@@ -1,0 +1,61 @@
+import { render, screen, act } from '@testing-library/react'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { App } from './App'
+import { encode } from './core/encoding'
+
+// JSDOM ships with neither RTCPeerConnection nor the bits of `navigator` that
+// the chat session uses. We don't exercise WebRTC here — these tests are
+// strictly about *routing* into the Joiner screen.
+class FakePeerConnection {
+  iceGatheringState = 'complete'
+  createDataChannel() {
+    return { readyState: 'connecting', close() {} }
+  }
+  createOffer() {
+    return Promise.resolve({ type: 'offer' as const, sdp: '' })
+  }
+  setLocalDescription() {
+    return Promise.resolve()
+  }
+  addEventListener() {}
+  removeEventListener() {}
+  close() {}
+}
+
+beforeAll(() => {
+  // @ts-expect-error stubbing minimal subset for jsdom
+  globalThis.RTCPeerConnection = FakePeerConnection
+})
+
+afterEach(() => {
+  // Reset between tests so one test's hash doesn't leak into the next.
+  history.replaceState(null, '', '/')
+  vi.restoreAllMocks()
+})
+
+describe('App routing', () => {
+  it('renders Joiner when the page loads with #offer= already in the URL', () => {
+    const payload = encode({ type: 'offer', sdp: 'v=0\r\n' })
+    history.replaceState(null, '', `/#offer=${payload}`)
+
+    render(<App />)
+
+    // The Joiner's accept screen should be visible.
+    expect(screen.getByRole('heading', { name: /you've been invited to chat/i })).toBeInTheDocument()
+  })
+
+  it('routes into Joiner when the hash changes AFTER mount (same-tab navigation)', () => {
+    // Start on the home screen.
+    render(<App />)
+    expect(screen.getByRole('heading', { name: /serverless p2p chat/i })).toBeInTheDocument()
+
+    // Now the OS opens the invite URL into this tab — only the hash changes.
+    const payload = encode({ type: 'offer', sdp: 'v=0\r\n' })
+    act(() => {
+      history.replaceState(null, '', `/#offer=${payload}`)
+      window.dispatchEvent(new HashChangeEvent('hashchange'))
+    })
+
+    expect(screen.getByRole('heading', { name: /you've been invited to chat/i })).toBeInTheDocument()
+  })
+})

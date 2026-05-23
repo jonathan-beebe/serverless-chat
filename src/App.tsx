@@ -16,9 +16,20 @@ export function App() {
   const [route, setRoute] = useState<Route>(() => routeFromHash())
   const session = useChatSession()
 
-  // The hash is meaningful on first paint (it routes us into joiner mode),
-  // but stale after that — once we've handed it to the session, scrub it so
-  // a refresh doesn't re-enter the joiner flow with a dead offer.
+  // If Bob already had the app open and the OS opens the invite URL into the
+  // same tab, only the hash changes — no reload. Without this listener we'd
+  // sit on the Home screen and never route into Joiner.
+  useEffect(() => {
+    const onHashChange = () => {
+      const next = routeFromHash()
+      if (next.kind === 'joiner') setRoute(next)
+    }
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [])
+
+  // Scrub the fragment once we've captured the offer in component state, so a
+  // refresh doesn't try to re-enter the joiner flow with a now-stale offer.
   useEffect(() => {
     if (route.kind === 'joiner') clearHash()
   }, [route.kind])
