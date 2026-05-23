@@ -93,10 +93,12 @@ describe('Chat input focus (FEAT-002)', () => {
   it('keeps focus on #chat-input after submitting via Enter', () => {
     const onSend = vi.fn()
     render(<Chat messages={[]} onSend={onSend} />)
-    const input = screen.getByLabelText(/message/i) as HTMLInputElement
+    const input = screen.getByLabelText(/message/i) as HTMLTextAreaElement
     input.focus()
     fireEvent.change(input, { target: { value: 'hi' } })
-    fireEvent.submit(input.closest('form') as HTMLFormElement)
+    // FEAT-004: composer is a textarea, so Enter is handled by onKeyDown
+    // rather than a native form submission.
+    fireEvent.keyDown(input, { key: 'Enter' })
 
     expect(onSend).toHaveBeenCalledWith('hi')
     expect(input).toHaveFocus()
@@ -147,6 +149,86 @@ describe('Chat input focus (FEAT-002)', () => {
 
     // The user's explicit focus on the other button must be preserved.
     expect(other).toHaveFocus()
+  })
+})
+
+describe('Chat composer Enter / Shift+Enter (FEAT-004)', () => {
+  function getComposer() {
+    return screen.getByLabelText(/message/i) as HTMLTextAreaElement
+  }
+
+  it('renders a multi-line <textarea> composer (not a single-line <input>)', () => {
+    render(<Chat messages={[]} onSend={() => {}} />)
+    expect(getComposer().tagName).toBe('TEXTAREA')
+  })
+
+  it('Enter sends (trimmed) and clears the draft', () => {
+    const onSend = vi.fn()
+    render(<Chat messages={[]} onSend={onSend} />)
+    const composer = getComposer()
+    fireEvent.change(composer, { target: { value: '  hello world  ' } })
+
+    fireEvent.keyDown(composer, { key: 'Enter' })
+
+    expect(onSend).toHaveBeenCalledWith('hello world')
+    expect(composer.value).toBe('')
+  })
+
+  it('Shift+Enter does NOT send (newline-insert path)', () => {
+    const onSend = vi.fn()
+    render(<Chat messages={[]} onSend={onSend} />)
+    const composer = getComposer()
+    fireEvent.change(composer, { target: { value: 'line one' } })
+
+    fireEvent.keyDown(composer, { key: 'Enter', shiftKey: true })
+
+    expect(onSend).not.toHaveBeenCalled()
+  })
+
+  it('Enter with empty / whitespace-only draft does nothing', () => {
+    const onSend = vi.fn()
+    render(<Chat messages={[]} onSend={onSend} />)
+    const composer = getComposer()
+    fireEvent.change(composer, { target: { value: '   \n   ' } })
+
+    fireEvent.keyDown(composer, { key: 'Enter' })
+
+    expect(onSend).not.toHaveBeenCalled()
+  })
+
+  it('Enter while `disabled` does nothing', () => {
+    const onSend = vi.fn()
+    render(<Chat messages={[]} onSend={onSend} disabled />)
+    const composer = getComposer()
+    expect(composer).toBeDisabled()
+
+    // Even if a keydown reaches the handler, the guard rejects it.
+    fireEvent.keyDown(composer, { key: 'Enter' })
+
+    expect(onSend).not.toHaveBeenCalled()
+  })
+
+  it('Enter during IME composition does NOT send', () => {
+    const onSend = vi.fn()
+    render(<Chat messages={[]} onSend={onSend} />)
+    const composer = getComposer()
+    fireEvent.change(composer, { target: { value: 'hi' } })
+
+    fireEvent.keyDown(composer, { key: 'Enter', isComposing: true })
+
+    expect(onSend).not.toHaveBeenCalled()
+  })
+
+  it('preserves embedded newlines in rendered message bubbles', () => {
+    const messages: ChatMessage[] = [msg('a', 'line one\nline two', 'me')]
+    render(<Chat messages={messages} onSend={() => {}} />)
+
+    const transcript = getTranscript()
+    // The bubble is the last <span> child of each <li>; assert it carries
+    // the whitespace-pre-wrap class so `\n` renders as a real line break.
+    const bubble = transcript.querySelector('li > span:last-child') as HTMLElement
+    expect(bubble.className).toMatch(/whitespace-pre-wrap/)
+    expect(bubble.textContent).toBe('line one\nline two')
   })
 })
 
