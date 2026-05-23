@@ -20,7 +20,7 @@ export function Joiner({ session, offerCode, onCancel }: Props) {
 
   if (session.state === 'connected') {
     return (
-      <div className="mx-auto flex h-[calc(100vh-3rem)] max-w-xl flex-col gap-3 px-4 py-6">
+      <main className="mx-auto flex h-[calc(100vh-3rem)] max-w-xl flex-col gap-3 px-4 py-6">
         <header className="flex items-center justify-between">
           <h1 className="text-lg font-semibold text-slate-100">Connected</h1>
           <button
@@ -31,13 +31,13 @@ export function Joiner({ session, offerCode, onCancel }: Props) {
           </button>
         </header>
         <Chat messages={session.messages} onSend={session.send} />
-      </div>
+      </main>
     )
   }
 
   if (!accepted) {
     return (
-      <div className="mx-auto flex max-w-xl flex-col items-center gap-6 px-4 py-12 text-center">
+      <main className="mx-auto flex max-w-xl flex-col items-center gap-6 px-4 py-12 text-center">
         <h1 className="text-2xl font-semibold text-slate-100">You've been invited to chat</h1>
         <p className="text-slate-300">
           Accepting opens a direct, peer-to-peer connection. You'll receive a short reply code to send back to your
@@ -57,12 +57,12 @@ export function Joiner({ session, offerCode, onCancel }: Props) {
             Decline
           </button>
         </div>
-      </div>
+      </main>
     )
   }
 
   return (
-    <div className="mx-auto flex max-w-xl flex-col gap-6 px-4 py-12">
+    <main className="mx-auto flex max-w-xl flex-col gap-6 px-4 py-12">
       <header className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-slate-100">Send this code back</h1>
@@ -103,6 +103,6 @@ export function Joiner({ session, offerCode, onCancel }: Props) {
           Couldn't establish a direct connection. Try a different network.
         </p>
       )}
-    </div>
+    </main>
   )
 }

@@ -4,7 +4,7 @@ interface Props {
 
 export function Home({ onStart }: Props) {
   return (
-    <div className="mx-auto flex max-w-xl flex-col items-center gap-6 px-4 py-12 text-center">
+    <main className="mx-auto flex max-w-xl flex-col items-center gap-6 px-4 py-12 text-center">
       <h1 className="text-3xl font-semibold tracking-tight text-slate-100">Serverless P2P Chat</h1>
       <p className="text-slate-300">
         Two people, one shared link. Real-time chat directly between your browsers — no chat server, no accounts, no
@@ -24,6 +24,6 @@ export function Home({ onStart }: Props) {
           touches a server.
         </p>
       </details>
-    </div>
+    </main>
   )
 }

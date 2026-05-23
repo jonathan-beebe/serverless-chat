@@ -26,7 +26,7 @@ export function Offerer({ session, onCancel }: Props) {
 
   if (session.state === 'connected') {
     return (
-      <div className="mx-auto flex h-[calc(100vh-3rem)] max-w-xl flex-col gap-3 px-4 py-6">
+      <main className="mx-auto flex h-[calc(100vh-3rem)] max-w-xl flex-col gap-3 px-4 py-6">
         <header className="flex items-center justify-between">
           <h1 className="text-lg font-semibold text-slate-100">Connected</h1>
           <button
@@ -37,14 +37,14 @@ export function Offerer({ session, onCancel }: Props) {
           </button>
         </header>
         <Chat messages={session.messages} onSend={session.send} />
-      </div>
+      </main>
     )
   }
 
   const offerUrl = session.encodedLocal && currentOfferUrl(session.encodedLocal)
 
   return (
-    <div className="mx-auto flex max-w-xl flex-col gap-6 px-4 py-12">
+    <main className="mx-auto flex max-w-xl flex-col gap-6 px-4 py-12">
       <header className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-slate-100">Invite your friend</h1>
@@ -106,6 +106,6 @@ export function Offerer({ session, onCancel }: Props) {
           Couldn't establish a direct connection. Try a different network.
         </p>
       )}
-    </div>
+    </main>
   )
 }
