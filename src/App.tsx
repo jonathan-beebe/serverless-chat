@@ -9,8 +9,12 @@ import { useChatSession } from './hooks/useChatSession'
 
 type Route =
   | { kind: 'home' }
-  | { kind: 'offerer' }
-  | { kind: 'joiner'; offerCode: string }
+  // FEAT-012: the Offerer route now carries the conversation id Home
+  // generated (new chat) or selected (Resume). Stable across the screen's
+  // lifetime — Home re-mounts on each navigation, so a new UUID would
+  // otherwise be allocated every render.
+  | { kind: 'offerer'; conversationId: string }
+  | { kind: 'joiner'; offerCode: string; conversationId: string | null }
   | { kind: 'design-system' }
   | { kind: 'network' }
 
@@ -19,7 +23,13 @@ function routeFromHash(): Route {
   if (hash === 'design-system') return { kind: 'design-system' }
   if (hash === 'network') return { kind: 'network' }
   const offer = readHashParam(location.hash, 'offer')
-  return offer ? { kind: 'joiner', offerCode: offer } : { kind: 'home' }
+  if (offer) {
+    // FEAT-012: the conv param may or may not be present (back-compat for
+    // pre-FEAT-012 invites). Joiner generates a fresh id if it's missing.
+    const conv = readHashParam(location.hash, 'conv')
+    return { kind: 'joiner', offerCode: offer, conversationId: conv }
+  }
+  return { kind: 'home' }
 }
 
 export function App() {
@@ -58,11 +68,16 @@ export function App() {
 
   switch (route.kind) {
     case 'home':
-      return <Home onStart={() => setRoute({ kind: 'offerer' })} />
+      // Home owns conversation-ID generation: new chats get a fresh UUID,
+      // resumed chats reuse the row's existing id. Either way we forward
+      // into the Offerer route.
+      return <Home onStart={(conversationId) => setRoute({ kind: 'offerer', conversationId })} />
     case 'offerer':
-      return <Offerer session={session} onCancel={goHome} />
+      return <Offerer session={session} conversationId={route.conversationId} onCancel={goHome} />
     case 'joiner':
-      return <Joiner session={session} offerCode={route.offerCode} onCancel={goHome} />
+      return (
+        <Joiner session={session} offerCode={route.offerCode} conversationId={route.conversationId} onCancel={goHome} />
+      )
     case 'design-system':
       return <DesignSystem />
     case 'network':

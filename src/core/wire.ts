@@ -10,13 +10,19 @@
 // deployment so v1 doesn't *negotiate* the version — but the field is here so
 // a future v2 can detect a mismatch and warn cleanly instead of crashing.
 
-export type WireEnvelope = ChatEnvelope | SyncProbeEnvelope | SyncAckEnvelope | SyncDoneEnvelope | ReceiptEnvelope
+export type WireEnvelope =
+  | ChatEnvelope
+  | SyncProbeEnvelope
+  | SyncAckEnvelope
+  | SyncDoneEnvelope
+  | ReceiptEnvelope
+  | HistoryEnvelope
 
 interface BaseEnvelope {
   /** Protocol version literal. */
   v: 1
   /** Discriminator. */
-  t: 'chat' | 'sync-probe' | 'sync-ack' | 'sync-done' | 'receipt'
+  t: 'chat' | 'sync-probe' | 'sync-ack' | 'sync-done' | 'receipt' | 'history'
   /** UUID for the envelope itself. For `chat` this doubles as the ChatMessage id. */
   id: string
   /** Sender's `Date.now()` at the moment `channel.send` was called. */
@@ -59,6 +65,34 @@ export interface ReceiptEnvelope extends BaseEnvelope {
   replyTo: string
   /** Receiver's clock at the moment the chat envelope was decoded. */
   messageReceivedAt: number
+}
+
+/**
+ * FEAT-012: full-history exchange on resume. The sender ships every message
+ * it has locally stored for `conversationId` at the moment the data channel
+ * opens. The receiver flips perspective (`from: 'me' ↔ 'them'`) and merges
+ * by message `id` (dedupe rule). See FEAT-012 AC#9-#11.
+ */
+export interface HistoryEnvelope extends BaseEnvelope {
+  t: 'history'
+  /** Conversation this history belongs to. Receiver verifies against its own
+   *  expected conv ID and drops the payload on mismatch (AC#7). */
+  conversationId: string
+  /** The sender's full transcript for `conversationId` at the moment of send.
+   *  Stored from the *sender's* perspective — receiver must flip on merge. */
+  messages: HistoryMessage[]
+}
+
+/**
+ * Wire shape for a single message inside a `history` envelope. Mirrors
+ * `ChatMessage` but ships across the wire (no `delivery` field — receipts
+ * are an in-session signal, not part of persisted history).
+ */
+export interface HistoryMessage {
+  id: string
+  from: 'me' | 'them'
+  text: string
+  at: number
 }
 
 export function encode(env: WireEnvelope): string {
@@ -150,6 +184,35 @@ export function decode(raw: string): WireEnvelope | null {
         replyTo: obj.replyTo,
         messageReceivedAt: obj.messageReceivedAt,
       }
+    case 'history': {
+      if (typeof obj.conversationId !== 'string' || !Array.isArray(obj.messages)) {
+        console.warn('[wire] dropping history envelope missing conversationId/messages')
+        return null
+      }
+      const cleaned: HistoryMessage[] = []
+      for (const raw of obj.messages) {
+        if (raw === null || typeof raw !== 'object') continue
+        const m = raw as Record<string, unknown>
+        if (
+          typeof m.id !== 'string' ||
+          (m.from !== 'me' && m.from !== 'them') ||
+          typeof m.text !== 'string' ||
+          typeof m.at !== 'number'
+        ) {
+          // Single malformed entry shouldn't kill the rest of the payload.
+          continue
+        }
+        cleaned.push({ id: m.id, from: m.from, text: m.text, at: m.at })
+      }
+      return {
+        v: 1,
+        t: 'history',
+        id: obj.id,
+        sentAt: obj.sentAt,
+        conversationId: obj.conversationId,
+        messages: cleaned,
+      }
+    }
     default:
       console.warn('[wire] dropping payload with unknown discriminator', obj.t)
       return null

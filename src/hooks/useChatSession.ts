@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { acceptAnswer, acceptOffer, ChatMessage, ConnectionState, createOffer } from '../core/rtc'
-import { decode, deriveSync, encode, type WireEnvelope } from '../core/wire'
+import { decode, deriveSync, encode, type HistoryMessage, type WireEnvelope } from '../core/wire'
+import * as storage from '../core/storage'
 
 // The hook is the imperative shell: it owns the live RTCPeerConnection,
 // the data channel, and the chat transcript. UI components subscribe to
@@ -14,8 +15,26 @@ export interface ChatSession {
   messages: ChatMessage[]
   /** FEAT-010: live network telemetry for the current session. */
   telemetry: NetworkTelemetry
-  startAsOfferer: () => Promise<void>
-  startAsAnswerer: (offerCode: string) => Promise<void>
+  /** FEAT-012: the conversation this session is bound to. Set by
+   *  bindConversation/startAsOfferer/startAsAnswerer before any persistence
+   *  happens. Null when no conversation is in scope (fresh hook, post-reset). */
+  conversationId: string | null
+  /**
+   * FEAT-012: true once both sides of the resume handshake have had a chance
+   *  to run — either the receiver got a `history` envelope, or the safety
+   *  timeout fired. The Chat component reads this to decide whether to draw
+   *  the "Resumed here" divider between persisted history and the live
+   *  session's first message.
+   */
+  hasResumed: boolean
+  /**
+   * FEAT-012: load any locally-stored transcript for this conversation into
+   *  `messages` before the data channel opens. Idempotent; safe to call from
+   *  multiple effects.
+   */
+  bindConversation: (conversationId: string) => Promise<void>
+  startAsOfferer: (conversationId: string) => Promise<void>
+  startAsAnswerer: (offerCode: string, conversationId: string) => Promise<void>
   submitAnswer: (answerCode: string) => Promise<void>
   /**
    * Polite-peer recovery (FEAT-008): the user pasted another *offer* into
@@ -101,9 +120,32 @@ export function useChatSession(): ChatSession {
   const [encodedLocal, setEncodedLocal] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [telemetry, setTelemetry] = useState<NetworkTelemetry>(emptyTelemetry)
+  const [conversationId, setConversationId] = useState<string | null>(null)
+  const [hasResumed, setHasResumed] = useState(false)
 
   const pcRef = useRef<RTCPeerConnection | null>(null)
   const channelRef = useRef<RTCDataChannel | null>(null)
+  // FEAT-012: keeps the *current* conversation id reachable from non-React
+  // callbacks (wireChannel.onmessage etc.) without re-binding the callback
+  // identity on every state change.
+  const conversationIdRef = useRef<string | null>(null)
+  // FEAT-012: tracks the in-flight bindConversation read so a history payload
+  // arriving before the local seed completes waits for the seed before
+  // merging. Otherwise the merge can race against setMessages(loaded).
+  const bindPromiseRef = useRef<Promise<void> | null>(null)
+  // FEAT-012: ids the hook has already persisted via appendMessage. Lets a
+  // late-arriving history envelope dedupe against locally-known ids even when
+  // the React `messages` state hasn't flushed yet (e.g. inside a microtask
+  // batch). Cleared on reset.
+  const knownIdsRef = useRef<Set<string>>(new Set())
+  // FEAT-012: latches "we've drawn the divider" so `setMessages` updates
+  // from incoming chat don't keep re-firing the divider effect.
+  const hasResumedRef = useRef(false)
+  // FEAT-012: caches the snapshot we ship in our `history` envelope. The
+  // snapshot is taken at the moment the channel opens so live messages that
+  // arrive during the exchange window aren't double-sent (they're already
+  // live envelopes; cf. AC#13).
+  const historySnapshotRef = useRef<HistoryMessage[]>([])
   // FEAT-010: ring buffer for wire events. Lives in a ref so high-frequency
   // appends don't trigger re-renders. The `telemetry` state object is updated
   // by `commitTelemetry()` only when a *visible* signal changes (sync
@@ -211,6 +253,16 @@ export function useChatSession(): ChatSession {
           // compute a transit time, which the Network page renders as "—".
           const transitMs = syncRef.current === null ? null : receivedAt - env.sentAt - syncRef.current.offset
           setMessages((prev) => [...prev, { id: env.id, from: 'them', text: env.text, at: receivedAt }])
+          // FEAT-012: best-effort persistence. Failure logs and keeps the
+          // UI moving so a quota-full or transient IDB error doesn't strand
+          // the chat.
+          const convId = conversationIdRef.current
+          if (convId) {
+            knownIdsRef.current.add(env.id)
+            storage
+              .appendMessage(convId, { id: env.id, from: 'them', text: env.text, at: receivedAt })
+              .catch((err) => console.warn('[storage] appendMessage (recv) failed', err))
+          }
           pushSample({ kind: 'received', at: receivedAt, messageId: env.id, sentAt: env.sentAt, transitMs })
           // Auto-fire a delivered receipt. Receipt is fire-and-forget; no
           // retry, no UI rendering on the receiver side (parity with
@@ -307,6 +359,83 @@ export function useChatSession(): ChatSession {
           commitTelemetry()
           return
         }
+        case 'history': {
+          // FEAT-012: full-history merge. We wait on the in-flight
+          // bindConversation read so the merge runs against the seeded local
+          // set, not an empty list. Then:
+          //   1. Verify conv ID matches the session's (drop on mismatch).
+          //   2. Flip perspective (sender's `from: 'me'` ↔ receiver's `from: 'them'`).
+          //   3. Skip ids already locally known (the dedupe rule).
+          //   4. Insert remainder into messages + storage in time order.
+          //   5. Latch hasResumed so Chat draws the "Resumed here" divider.
+          const expected = conversationIdRef.current
+          if (!expected) {
+            console.warn('[storage] history payload received but no conversationId is bound; dropping')
+            return
+          }
+          if (env.conversationId !== expected) {
+            console.warn('[storage] history conversationId mismatch; dropping payload')
+            return
+          }
+          const apply = async () => {
+            // Wait for any in-flight local bind so we don't dedupe against
+            // a still-loading set.
+            if (bindPromiseRef.current) {
+              try {
+                await bindPromiseRef.current
+              } catch {
+                // bindConversation already logged; carry on with whatever
+                // local state we ended up with.
+              }
+            }
+            const known = knownIdsRef.current
+            const toMerge: HistoryMessage[] = []
+            for (const m of env.messages) {
+              if (known.has(m.id)) continue
+              // Trust-local conflict rule: if the id is somehow already
+              // present, we keep the local copy. Skip-on-known above already
+              // implements that; the explicit warn lives in storage where a
+              // body mismatch could be detected on bulk-insert.
+              const flipped: HistoryMessage = {
+                id: m.id,
+                from: m.from === 'me' ? 'them' : 'me',
+                text: m.text,
+                at: m.at,
+              }
+              toMerge.push(flipped)
+              known.add(m.id)
+            }
+            if (toMerge.length > 0) {
+              // Merge into state in time order: union with current `messages`,
+              // sort by `at` ascending so resumed entries land above any
+              // live entries received during the exchange window.
+              setMessages((prev) => {
+                const next = [...prev, ...toMerge.map((m) => ({ id: m.id, from: m.from, text: m.text, at: m.at }))]
+                next.sort((a, b) => a.at - b.at)
+                return next
+              })
+              try {
+                await storage.bulkInsertMessages(
+                  expected,
+                  toMerge.map((m) => ({ id: m.id, from: m.from, text: m.text, at: m.at })),
+                )
+              } catch (err) {
+                console.warn('[storage] bulkInsertMessages failed', err)
+              }
+            }
+            // Latch the divider — Chat reads `hasResumed`. We do this on
+            // every received history, even an empty one, because the
+            // *exchange* having happened is what justifies the divider:
+            // when both sides have anything to compare, the live messages
+            // below are conceptually a new session.
+            if (!hasResumedRef.current) {
+              hasResumedRef.current = true
+              setHasResumed(true)
+            }
+          }
+          void apply()
+          return
+        }
         case 'receipt': {
           const arrivedAt = Date.now()
           // Compute the RTT off the sample we stamped at send time (rather
@@ -346,6 +475,30 @@ export function useChatSession(): ChatSession {
           // Defer one tick so the state transition and connectedAt commit
           // before we start mutating telemetry from a wire send.
           queueMicrotask(initiateSync)
+        }
+        // FEAT-012: send our full local transcript so the peer can merge any
+        // gaps. Empty arrays are sent too so "we have nothing" is
+        // distinguishable from "we're still loading" on the receiver side.
+        // The snapshot was taken once during bindConversation/start; we
+        // don't recompute on every render.
+        const convId = conversationIdRef.current
+        if (convId) {
+          const history: WireEnvelope = {
+            v: 1,
+            t: 'history',
+            id: nextId(),
+            sentAt: Date.now(),
+            conversationId: convId,
+            messages: historySnapshotRef.current,
+          }
+          try {
+            channel.send(encode(history))
+          } catch (err) {
+            // RTCDataChannel.send can throw on oversized payloads on some
+            // implementations (maxMessageSize ~64KB). v1 logs and drops;
+            // chunking is a follow-up per the ticket's "Out of scope" §5.
+            console.warn('[storage] failed to send history envelope', err)
+          }
         }
       }
       // For the offerer the channel is freshly created and guaranteed to be in
@@ -416,28 +569,74 @@ export function useChatSession(): ChatSession {
   // kills the live chat. The view-side guards in Offerer/Joiner stay (they
   // drive UI affordances), but they're no longer the only line of defense.
 
-  const startAsOfferer = useCallback(async () => {
-    if (state !== 'idle') return
-    setError(null)
-    transition('gathering')
-    try {
-      roleRef.current = 'offerer'
-      const session = await createOffer()
-      pcRef.current = session.pc
-      if (session.channel) wireChannel(session.channel)
-      wirePc(session.pc)
-      setEncodedLocal(session.encodedLocal)
-      transition('awaiting-answer')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-      transition('failed')
-    }
-  }, [state, transition, wireChannel, wirePc])
+  // FEAT-012: load any locally-stored transcript for `id` into both the
+  // React state and the in-memory dedupe set. Resolves once the load is
+  // committed so handleEnvelope can await it before merging. Also captures
+  // the snapshot we'll ship in our `history` envelope at channel-open time
+  // (so live messages during the exchange window aren't double-sent).
+  const bindConversation = useCallback(async (id: string) => {
+    setConversationId(id)
+    conversationIdRef.current = id
+    const load = (async () => {
+      try {
+        // Upsert a stub if missing so the conversation appears on Home even
+        // if the user closes the tab before sending anything.
+        const existing = await storage.getConversation(id)
+        if (!existing) {
+          await storage.upsertConversation({ id, createdAt: Date.now(), lastActivityAt: Date.now() })
+        }
+        const records = await storage.listMessages(id)
+        const seeded: ChatMessage[] = records.map((r) => ({ id: r.id, from: r.from, text: r.text, at: r.at }))
+        const ids = new Set<string>()
+        for (const r of records) ids.add(r.id)
+        knownIdsRef.current = ids
+        historySnapshotRef.current = records.map((r) => ({ id: r.id, from: r.from, text: r.text, at: r.at }))
+        setMessages(seeded)
+      } catch (err) {
+        console.warn('[storage] bindConversation failed', err)
+      }
+    })()
+    bindPromiseRef.current = load
+    await load
+  }, [])
 
-  const startAsAnswerer = useCallback(
-    async (offerCode: string) => {
+  const startAsOfferer = useCallback(
+    async (id: string) => {
       if (state !== 'idle') return
       setError(null)
+      // FEAT-012: seed the local transcript and snapshot the history payload
+      // before we kick off offer generation, so the user sees their prior
+      // chat the instant they land on the Offerer screen. We don't `await`
+      // the load — `bindConversation` stashes a promise on `bindPromiseRef`
+      // that handleEnvelope awaits before merging. Awaiting here would block
+      // offer generation behind an IDB read for no benefit (and would break
+      // tests that run fake timers, because fake-indexeddb schedules via
+      // setImmediate).
+      void bindConversation(id)
+      transition('gathering')
+      try {
+        roleRef.current = 'offerer'
+        const session = await createOffer()
+        pcRef.current = session.pc
+        if (session.channel) wireChannel(session.channel)
+        wirePc(session.pc)
+        setEncodedLocal(session.encodedLocal)
+        transition('awaiting-answer')
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err))
+        transition('failed')
+      }
+    },
+    [state, transition, wireChannel, wirePc, bindConversation],
+  )
+
+  const startAsAnswerer = useCallback(
+    async (offerCode: string, id: string) => {
+      if (state !== 'idle') return
+      setError(null)
+      // Fire-and-forget the local seed; see startAsOfferer for why we don't
+      // await it.
+      void bindConversation(id)
       transition('gathering')
       try {
         roleRef.current = 'answerer'
@@ -453,7 +652,7 @@ export function useChatSession(): ChatSession {
         transition('failed')
       }
     },
-    [state, transition, wireChannel, wirePc],
+    [state, transition, wireChannel, wirePc, bindConversation],
   )
 
   const submitAnswer = useCallback(
@@ -531,6 +730,15 @@ export function useChatSession(): ChatSession {
       const env: WireEnvelope = { v: 1, t: 'chat', id, sentAt, text: trimmed }
       channel.send(encode(env))
       setMessages((prev) => [...prev, { id, from: 'me', text: trimmed, at: sentAt, delivery: 'pending' }])
+      // FEAT-012: persist as soon as the bubble shows up; failure is logged
+      // but doesn't block the UI (AC#15).
+      const convId = conversationIdRef.current
+      if (convId) {
+        knownIdsRef.current.add(id)
+        storage
+          .appendMessage(convId, { id, from: 'me', text: trimmed, at: sentAt })
+          .catch((err) => console.warn('[storage] appendMessage (send) failed', err))
+      }
       pushSample({ kind: 'sent', at: sentAt, messageId: id, sentAt })
       commitTelemetry()
     },
@@ -546,6 +754,16 @@ export function useChatSession(): ChatSession {
     syncRef.current = null
     connectedAtRef.current = null
     roleRef.current = null
+    // FEAT-012: clear the in-memory conversation binding. Crucially this does
+    // NOT call storage.deleteConversation — the user's history survives a
+    // reset (AC#17). Delete is its own explicit action from the Home list.
+    setConversationId(null)
+    conversationIdRef.current = null
+    knownIdsRef.current = new Set()
+    historySnapshotRef.current = []
+    bindPromiseRef.current = null
+    hasResumedRef.current = false
+    setHasResumed(false)
     setTelemetry(emptyTelemetry())
     transition('idle')
   }, [teardown, transition])
@@ -556,6 +774,9 @@ export function useChatSession(): ChatSession {
     encodedLocal,
     messages,
     telemetry,
+    conversationId,
+    hasResumed,
+    bindConversation,
     startAsOfferer,
     startAsAnswerer,
     submitAnswer,

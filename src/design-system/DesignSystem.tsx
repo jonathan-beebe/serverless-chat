@@ -56,6 +56,11 @@ function stubSession(overrides: Partial<ChatSession> = {}): ChatSession {
       samples: [],
       summary: { sampleCount: 0, currentRttMs: null, medianRttMs: null, p95RttMs: null },
     },
+    // FEAT-012: showcase stubs declare the resume fields explicitly so the
+    // ChatSession type still narrows tightly (no implicit `undefined`).
+    conversationId: null,
+    hasResumed: false,
+    bindConversation: async () => {},
     startAsOfferer: async () => {},
     startAsAnswerer: async () => {},
     submitAnswer: async () => {},
@@ -65,6 +70,11 @@ function stubSession(overrides: Partial<ChatSession> = {}): ChatSession {
     ...overrides,
   }
 }
+
+// FEAT-012: the showcase Offerer / Joiner previews don't exercise the
+// resume flow — pinning a constant id keeps the props compliant without
+// implying a live conversation.
+const DS_PREVIEW_CONV_ID = '00000000-0000-0000-0000-000000000000'
 
 const FAKE_OFFER = 'eyJzZHAiOiJ2PTBcclxubz1mYWtlIDQ5ODc2NTQzMjEgMSBJTiBJUDQgMTI3LjAuMC4xXHJcbiJ9'
 const FAKE_REPLY = 'eyJzZHAiOiJ2PTBcclxubz1yZXBseSAxMjM0NTY3ODkgMSBJTiBJUDQgMTI3LjAuMC4xXHJcbiJ9'
@@ -350,16 +360,26 @@ export function DesignSystem() {
           <ScreenPreview label="Offerer — Invite your friend">
             <Offerer
               session={stubSession({ state: 'awaiting-answer', encodedLocal: FAKE_OFFER })}
+              conversationId={DS_PREVIEW_CONV_ID}
               onCancel={() => {}}
             />
           </ScreenPreview>
 
           <ScreenPreview label="Offerer — Connection lost">
-            <Offerer session={stubSession({ state: 'closed', encodedLocal: FAKE_OFFER })} onCancel={() => {}} />
+            <Offerer
+              session={stubSession({ state: 'closed', encodedLocal: FAKE_OFFER })}
+              conversationId={DS_PREVIEW_CONV_ID}
+              onCancel={() => {}}
+            />
           </ScreenPreview>
 
           <ScreenPreview label="Joiner — You've been invited">
-            <Joiner session={stubSession({ state: 'idle' })} offerCode={FAKE_OFFER} onCancel={() => {}} />
+            <Joiner
+              session={stubSession({ state: 'idle' })}
+              offerCode={FAKE_OFFER}
+              conversationId={null}
+              onCancel={() => {}}
+            />
           </ScreenPreview>
 
           <ScreenPreview label="Joiner — Send this code back">
@@ -370,6 +390,7 @@ export function DesignSystem() {
             <Joiner
               session={stubSession({ state: 'closed', encodedLocal: FAKE_REPLY })}
               offerCode={FAKE_OFFER}
+              conversationId={null}
               onCancel={() => {}}
             />
           </ScreenPreview>

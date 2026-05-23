@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Button } from '../components/Button'
 import { Callout } from '../components/Callout'
 import { Chat } from '../components/Chat'
@@ -14,6 +14,10 @@ import type { ConnectionState } from '../core/rtc'
 interface Props {
   session: ChatSession
   offerCode: string
+  /** FEAT-012: conversation id extracted from the `conv` hash param. Null on
+   *  pre-FEAT-012 invites; Joiner falls back to a fresh UUID so the chat
+   *  still persists locally (just not under the inviter's id). */
+  conversationId: string | null
   onCancel: () => void
 }
 
@@ -47,15 +51,20 @@ function statusMessage(state: ConnectionState, hasLocal: boolean): string {
   }
 }
 
-export function Joiner({ session, offerCode, onCancel }: Props) {
+export function Joiner({ session, offerCode, conversationId, onCancel }: Props) {
   const [accepted, setAccepted] = useState(false)
   usePageTitle(joinerTitle(session.state, accepted))
 
+  // FEAT-012: if the inviter sent a pre-FEAT-012 URL with no `conv` param,
+  // we mint a fresh UUID locally. Stable for the lifetime of the Joiner
+  // screen so the hook's `conversationId` doesn't churn between effects.
+  const effectiveConvId = useMemo(() => conversationId ?? crypto.randomUUID(), [conversationId])
+
   useEffect(() => {
     if (accepted && session.state === 'idle') {
-      void session.startAsAnswerer(offerCode)
+      void session.startAsAnswerer(offerCode, effectiveConvId)
     }
-  }, [accepted, offerCode, session])
+  }, [accepted, offerCode, effectiveConvId, session])
 
   // Joiner has four branches (invite → reply-code → connected → closed).
   // Each focuses its primary action (not the heading) so keyboard users can
@@ -93,7 +102,7 @@ export function Joiner({ session, offerCode, onCancel }: Props) {
             End chat
           </Button>
         </header>
-        <Chat messages={session.messages} onSend={session.send} />
+        <Chat messages={session.messages} onSend={session.send} hasResumed={session.hasResumed} />
       </ScreenContainer>
     )
   }

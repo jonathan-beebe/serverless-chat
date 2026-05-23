@@ -69,6 +69,74 @@ describe('wire envelope encode/decode round-trip', () => {
     }
     expect(decode(encode(env))).toEqual(env)
   })
+
+  it('round-trips a history envelope (FEAT-012)', () => {
+    const env: WireEnvelope = {
+      v: 1,
+      t: 'history',
+      id: 'history-1',
+      sentAt: 1_700_000_002_000,
+      conversationId: 'conv-uuid',
+      messages: [
+        { id: 'm1', from: 'me', text: 'hi', at: 1_700_000_000_000 },
+        { id: 'm2', from: 'them', text: 'bye', at: 1_700_000_000_500 },
+      ],
+    }
+    expect(decode(encode(env))).toEqual(env)
+  })
+
+  it('round-trips an empty history envelope (peer signaling "I have nothing")', () => {
+    const env: WireEnvelope = {
+      v: 1,
+      t: 'history',
+      id: 'history-empty',
+      sentAt: 1_700_000_002_000,
+      conversationId: 'conv-uuid',
+      messages: [],
+    }
+    expect(decode(encode(env))).toEqual(env)
+  })
+})
+
+describe('wire history envelope decode safety (FEAT-012)', () => {
+  it('returns null when conversationId is missing', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    expect(decode(JSON.stringify({ v: 1, t: 'history', id: 'h1', sentAt: 1, messages: [] }))).toBeNull()
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('returns null when messages is not an array', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    expect(
+      decode(JSON.stringify({ v: 1, t: 'history', id: 'h1', sentAt: 1, conversationId: 'c', messages: 'oops' })),
+    ).toBeNull()
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('drops individual malformed history-message entries but keeps well-formed ones', () => {
+    const decoded = decode(
+      JSON.stringify({
+        v: 1,
+        t: 'history',
+        id: 'h1',
+        sentAt: 1,
+        conversationId: 'c',
+        messages: [
+          { id: 'good', from: 'me', text: 'ok', at: 1 },
+          { id: 'badfrom', from: 'other', text: 'x', at: 1 },
+          null,
+          { id: 'badat', from: 'me', text: 'x', at: '1' },
+          { id: 'good2', from: 'them', text: 'ok2', at: 2 },
+        ],
+      }),
+    )
+    expect(decoded).not.toBeNull()
+    expect(decoded!.t).toBe('history')
+    // @ts-expect-error narrowing
+    expect(decoded.messages.map((m) => m.id)).toEqual(['good', 'good2'])
+  })
 })
 
 describe('wire envelope decode safety', () => {

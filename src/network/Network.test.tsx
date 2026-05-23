@@ -14,6 +14,11 @@ function stubSession(telemetry: NetworkTelemetry): ChatSession {
     encodedLocal: null,
     messages: [],
     telemetry,
+    // FEAT-012: the Network page doesn't read these, but the ChatSession type
+    // now requires them — minimal stubs keep the test surface honest.
+    conversationId: null,
+    hasResumed: false,
+    bindConversation: async () => {},
     startAsOfferer: async () => {},
     startAsAnswerer: async () => {},
     submitAnswer: async () => {},

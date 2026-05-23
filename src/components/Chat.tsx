@@ -11,6 +11,11 @@ interface Props {
   messages: ChatMessage[]
   onSend: (text: string) => void
   disabled?: boolean
+  /** FEAT-012: when true, the transcript inserts a one-line "Resumed here"
+   *  divider between the last persisted message (above) and the first live
+   *  message of this session (below). Driven by the hook's `hasResumed`
+   *  latch — see `useChatSession.hasResumed`. */
+  hasResumed?: boolean
 }
 
 // Distance (in px) from the bottom within which we still consider the user
@@ -20,14 +25,29 @@ const NEAR_BOTTOM_THRESHOLD_PX = 32
 
 // Items that flow through the transcript list. Date items are visual chrome
 // rendered above the first message and at every local-day rollover.
-type TranscriptItem = { kind: 'date'; key: string; date: Date } | { kind: 'message'; message: ChatMessage }
+// FEAT-012 adds a `resume` item — a single divider drawn between the last
+// persisted message and the first live message, when the session is a
+// resume rather than a fresh chat.
+type TranscriptItem =
+  | { kind: 'date'; key: string; date: Date }
+  | { kind: 'message'; message: ChatMessage }
+  | { kind: 'resume'; key: string }
 
-function buildItems(messages: ChatMessage[]): TranscriptItem[] {
+function buildItems(messages: ChatMessage[], resumeIndex: number | null): TranscriptItem[] {
   const out: TranscriptItem[] = []
   let lastDay: string | null = null
-  for (const m of messages) {
+  for (let i = 0; i < messages.length; i += 1) {
+    const m = messages[i]
     const date = new Date(m.at)
     const day = date.toDateString()
+    // FEAT-012: insert the "Resumed here" divider just before the live cohort
+    // begins. Date headers still render at their natural day rollover, so
+    // both can co-occur (e.g. yesterday's resume header above today's date
+    // header above today's first message) — per the ticket's "Resumed here
+    // vs date headers" open question.
+    if (resumeIndex !== null && i === resumeIndex) {
+      out.push({ kind: 'resume', key: 'resume-divider' })
+    }
     if (day !== lastDay) {
       out.push({ kind: 'date', key: `date-${day}`, date })
       lastDay = day
@@ -44,7 +64,7 @@ function buildItems(messages: ChatMessage[]): TranscriptItem[] {
 // aria-hidden so AT does not race with the timer.
 const COPY_FLASH_MS = 1500
 
-export function Chat({ messages, onSend, disabled }: Props) {
+export function Chat({ messages, onSend, disabled, hasResumed }: Props) {
   const [draft, setDraft] = useState('')
   // FEAT-011 toolbar state. Toggle defaults to ON (matches the visible UI —
   // every bubble already renders a timestamp). Lives in component state for
@@ -80,7 +100,26 @@ export function Chat({ messages, onSend, disabled }: Props) {
   const dateFmt = useMemo(() => new Intl.DateTimeFormat(undefined, { dateStyle: 'full' }), [])
   const timeFmt = useMemo(() => new Intl.DateTimeFormat(undefined, { timeStyle: 'short' }), [])
 
-  const items = useMemo(() => buildItems(messages), [messages])
+  // FEAT-012: latch the boundary where the live cohort begins, so the
+  // "Resumed here" divider sits *above* the first message added after the
+  // merge settled. `hasResumed` flips exactly once per session; we capture
+  // `messages.length` at that flip as the divider index and freeze it for
+  // the rest of the session (subsequent renders mustn't shift the divider
+  // when new live messages append). Refreezing only when `hasResumed` itself
+  // changes back to false (i.e. on session reset).
+  const [resumeBoundary, setResumeBoundary] = useState<number | null>(null)
+  useEffect(() => {
+    if (!hasResumed) {
+      setResumeBoundary(null)
+      return
+    }
+    setResumeBoundary((prev) => (prev === null ? messages.length : prev))
+    // We intentionally depend on `hasResumed` only — capturing `messages.length`
+    // at the moment of the flip, not on every message arrival.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasResumed])
+
+  const items = useMemo(() => buildItems(messages, resumeBoundary), [messages, resumeBoundary])
 
   // Keep the latest message in view as new ones stream in — but only if the
   // user hasn't scrolled up to read history. Yanking them back to the bottom
@@ -334,6 +373,22 @@ export function Chat({ messages, onSend, disabled }: Props) {
                     <Divider>
                       <time dateTime={item.date.toISOString().slice(0, 10)}>{dateFmt.format(item.date)}</time>
                     </Divider>
+                  </li>
+                )
+              }
+              if (item.kind === 'resume') {
+                // FEAT-012: marker between the persisted-history cohort
+                // (above) and the live-session cohort (below). Same
+                // presentation/aria-hidden treatment as date headers so AT
+                // doesn't double-announce the cohort split on every render.
+                return (
+                  <li
+                    key={item.key}
+                    role="presentation"
+                    aria-hidden="true"
+                    data-testid="resume-divider"
+                    className="py-1">
+                    <Divider>Resumed here</Divider>
                   </li>
                 )
               }

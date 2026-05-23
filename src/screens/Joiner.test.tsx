@@ -18,6 +18,10 @@ function makeSession(overrides: Partial<ChatSession> = {}): ChatSession {
       samples: [],
       summary: { sampleCount: 0, currentRttMs: null, medianRttMs: null, p95RttMs: null },
     },
+    // FEAT-012: session shape gains conversationId + hasResumed + bindConversation.
+    conversationId: null,
+    hasResumed: false,
+    bindConversation: vi.fn().mockResolvedValue(undefined),
     startAsOfferer: vi.fn().mockResolvedValue(undefined),
     startAsAnswerer: vi.fn().mockResolvedValue(undefined),
     submitAnswer: vi.fn().mockResolvedValue(undefined),
@@ -28,6 +32,11 @@ function makeSession(overrides: Partial<ChatSession> = {}): ChatSession {
   }
 }
 
+// FEAT-012: the Joiner now also takes a `conversationId` prop — null is the
+// pre-FEAT-012 invite case where Joiner mints a fresh UUID locally. Tests
+// pass null so they continue to exercise the legacy URL shape.
+const TEST_CONV_ID: string | null = null
+
 describe('Joiner focus-on-mount (A11Y-005 + A11Y-022)', () => {
   const SHOWCASE_CHROME: ScreenChromeValue = {
     landmark: 'region',
@@ -37,7 +46,7 @@ describe('Joiner focus-on-mount (A11Y-005 + A11Y-022)', () => {
 
   it('focuses the Accept button on the invite branch (primary action)', async () => {
     const session = makeSession({ state: 'idle' })
-    render(<Joiner session={session} offerCode="OFFER" onCancel={() => {}} />)
+    render(<Joiner session={session} offerCode="OFFER" conversationId={TEST_CONV_ID} onCancel={() => {}} />)
     const accept = screen.getByRole('button', { name: /^accept$/i })
 
     await waitFor(() => {
@@ -51,7 +60,7 @@ describe('Joiner focus-on-mount (A11Y-005 + A11Y-022)', () => {
     // local `accepted` flag, so render directly into the post-accept shape by
     // clicking Accept first.
     const session = makeSession({ state: 'awaiting-answer', encodedLocal: 'REPLY-CODE' })
-    render(<Joiner session={session} offerCode="OFFER" onCancel={() => {}} />)
+    render(<Joiner session={session} offerCode="OFFER" conversationId={TEST_CONV_ID} onCancel={() => {}} />)
     fireEvent.click(screen.getByRole('button', { name: /^accept$/i }))
 
     const copyButton = await screen.findByRole('button', { name: /^copy$/i })
@@ -62,7 +71,7 @@ describe('Joiner focus-on-mount (A11Y-005 + A11Y-022)', () => {
 
   it('focuses the "Start a new chat" button on the closed branch', async () => {
     const session = makeSession({ state: 'closed' })
-    render(<Joiner session={session} offerCode="OFFER" onCancel={() => {}} />)
+    render(<Joiner session={session} offerCode="OFFER" conversationId={TEST_CONV_ID} onCancel={() => {}} />)
     const restart = screen.getByRole('button', { name: /start a new chat/i })
 
     await waitFor(() => {
@@ -74,7 +83,7 @@ describe('Joiner focus-on-mount (A11Y-005 + A11Y-022)', () => {
     const session = makeSession({ state: 'idle' })
     render(
       <ScreenChromeContext.Provider value={SHOWCASE_CHROME}>
-        <Joiner session={session} offerCode="OFFER" onCancel={() => {}} />
+        <Joiner session={session} offerCode="OFFER" conversationId={TEST_CONV_ID} onCancel={() => {}} />
       </ScreenChromeContext.Provider>,
     )
     const accept = screen.getByRole('button', { name: /^accept$/i })
@@ -93,7 +102,7 @@ describe('Joiner post-connect drop (BUG-005)', () => {
     const staleReply = 'STALE-ENCODED-ANSWER-PAYLOAD'
     const session = makeSession({ state: 'closed', encodedLocal: staleReply })
 
-    render(<Joiner session={session} offerCode="ignored" onCancel={() => {}} />)
+    render(<Joiner session={session} offerCode="ignored" conversationId={TEST_CONV_ID} onCancel={() => {}} />)
 
     expect(screen.getByRole('heading', { name: /connection lost/i })).toBeInTheDocument()
 
@@ -107,7 +116,7 @@ describe('Joiner post-connect drop (BUG-005)', () => {
     const onCancel = vi.fn()
     const session = makeSession({ state: 'closed', encodedLocal: 'STALE' })
 
-    render(<Joiner session={session} offerCode="ignored" onCancel={onCancel} />)
+    render(<Joiner session={session} offerCode="ignored" conversationId={TEST_CONV_ID} onCancel={onCancel} />)
 
     fireEvent.click(screen.getByRole('button', { name: /start a new chat/i }))
     expect(onCancel).toHaveBeenCalledTimes(1)

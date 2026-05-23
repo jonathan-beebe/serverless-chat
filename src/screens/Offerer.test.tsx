@@ -21,6 +21,12 @@ function makeSession(overrides: Partial<ChatSession> = {}): ChatSession {
       samples: [],
       summary: { sampleCount: 0, currentRttMs: null, medianRttMs: null, p95RttMs: null },
     },
+    // FEAT-012: session shape gains conversationId + hasResumed + bindConversation.
+    // Tests stub these to null/false/no-op spies so the screens under test render
+    // the same branches they always have.
+    conversationId: null,
+    hasResumed: false,
+    bindConversation: vi.fn().mockResolvedValue(undefined),
     startAsOfferer: vi.fn().mockResolvedValue(undefined),
     startAsAnswerer: vi.fn().mockResolvedValue(undefined),
     submitAnswer: vi.fn().mockResolvedValue(undefined),
@@ -30,6 +36,12 @@ function makeSession(overrides: Partial<ChatSession> = {}): ChatSession {
     ...overrides,
   }
 }
+
+// FEAT-012: every Offerer render now needs a `conversationId` prop (the
+// Home screen owns generation). Tests don't exercise the conv-id wiring
+// directly, but the type requires us to pass something — a stable fixture
+// keeps the test signal noise-free.
+const TEST_CONV_ID = '11111111-1111-1111-1111-111111111111'
 
 describe('Offerer reply-code Enter-submit (FEAT-003)', () => {
   // The Connect form renders once `encodedLocal` is non-null AND the screen
@@ -41,7 +53,7 @@ describe('Offerer reply-code Enter-submit (FEAT-003)', () => {
       encodedLocal: 'OFFER-PAYLOAD',
       ...overrides,
     })
-    render(<Offerer session={session} onCancel={() => {}} />)
+    render(<Offerer session={session} conversationId={TEST_CONV_ID} onCancel={() => {}} />)
     return session
   }
 
@@ -120,7 +132,7 @@ describe('Offerer focus-on-mount (A11Y-005 + A11Y-022)', () => {
 
   it('focuses the CopyBox Copy button on the invite branch (primary action)', async () => {
     const session = makeSession({ state: 'awaiting-answer', encodedLocal: 'OFFER-PAYLOAD' })
-    render(<Offerer session={session} onCancel={() => {}} />)
+    render(<Offerer session={session} conversationId={TEST_CONV_ID} onCancel={() => {}} />)
     const copyButton = screen.getByRole('button', { name: /^copy$/i })
 
     await waitFor(() => {
@@ -130,7 +142,7 @@ describe('Offerer focus-on-mount (A11Y-005 + A11Y-022)', () => {
 
   it('focuses the "Start a new chat" button on the closed branch', async () => {
     const session = makeSession({ state: 'closed', encodedLocal: 'STALE' })
-    render(<Offerer session={session} onCancel={() => {}} />)
+    render(<Offerer session={session} conversationId={TEST_CONV_ID} onCancel={() => {}} />)
     const restart = screen.getByRole('button', { name: /start a new chat/i })
 
     await waitFor(() => {
@@ -142,7 +154,7 @@ describe('Offerer focus-on-mount (A11Y-005 + A11Y-022)', () => {
     const session = makeSession({ state: 'awaiting-answer', encodedLocal: 'OFFER-PAYLOAD' })
     render(
       <ScreenChromeContext.Provider value={SHOWCASE_CHROME}>
-        <Offerer session={session} onCancel={() => {}} />
+        <Offerer session={session} conversationId={TEST_CONV_ID} onCancel={() => {}} />
       </ScreenChromeContext.Provider>,
     )
     const copyButton = screen.getByRole('button', { name: /^copy$/i })
@@ -162,7 +174,7 @@ describe('Offerer post-connect drop (BUG-005)', () => {
     const staleEncoded = 'STALE-ENCODED-OFFER-PAYLOAD'
     const session = makeSession({ state: 'closed', encodedLocal: staleEncoded })
 
-    render(<Offerer session={session} onCancel={() => {}} />)
+    render(<Offerer session={session} conversationId={TEST_CONV_ID} onCancel={() => {}} />)
 
     // Dedicated post-mortem heading + copy.
     expect(screen.getByRole('heading', { name: /connection lost/i })).toBeInTheDocument()
@@ -179,7 +191,7 @@ describe('Offerer post-connect drop (BUG-005)', () => {
     const onCancel = vi.fn()
     const session = makeSession({ state: 'closed', encodedLocal: 'STALE' })
 
-    render(<Offerer session={session} onCancel={onCancel} />)
+    render(<Offerer session={session} conversationId={TEST_CONV_ID} onCancel={onCancel} />)
 
     fireEvent.click(screen.getByRole('button', { name: /start a new chat/i }))
     expect(onCancel).toHaveBeenCalledTimes(1)
@@ -190,7 +202,7 @@ describe('Offerer post-connect drop (BUG-005)', () => {
     // "Try a different network" amber message — only post-connect drops
     // route to the new closed view.
     const session = makeSession({ state: 'failed', encodedLocal: 'STALE' })
-    render(<Offerer session={session} onCancel={() => {}} />)
+    render(<Offerer session={session} conversationId={TEST_CONV_ID} onCancel={() => {}} />)
 
     expect(screen.getByText(/try a different network/i)).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: /connection lost/i })).not.toBeInTheDocument()
@@ -209,7 +221,7 @@ describe('Offerer polite-peer defer (FEAT-008)', () => {
       encodedLocal: 'OFFER-PAYLOAD',
       ...overrides,
     })
-    render(<Offerer session={session} onCancel={() => {}} />)
+    render(<Offerer session={session} conversationId={TEST_CONV_ID} onCancel={() => {}} />)
     return session
   }
 
@@ -292,7 +304,7 @@ describe('Offerer polite-peer defer (FEAT-008)', () => {
     // Pre-load the session with the offer payload so submitting paints the
     // form, then the user pastes another offer.
     const session = makeSession({ state: 'awaiting-answer', encodedLocal: 'OFFER-PAYLOAD' })
-    render(<Offerer session={session} onCancel={() => {}} />)
+    render(<Offerer session={session} conversationId={TEST_CONV_ID} onCancel={() => {}} />)
 
     fireEvent.change(screen.getByRole('textbox', { name: /paste their reply code/i }), { target: { value: offerCode } })
     fireEvent.click(screen.getByRole('button', { name: /^connect$/i }))
@@ -309,7 +321,7 @@ describe('Offerer polite-peer defer (FEAT-008)', () => {
     // screen changed for sighted users, mirroring the live-region message.
     const offerCode = encode({ type: 'offer', sdp: 'v=0\r\n' })
     const session = makeSession({ state: 'awaiting-answer', encodedLocal: 'OFFER-PAYLOAD' })
-    render(<Offerer session={session} onCancel={() => {}} />)
+    render(<Offerer session={session} conversationId={TEST_CONV_ID} onCancel={() => {}} />)
 
     fireEvent.change(screen.getByRole('textbox', { name: /paste their reply code/i }), { target: { value: offerCode } })
     fireEvent.click(screen.getByRole('button', { name: /^connect$/i }))
@@ -334,7 +346,7 @@ describe('Offerer polite-peer defer (FEAT-008)', () => {
     const offerCode = encode({ type: 'offer', sdp: 'v=0\r\n' })
     const replyCode = 'NEW-ANSWER-PAYLOAD'
     const session = makeSession({ state: 'awaiting-answer', encodedLocal: replyCode })
-    render(<Offerer session={session} onCancel={() => {}} />)
+    render(<Offerer session={session} conversationId={TEST_CONV_ID} onCancel={() => {}} />)
 
     fireEvent.change(screen.getByRole('textbox', { name: /paste their reply code/i }), { target: { value: offerCode } })
     fireEvent.click(screen.getByRole('button', { name: /^connect$/i }))
@@ -349,7 +361,7 @@ describe('Offerer polite-peer defer (FEAT-008)', () => {
     // focus, matching the Joiner reply branch behaviour.
     const offerCode = encode({ type: 'offer', sdp: 'v=0\r\n' })
     const session = makeSession({ state: 'awaiting-answer', encodedLocal: 'REPLY-CODE' })
-    render(<Offerer session={session} onCancel={() => {}} />)
+    render(<Offerer session={session} conversationId={TEST_CONV_ID} onCancel={() => {}} />)
 
     fireEvent.change(screen.getByRole('textbox', { name: /paste their reply code/i }), { target: { value: offerCode } })
     fireEvent.click(screen.getByRole('button', { name: /^connect$/i }))

@@ -1,6 +1,8 @@
 import { act, renderHook } from '@testing-library/react'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { IDBFactory } from 'fake-indexeddb'
 import { useChatSession } from './useChatSession'
+import { __resetForTests as resetStorage } from '../core/storage'
 
 // Minimal stubs for the slice of WebRTC the hook touches. We don't exercise
 // real ICE here — these tests pin down the controller's state machine,
@@ -115,13 +117,17 @@ beforeEach(() => {
   lastPc = null
   pcStats.constructorCount = 0
   failNextSetLocalDescription = false
+  // FEAT-012: each test gets a fresh in-memory IDB so persistence side
+  // effects from one case don't leak into the next.
+  ;(globalThis as { indexedDB: IDBFactory }).indexedDB = new IDBFactory()
+  resetStorage()
 })
 
 describe('useChatSession message ids', () => {
   it('assigns a unique, non-empty string id to each sent message', async () => {
     const { result } = renderHook(() => useChatSession())
     await act(async () => {
-      await result.current.startAsOfferer()
+      await result.current.startAsOfferer('test-conv')
     })
     act(() => lastChannel!.open())
 
@@ -145,7 +151,7 @@ describe('useChatSession message ids', () => {
     for (let i = 0; i < 2; i += 1) {
       const { result } = renderHook(() => useChatSession())
       await act(async () => {
-        await result.current.startAsOfferer()
+        await result.current.startAsOfferer(`test-conv-${i}`)
       })
       act(() => lastChannel!.open())
       act(() => result.current.send(`msg-${i}`))
@@ -158,7 +164,7 @@ describe('useChatSession message ids', () => {
   it('continues to issue unique ids after reset()', async () => {
     const { result } = renderHook(() => useChatSession())
     await act(async () => {
-      await result.current.startAsOfferer()
+      await result.current.startAsOfferer('test-conv-a')
     })
     act(() => lastChannel!.open())
     act(() => result.current.send('before'))
@@ -168,7 +174,9 @@ describe('useChatSession message ids', () => {
     expect(result.current.messages).toHaveLength(0)
 
     await act(async () => {
-      await result.current.startAsOfferer()
+      // Use a different conversation so the seeded transcript from the prior
+      // run doesn't push the new "after" message off index 0.
+      await result.current.startAsOfferer('test-conv-b')
     })
     act(() => lastChannel!.open())
     act(() => result.current.send('after'))
@@ -192,7 +200,7 @@ describe('useChatSession lifecycle', () => {
   it('startAsOfferer transitions to awaiting-answer and populates encodedLocal', async () => {
     const { result } = renderHook(() => useChatSession())
     await act(async () => {
-      await result.current.startAsOfferer()
+      await result.current.startAsOfferer('test-conv')
     })
     expect(result.current.state).toBe('awaiting-answer')
     expect(result.current.encodedLocal).toBeTypeOf('string')
@@ -204,7 +212,7 @@ describe('useChatSession lifecycle', () => {
     failNextSetLocalDescription = true
     const { result } = renderHook(() => useChatSession())
     await act(async () => {
-      await result.current.startAsOfferer()
+      await result.current.startAsOfferer('test-conv')
     })
     expect(result.current.state).toBe('failed')
     expect(result.current.error).toBe('boom')
@@ -214,7 +222,7 @@ describe('useChatSession lifecycle', () => {
   it('channel onopen transitions state to "connected"', async () => {
     const { result } = renderHook(() => useChatSession())
     await act(async () => {
-      await result.current.startAsOfferer()
+      await result.current.startAsOfferer('test-conv')
     })
     expect(result.current.state).toBe('awaiting-answer')
 
@@ -225,7 +233,7 @@ describe('useChatSession lifecycle', () => {
   it('pc.onconnectionstatechange with "failed" transitions state to "failed"', async () => {
     const { result } = renderHook(() => useChatSession())
     await act(async () => {
-      await result.current.startAsOfferer()
+      await result.current.startAsOfferer('test-conv')
     })
 
     act(() => lastPc!.failConnection())
@@ -243,7 +251,7 @@ describe('useChatSession lifecycle', () => {
     const offerCode = encode({ type: 'offer', sdp: 'v=0\r\n' })
     const { result } = renderHook(() => useChatSession())
     await act(async () => {
-      await result.current.startAsAnswerer(offerCode)
+      await result.current.startAsAnswerer(offerCode, 'test-conv')
     })
     expect(result.current.state).toBe('connecting')
 
@@ -263,7 +271,7 @@ describe('useChatSession lifecycle', () => {
     // path instead of stranding the user on the spinner.
     const { result } = renderHook(() => useChatSession())
     await act(async () => {
-      await result.current.startAsOfferer()
+      await result.current.startAsOfferer('test-conv')
     })
     expect(result.current.state).toBe('awaiting-answer')
 
@@ -279,7 +287,7 @@ describe('useChatSession lifecycle', () => {
     // state for "we were connected, then the channel went away".
     const { result } = renderHook(() => useChatSession())
     await act(async () => {
-      await result.current.startAsOfferer()
+      await result.current.startAsOfferer('test-conv')
     })
     act(() => lastChannel!.open())
     expect(result.current.state).toBe('connected')
@@ -302,7 +310,7 @@ describe('useChatSession submitAnswer', () => {
   it('with an active connection calls setRemoteDescription and transitions to "connecting"', async () => {
     const { result } = renderHook(() => useChatSession())
     await act(async () => {
-      await result.current.startAsOfferer()
+      await result.current.startAsOfferer('test-conv')
     })
     // Encode a real session description so the decoder inside acceptAnswer
     // doesn't reject. We import lazily here to avoid a top-level dep.
@@ -330,7 +338,7 @@ describe('useChatSession messages', () => {
   it('appends an incoming chat envelope as a "them" message', async () => {
     const { result } = renderHook(() => useChatSession())
     await act(async () => {
-      await result.current.startAsOfferer()
+      await result.current.startAsOfferer('test-conv')
     })
     act(() => lastChannel!.open())
 
@@ -347,7 +355,7 @@ describe('useChatSession messages', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const { result } = renderHook(() => useChatSession())
     await act(async () => {
-      await result.current.startAsOfferer()
+      await result.current.startAsOfferer('test-conv')
     })
     act(() => lastChannel!.open())
 
@@ -365,7 +373,7 @@ describe('useChatSession messages', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const { result } = renderHook(() => useChatSession())
     await act(async () => {
-      await result.current.startAsOfferer()
+      await result.current.startAsOfferer('test-conv')
     })
     act(() => lastChannel!.open())
 
@@ -380,7 +388,7 @@ describe('useChatSession messages', () => {
   it('send() drops empty / whitespace-only input as a no-op', async () => {
     const { result } = renderHook(() => useChatSession())
     await act(async () => {
-      await result.current.startAsOfferer()
+      await result.current.startAsOfferer('test-conv')
     })
     act(() => lastChannel!.open())
 
@@ -403,7 +411,7 @@ describe('useChatSession messages', () => {
   it('send() is a no-op when the channel is not open', async () => {
     const { result } = renderHook(() => useChatSession())
     await act(async () => {
-      await result.current.startAsOfferer()
+      await result.current.startAsOfferer('test-conv')
     })
     // Deliberately do NOT call lastChannel.open(); readyState stays 'connecting'.
     expect(lastChannel!.readyState).toBe('connecting')
@@ -417,7 +425,7 @@ describe('useChatSession messages', () => {
   it('send() with an open channel wraps the text in a chat envelope and appends from: "me"', async () => {
     const { result } = renderHook(() => useChatSession())
     await act(async () => {
-      await result.current.startAsOfferer()
+      await result.current.startAsOfferer('test-conv')
     })
     act(() => lastChannel!.open())
 
@@ -471,7 +479,7 @@ describe('useChatSession FEAT-010 telemetry, sync, receipts', () => {
   it('offerer initiates a sync-probe envelope as soon as the channel opens', async () => {
     const { result } = renderHook(() => useChatSession())
     await act(async () => {
-      await result.current.startAsOfferer()
+      await result.current.startAsOfferer('test-conv')
     })
     await act(async () => {
       lastChannel!.open()
@@ -488,7 +496,7 @@ describe('useChatSession FEAT-010 telemetry, sync, receipts', () => {
   it('offerer completes the sync handshake on sync-ack and populates telemetry.sync', async () => {
     const { result } = renderHook(() => useChatSession())
     await act(async () => {
-      await result.current.startAsOfferer()
+      await result.current.startAsOfferer('test-conv')
     })
     await act(async () => {
       lastChannel!.open()
@@ -535,7 +543,7 @@ describe('useChatSession FEAT-010 telemetry, sync, receipts', () => {
     const offerCode = encodeSdp({ type: 'offer', sdp: 'v=0\r\n' })
     const { result } = renderHook(() => useChatSession())
     await act(async () => {
-      await result.current.startAsAnswerer(offerCode)
+      await result.current.startAsAnswerer(offerCode, 'test-conv')
     })
     // Answerer's channel arrives via `pc.ondatachannel`, not `createDataChannel`.
     const answererChannel = new FakeDataChannel()
@@ -578,7 +586,7 @@ describe('useChatSession FEAT-010 telemetry, sync, receipts', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
       const { result } = renderHook(() => useChatSession())
       await act(async () => {
-        await result.current.startAsOfferer()
+        await result.current.startAsOfferer('test-conv')
       })
       await act(async () => {
         lastChannel!.open()
@@ -609,7 +617,7 @@ describe('useChatSession FEAT-010 telemetry, sync, receipts', () => {
     const offerCode = encodeSdp({ type: 'offer', sdp: 'v=0\r\n' })
     const { result: answerer } = renderHook(() => useChatSession())
     await act(async () => {
-      await answerer.current.startAsAnswerer(offerCode)
+      await answerer.current.startAsAnswerer(offerCode, 'test-conv')
     })
     // Answerer's channel arrives via `pc.ondatachannel`, not `createDataChannel`.
     const answererChannel = new FakeDataChannel()
@@ -636,7 +644,7 @@ describe('useChatSession FEAT-010 telemetry, sync, receipts', () => {
   it('outgoing chat starts as delivery:"pending" and flips to "delivered" when a receipt arrives', async () => {
     const { result } = renderHook(() => useChatSession())
     await act(async () => {
-      await result.current.startAsOfferer()
+      await result.current.startAsOfferer('test-conv')
     })
     await act(async () => {
       lastChannel!.open()
@@ -674,7 +682,7 @@ describe('useChatSession FEAT-010 telemetry, sync, receipts', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const { result } = renderHook(() => useChatSession())
     await act(async () => {
-      await result.current.startAsOfferer()
+      await result.current.startAsOfferer('test-conv')
     })
     await act(async () => {
       lastChannel!.open()
@@ -704,7 +712,7 @@ describe('useChatSession FEAT-010 telemetry, sync, receipts', () => {
   it('state-change samples accumulate as the connection progresses', async () => {
     const { result } = renderHook(() => useChatSession())
     await act(async () => {
-      await result.current.startAsOfferer()
+      await result.current.startAsOfferer('test-conv')
     })
     await act(async () => {
       lastChannel!.open()
@@ -723,7 +731,7 @@ describe('useChatSession FEAT-010 telemetry, sync, receipts', () => {
   it('telemetry.connectedAt is set when the channel opens', async () => {
     const { result } = renderHook(() => useChatSession())
     await act(async () => {
-      await result.current.startAsOfferer()
+      await result.current.startAsOfferer('test-conv')
     })
     expect(result.current.telemetry.connectedAt).toBeNull()
     await act(async () => {
@@ -738,7 +746,7 @@ describe('useChatSession teardown', () => {
   it('reset() clears state and closes both pc and channel', async () => {
     const { result } = renderHook(() => useChatSession())
     await act(async () => {
-      await result.current.startAsOfferer()
+      await result.current.startAsOfferer('test-conv')
     })
     act(() => lastChannel!.open())
     act(() => result.current.send('hello'))
@@ -761,7 +769,7 @@ describe('useChatSession teardown', () => {
   it('unmount closes both pc and channel', async () => {
     const { result, unmount } = renderHook(() => useChatSession())
     await act(async () => {
-      await result.current.startAsOfferer()
+      await result.current.startAsOfferer('test-conv')
     })
     const pc = lastPc!
     const channel = lastChannel!
@@ -784,7 +792,7 @@ describe('useChatSession state-machine guards', () => {
     const { result } = renderHook(() => useChatSession())
 
     await act(async () => {
-      await result.current.startAsOfferer()
+      await result.current.startAsOfferer('test-conv')
     })
     const firstPc = lastPc
     expect(result.current.state).toBe('awaiting-answer')
@@ -792,7 +800,7 @@ describe('useChatSession state-machine guards', () => {
 
     // Second call once we're already in `awaiting-answer` — should be a no-op.
     await act(async () => {
-      await result.current.startAsOfferer()
+      await result.current.startAsOfferer('test-conv')
     })
 
     expect(pcStats.constructorCount).toBe(1)
@@ -804,7 +812,7 @@ describe('useChatSession state-machine guards', () => {
     const { result } = renderHook(() => useChatSession())
 
     await act(async () => {
-      await result.current.startAsOfferer()
+      await result.current.startAsOfferer('test-conv')
     })
     const offererPc = lastPc!
     expect(result.current.state).toBe('awaiting-answer')
@@ -814,7 +822,7 @@ describe('useChatSession state-machine guards', () => {
     const offerCode = encode({ type: 'offer', sdp: 'v=0\r\n' })
 
     await act(async () => {
-      await result.current.startAsAnswerer(offerCode)
+      await result.current.startAsAnswerer(offerCode, 'test-conv')
     })
 
     // No second PC, no setRemoteDescription on a fresh pc, state stayed on
@@ -828,7 +836,7 @@ describe('useChatSession state-machine guards', () => {
   it('submitAnswer while state is "connected" does not tear down the live chat', async () => {
     const { result } = renderHook(() => useChatSession())
     await act(async () => {
-      await result.current.startAsOfferer()
+      await result.current.startAsOfferer('test-conv')
     })
     act(() => lastChannel!.open())
     // FEAT-010: incoming wire payloads are JSON envelopes now.
@@ -865,7 +873,7 @@ describe('useChatSession state-machine guards', () => {
 
     const { result } = renderHook(() => useChatSession())
     await act(async () => {
-      await result.current.startAsAnswerer(offerCode)
+      await result.current.startAsAnswerer(offerCode, 'test-conv')
     })
     expect(result.current.state).toBe('connecting')
     // acceptOffer calls setRemoteDescription with the offer once; track baseline.
@@ -886,7 +894,7 @@ describe('useChatSession state-machine guards', () => {
     // Regression guard: the guard keys on 'idle', and reset returns to 'idle'.
     const { result } = renderHook(() => useChatSession())
     await act(async () => {
-      await result.current.startAsOfferer()
+      await result.current.startAsOfferer('test-conv')
     })
     expect(pcStats.constructorCount).toBe(1)
 
@@ -894,7 +902,7 @@ describe('useChatSession state-machine guards', () => {
     expect(result.current.state).toBe('idle')
 
     await act(async () => {
-      await result.current.startAsOfferer()
+      await result.current.startAsOfferer('test-conv')
     })
 
     expect(pcStats.constructorCount).toBe(2)
@@ -912,7 +920,7 @@ describe('useChatSession politelyAcceptOffer (FEAT-008)', () => {
   it('tears down the offerer PC and starts an answerer flow against the pasted offer', async () => {
     const { result } = renderHook(() => useChatSession())
     await act(async () => {
-      await result.current.startAsOfferer()
+      await result.current.startAsOfferer('test-conv')
     })
     expect(result.current.state).toBe('awaiting-answer')
     const offererPc = lastPc!
@@ -947,7 +955,7 @@ describe('useChatSession politelyAcceptOffer (FEAT-008)', () => {
     // method must short-circuit that path.
     const { result } = renderHook(() => useChatSession())
     await act(async () => {
-      await result.current.startAsOfferer()
+      await result.current.startAsOfferer('test-conv')
     })
     expect(result.current.state).toBe('awaiting-answer')
 
@@ -991,7 +999,7 @@ describe('useChatSession politelyAcceptOffer (FEAT-008)', () => {
     // identity rather than encoded-payload byte-equality.
     const { result } = renderHook(() => useChatSession())
     await act(async () => {
-      await result.current.startAsOfferer()
+      await result.current.startAsOfferer('test-conv')
     })
     const offererPc = lastPc!
     expect(result.current.encodedLocal).toBeTypeOf('string')
@@ -1014,7 +1022,7 @@ describe('useChatSession politelyAcceptOffer (FEAT-008)', () => {
   it('surfaces an error and lands in "failed" when the pasted code cannot be decoded', async () => {
     const { result } = renderHook(() => useChatSession())
     await act(async () => {
-      await result.current.startAsOfferer()
+      await result.current.startAsOfferer('test-conv')
     })
 
     await act(async () => {
@@ -1024,5 +1032,234 @@ describe('useChatSession politelyAcceptOffer (FEAT-008)', () => {
     expect(result.current.state).toBe('failed')
     expect(result.current.error).toBeTypeOf('string')
     expect(result.current.error).not.toBe('')
+  })
+})
+
+describe('useChatSession FEAT-012 resume', () => {
+  // Helper: build a chat envelope string for the wire path.
+  function chatEnvelope(id: string, text: string, sentAt = 1_700_000_000_000): string {
+    return JSON.stringify({ v: 1, t: 'chat', id, sentAt, text })
+  }
+  function historyEnvelope(
+    conversationId: string,
+    messages: Array<{ id: string; from: 'me' | 'them'; text: string; at: number }>,
+  ): string {
+    return JSON.stringify({
+      v: 1,
+      t: 'history',
+      id: 'history-1',
+      sentAt: Date.now(),
+      conversationId,
+      messages,
+    })
+  }
+
+  it('bindConversation seeds messages from local storage before the channel opens (AC#16)', async () => {
+    // Seed storage with a prior transcript for conv 'c1'.
+    const storage = await import('../core/storage')
+    await storage.upsertConversation({ id: 'c1', createdAt: 1, lastActivityAt: 100 })
+    await storage.appendMessage('c1', { id: 'm1', from: 'me', text: 'hi from yesterday', at: 50 })
+    await storage.appendMessage('c1', { id: 'm2', from: 'them', text: 'oh hi', at: 75 })
+
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.bindConversation('c1')
+    })
+
+    expect(result.current.messages).toHaveLength(2)
+    expect(result.current.messages.map((m) => m.id)).toEqual(['m1', 'm2'])
+    expect(result.current.conversationId).toBe('c1')
+  })
+
+  it('send persists the outgoing message via storage.appendMessage (AC#15)', async () => {
+    const storage = await import('../core/storage')
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.bindConversation('c2')
+    })
+    await act(async () => {
+      await result.current.startAsOfferer('c2')
+    })
+    act(() => lastChannel!.open())
+
+    act(() => result.current.send('persisted hello'))
+
+    // Yield so the appendMessage IDB transaction resolves.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+
+    // Read back from storage to assert the message landed.
+    const stored = await storage.listMessages('c2')
+    expect(stored).toHaveLength(1)
+    expect(stored[0]).toMatchObject({ from: 'me', text: 'persisted hello' })
+  })
+
+  it('incoming chat envelope is persisted via storage.appendMessage (AC#15)', async () => {
+    const storage = await import('../core/storage')
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.bindConversation('c3')
+    })
+    await act(async () => {
+      await result.current.startAsOfferer('c3')
+    })
+    act(() => lastChannel!.open())
+
+    act(() => lastChannel!.onmessage?.({ data: chatEnvelope('inc-1', 'incoming') }))
+
+    // Yield so the appendMessage IDB transaction resolves.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+
+    const stored = await storage.listMessages('c3')
+    const incoming = stored.find((m) => m.id === 'inc-1')
+    expect(incoming).toBeDefined()
+    expect(incoming!.from).toBe('them')
+    expect(incoming!.text).toBe('incoming')
+    void result
+  })
+
+  it('reset() clears messages and conversationId but does NOT delete from storage (AC#17)', async () => {
+    const storage = await import('../core/storage')
+    const { result } = renderHook(() => useChatSession())
+    // Bind explicitly so we can await the stub upsert before the send fires.
+    await act(async () => {
+      await result.current.bindConversation('c4')
+    })
+    await act(async () => {
+      await result.current.startAsOfferer('c4')
+    })
+    act(() => lastChannel!.open())
+    act(() => result.current.send('keep me'))
+    // Drain the appendMessage promise (and the IDB transaction it spawns).
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+
+    act(() => result.current.reset())
+
+    expect(result.current.messages).toEqual([])
+    expect(result.current.conversationId).toBeNull()
+    // Storage record survives the reset.
+    expect(await storage.getConversation('c4')).not.toBeNull()
+    expect((await storage.listMessages('c4')).length).toBeGreaterThan(0)
+  })
+
+  it('sends a history envelope as soon as the channel opens (AC#10)', async () => {
+    const storage = await import('../core/storage')
+    await storage.upsertConversation({ id: 'c5', createdAt: 1, lastActivityAt: 100 })
+    await storage.appendMessage('c5', { id: 'h1', from: 'me', text: 'old', at: 50 })
+
+    const { result } = renderHook(() => useChatSession())
+    // Bind synchronously so the snapshot is populated before the channel
+    // opens. Without this the open handler would ship an empty array.
+    await act(async () => {
+      await result.current.bindConversation('c5')
+    })
+    await act(async () => {
+      await result.current.startAsOfferer('c5')
+    })
+    await act(async () => {
+      lastChannel!.open()
+      await Promise.resolve()
+    })
+
+    // Find the history envelope in the sent bytes.
+    const history = lastChannel!.sent
+      .map((s) => {
+        try {
+          return JSON.parse(s)
+        } catch {
+          return null
+        }
+      })
+      .find((p) => p && p.t === 'history')
+    expect(history).toBeTruthy()
+    expect(history.conversationId).toBe('c5')
+    expect(history.messages).toHaveLength(1)
+    expect(history.messages[0].id).toBe('h1')
+    void result
+  })
+
+  it('merges an incoming history envelope, flipping perspective and deduping by id (AC#11)', async () => {
+    const storage = await import('../core/storage')
+    await storage.upsertConversation({ id: 'c6', createdAt: 1, lastActivityAt: 100 })
+    // Local already has m1 (sent by me).
+    await storage.appendMessage('c6', { id: 'm1', from: 'me', text: 'local-mine', at: 50 })
+
+    const { result } = renderHook(() => useChatSession())
+    // Bind synchronously so the local seed has finished by the time the
+    // history envelope arrives — otherwise the merge path's bindPromise
+    // wait stretches past the test timeout.
+    await act(async () => {
+      await result.current.bindConversation('c6')
+    })
+    await act(async () => {
+      await result.current.startAsOfferer('c6')
+    })
+    act(() => lastChannel!.open())
+
+    // Peer sends a history with our m1 (from their perspective: 'them') plus
+    // a new m2 (from their perspective: 'me' — they sent it).
+    const incoming = [
+      { id: 'm1', from: 'them' as const, text: 'local-mine', at: 50 },
+      { id: 'm2', from: 'me' as const, text: 'their-message', at: 75 },
+    ]
+    await act(async () => {
+      lastChannel!.onmessage?.({ data: historyEnvelope('c6', incoming) })
+      // Apply runs after the bindPromise. Yield the event loop so the IDB
+      // bulkInsert and setState resolve before we assert.
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+
+    // After merge: m1 stayed local (not duplicated), m2 was inserted with
+    // flipped perspective ('me' on peer → 'them' on us).
+    expect(result.current.messages).toHaveLength(2)
+    const m2 = result.current.messages.find((m) => m.id === 'm2')
+    expect(m2).toBeDefined()
+    expect(m2!.from).toBe('them')
+    // hasResumed latched.
+    expect(result.current.hasResumed).toBe(true)
+  })
+
+  it('drops a history envelope whose conversationId does not match the session', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsOfferer('c-expected')
+    })
+    act(() => lastChannel!.open())
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    const initialCount = result.current.messages.length
+
+    await act(async () => {
+      lastChannel!.onmessage?.({
+        data: historyEnvelope('c-wrong', [{ id: 'x', from: 'me', text: 'stale', at: 1 }]),
+      })
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(result.current.messages).toHaveLength(initialCount)
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('hasResumed stays false on a fresh conversation that never receives a history envelope', async () => {
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsOfferer('c-fresh')
+    })
+    act(() => lastChannel!.open())
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(result.current.hasResumed).toBe(false)
   })
 })

@@ -35,6 +35,28 @@ describe('buildOfferUrl', () => {
   it('keeps a base path with trailing slash', () => {
     expect(buildOfferUrl('https://example.com', '/p2p/', 'X')).toBe('https://example.com/p2p/#offer=X')
   })
+
+  it('appends a conversationId as &conv= when provided (FEAT-012)', () => {
+    expect(buildOfferUrl('https://example.com', '/', 'PAYLOAD', 'uuid-1')).toBe(
+      'https://example.com/#offer=PAYLOAD&conv=uuid-1',
+    )
+  })
+
+  it('omits the conv param when conversationId is null/undefined', () => {
+    expect(buildOfferUrl('https://example.com', '/', 'PAYLOAD', null)).toBe('https://example.com/#offer=PAYLOAD')
+    expect(buildOfferUrl('https://example.com', '/', 'PAYLOAD')).toBe('https://example.com/#offer=PAYLOAD')
+  })
+})
+
+describe('readHashParam reads conv alongside offer (FEAT-012)', () => {
+  it('returns the conv value from a hash with both offer and conv params', () => {
+    expect(readHashParam('#offer=ABC&conv=uuid-1', 'conv')).toBe('uuid-1')
+    expect(readHashParam('#offer=ABC&conv=uuid-1', 'offer')).toBe('ABC')
+  })
+
+  it('returns null when conv is absent', () => {
+    expect(readHashParam('#offer=ABC', 'conv')).toBeNull()
+  })
 })
 
 describe('currentOfferUrl', () => {

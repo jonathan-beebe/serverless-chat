@@ -16,6 +16,9 @@ import type { ConnectionState } from '../core/rtc'
 
 interface Props {
   session: ChatSession
+  /** FEAT-012: the conversation this Offerer run is bound to. Home owns the
+   *  generator — fresh UUID for new chats, existing id for Resume. */
+  conversationId: string
   onCancel: () => void
 }
 
@@ -91,7 +94,7 @@ function statusMessage(state: ConnectionState, hasLocal: boolean): string {
   }
 }
 
-export function Offerer({ session, onCancel }: Props) {
+export function Offerer({ session, conversationId, onCancel }: Props) {
   const [answerDraft, setAnswerDraft] = useState('')
   // FEAT-008: tracks whether the user pasted another peer's offer into the
   // reply box. Once true, the screen swaps from the invite view to the
@@ -132,10 +135,11 @@ export function Offerer({ session, onCancel }: Props) {
   })
 
   // Kick off offer generation on first mount; the hook owns the connection
-  // so re-renders won't restart it.
+  // so re-renders won't restart it. FEAT-012: pass the conversation id so
+  // the hook can seed the transcript before the channel opens (AC#16/#25/#26).
   useEffect(() => {
-    if (session.state === 'idle') void session.startAsOfferer()
-  }, [session])
+    if (session.state === 'idle') void session.startAsOfferer(conversationId)
+  }, [session, conversationId])
 
   // Shared dispatch — both the form submit and the Enter key path route
   // through here so there's no way to bypass the polite-peer detection by
@@ -200,7 +204,7 @@ export function Offerer({ session, onCancel }: Props) {
             End chat
           </Button>
         </header>
-        <Chat messages={session.messages} onSend={session.send} />
+        <Chat messages={session.messages} onSend={session.send} hasResumed={session.hasResumed} />
       </ScreenContainer>
     )
   }
@@ -278,7 +282,9 @@ export function Offerer({ session, onCancel }: Props) {
     )
   }
 
-  const offerUrl = session.encodedLocal && currentOfferUrl(session.encodedLocal)
+  // FEAT-012 AC#6: the invite URL carries the conversation id alongside the
+  // encoded SDP so the joining peer can mirror the conversation locally.
+  const offerUrl = session.encodedLocal && currentOfferUrl(session.encodedLocal, conversationId)
 
   return (
     <ScreenContainer label="Invite your friend" className="mx-auto flex max-w-xl flex-col gap-6 px-4 py-12">
