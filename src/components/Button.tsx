@@ -13,8 +13,12 @@ const base =
 
 const variants: Record<Variant, string> = {
   primary: 'bg-sky-700 text-white hover:bg-sky-800',
+  // A11Y-016: secondary button border was `slate-300 / slate-700` against the
+  // page surface — same failing 1.48 / 1.75:1 ratios as Textarea. Bumped in
+  // lockstep with `Textarea` to `slate-400 / slate-500` so the button boundary
+  // (its only resting-state delimiter) clears WCAG 1.4.11's 3:1 floor.
   secondary:
-    'border border-slate-300 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800',
+    'border border-slate-400 text-slate-700 hover:bg-slate-100 dark:border-slate-500 dark:text-slate-300 dark:hover:bg-slate-800',
   ghost: 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800',
 }
 

@@ -8,7 +8,11 @@ describe('Textarea primitive', () => {
     render(<Textarea aria-label="msg" />)
     const el = screen.getByLabelText('msg')
     expect(el.tagName).toBe('TEXTAREA')
-    expect(el.className).toMatch(/border-slate-300/)
+    // A11Y-016: control border tokens were bumped from `slate-300 / slate-700`
+    // (1.48 / 1.75:1 vs page surface) to `slate-400 / slate-500` (≈3.00 / 3.45:1)
+    // to clear WCAG 1.4.11's 3:1 floor for non-text UI contrast.
+    expect(el.className).toMatch(/border-slate-400/)
+    expect(el.className).toMatch(/dark:border-slate-500/)
     expect(el.className).toMatch(/focus-visible:ring-sky-400/)
     expect(el.className).toMatch(/dark:bg-slate-900/)
   })
@@ -46,7 +50,7 @@ describe('Textarea primitive', () => {
     const el = screen.getByLabelText('msg')
     expect(el.className).toMatch(/font-mono/)
     expect(el.className).toMatch(/text-xs/)
-    // Base styling is still present.
-    expect(el.className).toMatch(/border-slate-300/)
+    // Base styling is still present (A11Y-016 control-border token).
+    expect(el.className).toMatch(/border-slate-400/)
   })
 })
