@@ -59,6 +59,21 @@ describe('App routing', () => {
     expect(screen.getByRole('heading', { name: /you've been invited to chat/i })).toBeInTheDocument()
   })
 
+  it('moves focus to the new screen heading on navigation (WCAG 2.4.3)', () => {
+    // Home renders → its h1 should receive programmatic focus so keyboard /
+    // screen-reader users land on a meaningful starting point.
+    render(<App />)
+    expect(screen.getByRole('heading', { name: /serverless p2p chat/i })).toHaveFocus()
+
+    // Routing into Joiner via the hash should move focus to that screen's h1.
+    const payload = encode({ type: 'offer', sdp: 'v=0\r\n' })
+    act(() => {
+      history.replaceState(null, '', `/#offer=${payload}`)
+      window.dispatchEvent(new HashChangeEvent('hashchange'))
+    })
+    expect(screen.getByRole('heading', { name: /you've been invited to chat/i })).toHaveFocus()
+  })
+
   it('updates document.title to reflect the current screen (WCAG 2.4.2)', () => {
     // Home keeps the base title.
     render(<App />)

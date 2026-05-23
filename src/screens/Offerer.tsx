@@ -3,6 +3,7 @@ import { CopyBox } from '../components/CopyBox'
 import { Chat } from '../components/Chat'
 import { currentOfferUrl } from '../core/url'
 import type { ChatSession } from '../hooks/useChatSession'
+import { useFocusOnMount } from '../hooks/useFocusOnMount'
 import { usePageTitle } from '../hooks/usePageTitle'
 
 interface Props {
@@ -12,7 +13,11 @@ interface Props {
 
 export function Offerer({ session, onCancel }: Props) {
   const [answerDraft, setAnswerDraft] = useState('')
-  usePageTitle(session.state === 'connected' ? 'Connected · P2P Chat' : 'Invite a friend · P2P Chat')
+  const isConnected = session.state === 'connected'
+  usePageTitle(isConnected ? 'Connected · P2P Chat' : 'Invite a friend · P2P Chat')
+  // Refocus when the rendered branch swaps (invite ↔ connected), so the
+  // user lands on the new heading instead of being dropped to <body>.
+  const headingRef = useFocusOnMount<HTMLHeadingElement>([isConnected])
 
   // Kick off offer generation on first mount; the hook owns the connection
   // so re-renders won't restart it.
@@ -26,11 +31,13 @@ export function Offerer({ session, onCancel }: Props) {
     void session.submitAnswer(answerDraft)
   }
 
-  if (session.state === 'connected') {
+  if (isConnected) {
     return (
       <main className="mx-auto flex h-[calc(100vh-3rem)] max-w-xl flex-col gap-3 px-4 py-6">
         <header className="flex items-center justify-between">
-          <h1 className="text-lg font-semibold text-slate-100">Connected</h1>
+          <h1 ref={headingRef} tabIndex={-1} className="text-lg font-semibold text-slate-100 focus:outline-none">
+            Connected
+          </h1>
           <button
             type="button"
             onClick={onCancel}
@@ -49,7 +56,9 @@ export function Offerer({ session, onCancel }: Props) {
     <main className="mx-auto flex max-w-xl flex-col gap-6 px-4 py-12">
       <header className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-100">Invite your friend</h1>
+          <h1 ref={headingRef} tabIndex={-1} className="text-2xl font-semibold text-slate-100 focus:outline-none">
+            Invite your friend
+          </h1>
           <p className="mt-1 text-sm text-slate-400">Keep this tab open — your friend's reply lands here.</p>
         </div>
         <button

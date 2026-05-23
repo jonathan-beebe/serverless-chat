@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { CopyBox } from '../components/CopyBox'
 import { Chat } from '../components/Chat'
 import type { ChatSession } from '../hooks/useChatSession'
+import { useFocusOnMount } from '../hooks/useFocusOnMount'
 import { usePageTitle } from '../hooks/usePageTitle'
 
 interface Props {
@@ -26,11 +27,20 @@ export function Joiner({ session, offerCode, onCancel }: Props) {
     }
   }, [accepted, offerCode, session])
 
-  if (session.state === 'connected') {
+  // Joiner has three branches (invite → reply-code → connected). Recompute
+  // focus when that branch flips so keyboard / screen-reader users land on
+  // the new heading instead of <body>.
+  const branch: 'connected' | 'invite' | 'reply' =
+    session.state === 'connected' ? 'connected' : accepted ? 'reply' : 'invite'
+  const headingRef = useFocusOnMount<HTMLHeadingElement>([branch])
+
+  if (branch === 'connected') {
     return (
       <main className="mx-auto flex h-[calc(100vh-3rem)] max-w-xl flex-col gap-3 px-4 py-6">
         <header className="flex items-center justify-between">
-          <h1 className="text-lg font-semibold text-slate-100">Connected</h1>
+          <h1 ref={headingRef} tabIndex={-1} className="text-lg font-semibold text-slate-100 focus:outline-none">
+            Connected
+          </h1>
           <button
             type="button"
             onClick={onCancel}
@@ -43,10 +53,12 @@ export function Joiner({ session, offerCode, onCancel }: Props) {
     )
   }
 
-  if (!accepted) {
+  if (branch === 'invite') {
     return (
       <main className="mx-auto flex max-w-xl flex-col items-center gap-6 px-4 py-12 text-center">
-        <h1 className="text-2xl font-semibold text-slate-100">You've been invited to chat</h1>
+        <h1 ref={headingRef} tabIndex={-1} className="text-2xl font-semibold text-slate-100 focus:outline-none">
+          You've been invited to chat
+        </h1>
         <p className="text-slate-300">
           Accepting opens a direct, peer-to-peer connection. You'll receive a short reply code to send back to your
           friend.
@@ -73,7 +85,9 @@ export function Joiner({ session, offerCode, onCancel }: Props) {
     <main className="mx-auto flex max-w-xl flex-col gap-6 px-4 py-12">
       <header className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-100">Send this code back</h1>
+          <h1 ref={headingRef} tabIndex={-1} className="text-2xl font-semibold text-slate-100 focus:outline-none">
+            Send this code back
+          </h1>
           <p className="mt-1 text-sm text-slate-400">
             Once they paste it, the connection opens and the chat starts automatically.
           </p>
