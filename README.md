@@ -7,6 +7,12 @@ chat.
 
 ## Develop
 
+First-time setup (devcontainer users): run `./scripts/setup-devcontainer.sh` to
+generate `.devcontainer/.env` with your git name/email (defaults are taken from
+your host `git config`). The values are loaded into the container on start and
+applied via `git config --global`, so commits inside the container are
+attributed to you. The file is gitignored.
+
 ```bash
 npm install
 npm run dev          # vite dev server
@@ -14,9 +20,6 @@ npm run dev:host     # use this when running inside the devcontainer so the host
 npm test             # vitest (one-shot); npm run test:watch for watch mode
 npm run ci           # format:check + typecheck + lint + test + build
 ```
-
-Other scripts: `npm run build`, `npm run preview`, `npm run lint`,
-`npm run format`, `npm run typecheck`.
 
 ## How it works
 
@@ -62,3 +65,12 @@ Source map:
   `RTCPeerConnection`.
 - `src/screens/Offerer.tsx` / `src/screens/Joiner.tsx` — the two signaling UIs.
 - `src/components/Chat.tsx` — the connected-state chat transcript and composer.
+
+## Coding Principles
+
+- Favor simple over complex, clear over clever.
+- Favor a functional core / imperative shell pattern.
+- Favor a TDD approach, ensuring the functional core is well tested, and the
+  imperative shell protects user flows and expected behavior with integration
+  tests.
+- Always keep the app fully accessible and adhere to WCAG.
