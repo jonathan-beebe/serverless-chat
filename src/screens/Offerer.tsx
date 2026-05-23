@@ -3,6 +3,7 @@ import { CopyBox } from '../components/CopyBox'
 import { Chat } from '../components/Chat'
 import { currentOfferUrl } from '../core/url'
 import type { ChatSession } from '../hooks/useChatSession'
+import { usePageTitle } from '../hooks/usePageTitle'
 
 interface Props {
   session: ChatSession
@@ -11,6 +12,7 @@ interface Props {
 
 export function Offerer({ session, onCancel }: Props) {
   const [answerDraft, setAnswerDraft] = useState('')
+  usePageTitle(session.state === 'connected' ? 'Connected · P2P Chat' : 'Invite a friend · P2P Chat')
 
   // Kick off offer generation on first mount; the hook owns the connection
   // so re-renders won't restart it.

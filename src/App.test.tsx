@@ -58,4 +58,18 @@ describe('App routing', () => {
 
     expect(screen.getByRole('heading', { name: /you've been invited to chat/i })).toBeInTheDocument()
   })
+
+  it('updates document.title to reflect the current screen (WCAG 2.4.2)', () => {
+    // Home keeps the base title.
+    render(<App />)
+    expect(document.title).toBe('P2P Chat')
+
+    // Routing into Joiner via the hash should swap the title.
+    const payload = encode({ type: 'offer', sdp: 'v=0\r\n' })
+    act(() => {
+      history.replaceState(null, '', `/#offer=${payload}`)
+      window.dispatchEvent(new HashChangeEvent('hashchange'))
+    })
+    expect(document.title).toMatch(/you've been invited/i)
+  })
 })

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { CopyBox } from '../components/CopyBox'
 import { Chat } from '../components/Chat'
 import type { ChatSession } from '../hooks/useChatSession'
+import { usePageTitle } from '../hooks/usePageTitle'
 
 interface Props {
   session: ChatSession
@@ -9,8 +10,15 @@ interface Props {
   onCancel: () => void
 }
 
+function joinerTitle(state: ChatSession['state'], accepted: boolean): string {
+  if (state === 'connected') return 'Connected · P2P Chat'
+  if (!accepted) return "You've been invited · P2P Chat"
+  return 'Send your reply code · P2P Chat'
+}
+
 export function Joiner({ session, offerCode, onCancel }: Props) {
   const [accepted, setAccepted] = useState(false)
+  usePageTitle(joinerTitle(session.state, accepted))
 
   useEffect(() => {
     if (accepted && session.state === 'idle') {
