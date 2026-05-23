@@ -8,10 +8,14 @@ describe('Button primitive', () => {
     expect(screen.getByRole('button', { name: 'Click' })).toHaveAttribute('type', 'button')
   })
 
-  it('primary variant carries sky-600 background + light/dark treatment', () => {
+  it('primary variant carries sky-700 background (AA-contrast brand token) + light/dark treatment', () => {
     render(<Button variant="primary">Go</Button>)
     const btn = screen.getByRole('button', { name: 'Go' })
-    expect(btn.className).toMatch(/bg-sky-600/)
+    // A11Y-014: brand token promoted from sky-600 → sky-700 so text-white on
+    // the primary surface clears WCAG AA 4.5:1 for normal text. Hover darkens
+    // (sky-800) instead of lightens so the hover state also clears AA.
+    expect(btn.className).toMatch(/bg-sky-700/)
+    expect(btn.className).toMatch(/hover:bg-sky-800/)
     expect(btn.className).toMatch(/text-white/)
     expect(btn.className).toMatch(/focus-visible:ring-2/)
   })
@@ -59,6 +63,6 @@ describe('Button primitive', () => {
     )
     const btn = screen.getByRole('button', { name: 'X' })
     expect(btn.className).toMatch(/self-start/)
-    expect(btn.className).toMatch(/bg-sky-600/)
+    expect(btn.className).toMatch(/bg-sky-700/)
   })
 })

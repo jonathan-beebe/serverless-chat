@@ -142,7 +142,7 @@ export function Chat({ messages, onSend, disabled }: Props) {
               <div
                 data-testid="message-bubble"
                 className={`flex max-w-[80%] flex-col gap-0.5 rounded-lg px-3 py-1 text-sm ${
-                  isMe ? 'bg-sky-600 text-white' : 'bg-slate-200 text-slate-900 dark:bg-slate-700 dark:text-slate-100'
+                  isMe ? 'bg-sky-700 text-white' : 'bg-slate-200 text-slate-900 dark:bg-slate-700 dark:text-slate-100'
                 }`}>
                 <span data-testid={`message-text-${m.id}`} className="whitespace-pre-wrap break-words">
                   {m.text}

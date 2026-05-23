@@ -59,7 +59,7 @@ const FAKE_REPLY = 'eyJzZHAiOiJ2PTBcclxubz1yZXBseSAxMjM0NTY3ODkgMSBJTiBJUDQgMTI3
 const SWATCHES: { name: string; light: string; dark: string; label: string }[] = [
   { name: 'slate-50', light: 'bg-slate-50', dark: 'bg-slate-50', label: 'page light bg' },
   { name: 'slate-900', light: 'bg-slate-900', dark: 'bg-slate-900', label: 'page dark bg' },
-  { name: 'sky-600', light: 'bg-sky-600', dark: 'bg-sky-600', label: 'brand / primary' },
+  { name: 'sky-700', light: 'bg-sky-700', dark: 'bg-sky-700', label: 'brand / primary' },
   { name: 'emerald-700', light: 'bg-emerald-700', dark: 'bg-emerald-700', label: 'success' },
   { name: 'amber-700', light: 'bg-amber-700', dark: 'bg-amber-700', label: 'warning' },
   { name: 'red-900', light: 'bg-red-900', dark: 'bg-red-900', label: 'error text' },
