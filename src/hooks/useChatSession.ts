@@ -49,7 +49,11 @@ export function useChatSession(): ChatSession {
   const wireChannel = useCallback((channel: RTCDataChannel) => {
     channelRef.current = channel
     channel.onopen = () => setState('connected')
-    channel.onclose = () => setState((prev) => (prev === 'connected' ? 'failed' : prev))
+    // A close from any pre-terminal state means the connection never recovered;
+    // escalate to 'failed' so the UI can offer a fresh invite exchange. Skip
+    // states that are already terminal ('idle' after teardown, 'failed' already)
+    // so a deliberate reset() isn't clobbered into a spurious error screen.
+    channel.onclose = () => setState((prev) => (prev === 'idle' || prev === 'failed' ? prev : 'failed'))
     channel.onmessage = (event) => {
       const text = typeof event.data === 'string' ? event.data : '[binary message]'
       setMessages((prev) => [...prev, { id: nextId(), from: 'them', text, at: Date.now() }])

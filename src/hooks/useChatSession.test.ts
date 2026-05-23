@@ -216,6 +216,21 @@ describe('useChatSession lifecycle', () => {
     act(() => lastPc!.failConnection())
     expect(result.current.state).toBe('failed')
   })
+
+  it('channel onclose before onopen transitions state to "failed"', async () => {
+    // Repros BUG-002: if the data channel closes while we're still pre-open
+    // (e.g. ICE gives up on a symmetric NAT, or the SCTP transport dies during
+    // setup), state must escalate to "failed" so the UI can offer a recovery
+    // path instead of stranding the user on the spinner.
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsOfferer()
+    })
+    expect(result.current.state).toBe('awaiting-answer')
+
+    act(() => lastChannel!.onclose?.())
+    expect(result.current.state).toBe('failed')
+  })
 })
 
 describe('useChatSession submitAnswer', () => {
