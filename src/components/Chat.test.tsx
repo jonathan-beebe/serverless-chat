@@ -83,3 +83,27 @@ describe('Chat auto-scroll', () => {
     expect(transcript.scrollTop).toBe(460)
   })
 })
+
+describe('Chat speaker attribution (A11Y-004)', () => {
+  it('includes a visually-hidden speaker prefix so the live-region announcement names who spoke', () => {
+    const messages: ChatMessage[] = [msg('a', 'hi there', 'them'), msg('b', 'hello back', 'me')]
+    render(<Chat messages={messages} onSend={() => {}} />)
+
+    const transcript = getTranscript()
+    // The textContent of the transcript is what a screen reader on a polite
+    // live region effectively reads out; assert both speakers are attributed.
+    expect(transcript.textContent).toContain('They said: hi there')
+    expect(transcript.textContent).toContain('You said: hello back')
+  })
+
+  it('renders a visible speaker caption so authorship is not conveyed by color/alignment alone', () => {
+    const messages: ChatMessage[] = [msg('a', 'hi', 'them'), msg('b', 'yo', 'me')]
+    render(<Chat messages={messages} onSend={() => {}} />)
+
+    // Captions are aria-hidden (the sr-only prefix carries the semantics),
+    // so query by text directly within the transcript list.
+    const transcript = getTranscript()
+    expect(transcript.textContent).toContain('Them')
+    expect(transcript.textContent).toContain('You')
+  })
+})

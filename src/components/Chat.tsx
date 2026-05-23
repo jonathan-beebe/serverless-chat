@@ -56,7 +56,13 @@ export function Chat({ messages, onSend, disabled }: Props) {
         className="flex-1 space-y-2 overflow-y-auto rounded-md border border-slate-700 bg-slate-900/50 p-3">
         {messages.length === 0 && <li className="text-sm text-slate-500">No messages yet. Say hello.</li>}
         {messages.map((m) => (
-          <li key={m.id} className={`flex ${m.from === 'me' ? 'justify-end' : 'justify-start'}`}>
+          <li key={m.id} className={`flex flex-col ${m.from === 'me' ? 'items-end' : 'items-start'}`}>
+            {/* Visible caption so sighted users who can't distinguish color/alignment still see authorship. */}
+            <span aria-hidden="true" className="px-1 text-xs text-slate-400">
+              {m.from === 'me' ? 'You' : 'Them'}
+            </span>
+            {/* Visually-hidden prefix so the aria-live announcement includes the speaker. */}
+            <span className="sr-only">{m.from === 'me' ? 'You said: ' : 'They said: '}</span>
             <span
               className={`max-w-[80%] rounded-lg px-3 py-1.5 text-sm ${
                 m.from === 'me' ? 'bg-sky-600 text-white' : 'bg-slate-700 text-slate-100'
