@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { Button } from './Button'
 import { Callout } from './Callout'
 import { LiveRegion } from './LiveRegion'
@@ -21,17 +21,34 @@ export function CopyBox({ value, label, helpText, variant = 'code' }: Props) {
   const manualCopyHintId = `${textareaId}-manual-copy`
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  const flashCopied = () => {
+  // Marks a successful copy. The confirmation persists until the user starts a
+  // new copy attempt, the underlying `value` changes, or the component
+  // unmounts — there is intentionally no wall-clock timer here. A fixed
+  // auto-dismiss was a WCAG 2.2.1 (Timing Adjustable, Level A) violation:
+  // users on screen magnifiers, with cognitive-load needs, or who context-
+  // switched to paste the value would routinely lose the confirmation before
+  // they could read it. See A11Y-020 for the full analysis.
+  const markCopied = () => {
     setCopied(true)
     setNeedsManualCopy(false)
-    setTimeout(() => setCopied(false), 1500)
   }
 
+  // If the value being shown changes, the previous "Copied!" no longer
+  // describes what is in the box — clear it (and any stale fallback hint).
+  useEffect(() => {
+    setCopied(false)
+    setNeedsManualCopy(false)
+  }, [value])
+
   const onCopy = async () => {
+    // A fresh attempt supersedes any previous confirmation; clear up front so
+    // the success/failure of *this* click is what the user sees.
+    setCopied(false)
+
     // Primary path: the modern async clipboard API.
     try {
       await navigator.clipboard.writeText(value)
-      flashCopied()
+      markCopied()
       return
     } catch {
       // Falls through to the legacy path (writeText can be blocked on http:,
@@ -46,7 +63,7 @@ export function CopyBox({ value, label, helpText, variant = 'code' }: Props) {
       el.select()
       try {
         if (document.execCommand('copy')) {
-          flashCopied()
+          markCopied()
           return
         }
       } catch {

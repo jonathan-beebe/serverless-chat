@@ -1,10 +1,11 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CopyBox } from './CopyBox'
 
 describe('CopyBox copy behavior', () => {
   afterEach(() => {
     vi.restoreAllMocks()
+    vi.useRealTimers()
   })
 
   function setClipboardWriteText(impl: (text: string) => Promise<void>) {
@@ -105,5 +106,77 @@ describe('CopyBox copy behavior', () => {
     // The success callout's AT path is the live region; the visible callout
     // stays aria-hidden so SRs don't double-announce the confirmation.
     expect(copied).toHaveAttribute('aria-hidden', 'true')
+  })
+
+  it('A11Y-020: "Copied!" persists well past the former 1500ms auto-dismiss window (Timing Adjustable, WCAG 2.2.1)', async () => {
+    setClipboardWriteText(vi.fn().mockResolvedValue(undefined))
+
+    render(<CopyBox value="payload-value" label="Answer code" />)
+    fireEvent.click(screen.getByRole('button', { name: /copy/i }))
+
+    // The async clipboard promise must resolve before the confirmation appears.
+    await waitFor(() => {
+      expect(screen.getByText('Copied!')).toBeInTheDocument()
+    })
+
+    // Switch to fake timers after the async path has settled. The contract is
+    // that no wall-clock dismissal fires — advancing the clock far past the
+    // former 1500ms hard-coded timer must not remove the confirmation.
+    vi.useFakeTimers()
+    act(() => {
+      vi.advanceTimersByTime(5000)
+    })
+    expect(screen.getByText('Copied!')).toBeInTheDocument()
+
+    act(() => {
+      vi.advanceTimersByTime(60_000)
+    })
+    expect(screen.getByText('Copied!')).toBeInTheDocument()
+  })
+
+  it('A11Y-020: clicking Copy again clears prior "Copied!" state before the new outcome is rendered', async () => {
+    // First click succeeds; second click fails both clipboard paths so the
+    // component would render the manual-copy warning instead of "Copied!".
+    // The prior success confirmation must not linger alongside the new failure.
+    let writeTextImpl: (text: string) => Promise<void> = vi.fn().mockResolvedValue(undefined)
+    setClipboardWriteText((text) => writeTextImpl(text))
+
+    render(<CopyBox value="payload-value" label="Answer code" />)
+    fireEvent.click(screen.getByRole('button', { name: /copy/i }))
+    await waitFor(() => {
+      expect(screen.getByText('Copied!')).toBeInTheDocument()
+    })
+
+    // Swap in a failing implementation, plus a failing execCommand fallback.
+    writeTextImpl = vi.fn().mockRejectedValue(new Error('blocked'))
+    Object.defineProperty(document, 'execCommand', {
+      configurable: true,
+      value: vi.fn().mockReturnValue(false),
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /copy/i }))
+
+    await waitFor(() => {
+      // New outcome: the manual-copy warning is shown.
+      expect(screen.getByText(/Ctrl\+C/)).toBeInTheDocument()
+    })
+    // And the stale "Copied!" from the previous attempt must be gone.
+    expect(screen.queryByText('Copied!')).not.toBeInTheDocument()
+  })
+
+  it('A11Y-020: changing the `value` prop clears a previous "Copied!" confirmation', async () => {
+    setClipboardWriteText(vi.fn().mockResolvedValue(undefined))
+
+    const { rerender } = render(<CopyBox value="first-value" label="Answer code" />)
+    fireEvent.click(screen.getByRole('button', { name: /copy/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Copied!')).toBeInTheDocument()
+    })
+
+    // The thing in the box is no longer the thing on the clipboard. The
+    // confirmation must clear so the user is not misled about what was copied.
+    rerender(<CopyBox value="second-value" label="Answer code" />)
+    expect(screen.queryByText('Copied!')).not.toBeInTheDocument()
   })
 })
