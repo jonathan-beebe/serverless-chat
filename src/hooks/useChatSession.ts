@@ -41,8 +41,15 @@ export interface ChatSession {
    * the reply box instead of an answer. Tear down our own pending offer and
    * become the answerer of the pasted offer so the other peer's existing
    * flow can finish the handshake. Only valid while `state === 'awaiting-answer'`.
+   *
+   * When `conversationId` is supplied, the hook rebinds to that conversation
+   * before kicking off the answerer flow — used by the Joiner path (BUG-007)
+   * where Bob's offerer session was bound to his own conv id and the polite-
+   * defer should follow Alice's invite into her conversation so the FEAT-012
+   * history exchange sees a matching id on both ends. Omit on the Offerer-side
+   * polite-defer where the existing binding is the right one to keep.
    */
-  politelyAcceptOffer: (offerCode: string) => Promise<void>
+  politelyAcceptOffer: (offerCode: string, conversationId?: string) => Promise<void>
   send: (text: string) => void
   reset: () => void
 }
@@ -686,7 +693,7 @@ export function useChatSession(): ChatSession {
   // no-op so a stray call from a stale event handler can't tear down a
   // live chat or restart an in-flight gather.
   const politelyAcceptOffer = useCallback(
-    async (offerCode: string) => {
+    async (offerCode: string, nextConversationId?: string) => {
       if (state !== 'awaiting-answer') return
       // Mark the teardown as deliberate BEFORE closing the channel so the
       // async `onclose` fired by `channel.close()` short-circuits in the
@@ -695,6 +702,14 @@ export function useChatSession(): ChatSession {
       teardown()
       setError(null)
       setEncodedLocal(null)
+      // BUG-007: the Joiner path passes the offer's conversation id so the
+      // session follows the inviter's conversation across the swap. Without
+      // this, Bob's session stays bound to his old offerer conv id and
+      // Alice's FEAT-012 history envelope is rejected with a mismatch warn.
+      // Offerer-side polite-defer omits the arg and keeps its existing binding.
+      if (nextConversationId && nextConversationId !== conversationIdRef.current) {
+        void bindConversation(nextConversationId)
+      }
       transition('gathering')
       try {
         roleRef.current = 'answerer'
@@ -716,7 +731,7 @@ export function useChatSession(): ChatSession {
         deliberateTeardownRef.current = false
       }
     },
-    [state, transition, teardown, wireChannel, wirePc],
+    [state, transition, teardown, wireChannel, wirePc, bindConversation],
   )
 
   const send = useCallback(

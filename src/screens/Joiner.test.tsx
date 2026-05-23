@@ -97,6 +97,80 @@ describe('Joiner focus-on-mount (A11Y-005 + A11Y-022)', () => {
   })
 })
 
+describe('Joiner polite-defer on Accept (BUG-007)', () => {
+  // App.tsx hoists `useChatSession` and shares it across routes — when the user
+  // already started as offerer and then loads the other peer's invite URL in
+  // the same tab, the Joiner mounts onto a non-idle session that still holds
+  // its own offer's `encodedLocal`. Accepting on that screen must politely
+  // defer (tear down our offer, become the answerer of the pasted offer)
+  // instead of no-op'ing under the old `state === 'idle'` guard, otherwise the
+  // reply CopyBox renders Bob's stale offer SDP labeled as "Reply code" and
+  // both peers strand on reply-code screens.
+
+  it('idle session: Accept calls startAsAnswerer (regression — original happy path)', () => {
+    const session = makeSession({ state: 'idle' })
+    render(<Joiner session={session} offerCode="ALICE_OFFER" conversationId={TEST_CONV_ID} onCancel={() => {}} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /^accept$/i }))
+
+    expect(session.startAsAnswerer).toHaveBeenCalledTimes(1)
+    expect(session.startAsAnswerer).toHaveBeenCalledWith('ALICE_OFFER', expect.any(String))
+    expect(session.politelyAcceptOffer).not.toHaveBeenCalled()
+  })
+
+  it('awaiting-answer session: Accept calls politelyAcceptOffer with the offer + conv id', () => {
+    // Bob's session is still in `awaiting-answer` from his own startAsOfferer
+    // when Alice's URL routes him into Joiner. The shared hook means
+    // session.state never returned to 'idle', so the old guard stranded the
+    // reply flow on Bob's stale `encodedLocal`. Polite-defer is the recovery.
+    const session = makeSession({
+      state: 'awaiting-answer',
+      encodedLocal: 'BOBS_STALE_OFFER',
+    })
+    render(<Joiner session={session} offerCode="ALICE_OFFER" conversationId={TEST_CONV_ID} onCancel={() => {}} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /^accept$/i }))
+
+    expect(session.politelyAcceptOffer).toHaveBeenCalledTimes(1)
+    expect(session.politelyAcceptOffer).toHaveBeenCalledWith('ALICE_OFFER', expect.any(String))
+    expect(session.startAsAnswerer).not.toHaveBeenCalled()
+  })
+
+  it('awaiting-answer session: passes a stable conv id (matching the Joiner-side effectiveConvId)', () => {
+    // The hook needs a non-null conv id so its FEAT-012 history exchange
+    // can run against the right key — null'ing it (the pre-FEAT-012 invite
+    // case) must still produce a usable id.
+    const session = makeSession({
+      state: 'awaiting-answer',
+      encodedLocal: 'BOBS_STALE_OFFER',
+    })
+    render(<Joiner session={session} offerCode="ALICE_OFFER" conversationId={null} onCancel={() => {}} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /^accept$/i }))
+
+    const calls = (session.politelyAcceptOffer as ReturnType<typeof vi.fn>).mock.calls
+    expect(calls).toHaveLength(1)
+    const [, convId] = calls[0]
+    expect(typeof convId).toBe('string')
+    expect(convId.length).toBeGreaterThan(0)
+  })
+
+  it('does NOT announce "Reply code ready" in the live region while still on the invite branch', () => {
+    // BUG-007 polish: when the shared hook has leaked `awaiting-answer` from a
+    // prior offerer flow, the Joiner's live region must not announce
+    // "Reply code ready" to AT users — the visible content is still the
+    // "You've been invited" page, and the misleading status copy would lead
+    // screen-reader users to look for a code that doesn't exist yet.
+    const session = makeSession({
+      state: 'awaiting-answer',
+      encodedLocal: 'BOBS_STALE_OFFER',
+    })
+    render(<Joiner session={session} offerCode="ALICE_OFFER" conversationId={TEST_CONV_ID} onCancel={() => {}} />)
+
+    expect(screen.queryByText(/reply code ready/i)).not.toBeInTheDocument()
+  })
+})
+
 describe('Joiner post-connect drop (BUG-005)', () => {
   it('renders a "Connection lost" view when state === "closed"', () => {
     const staleReply = 'STALE-ENCODED-ANSWER-PAYLOAD'

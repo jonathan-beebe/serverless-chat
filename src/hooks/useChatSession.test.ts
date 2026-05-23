@@ -1019,6 +1019,73 @@ describe('useChatSession politelyAcceptOffer (FEAT-008)', () => {
     expect(result.current.encodedLocal!.length).toBeGreaterThan(0)
   })
 
+  it("rebinds to the supplied conversationId so the inviter's history envelope is accepted (BUG-007)", async () => {
+    // The Joiner-side polite-defer (BUG-007) passes Alice's conv id so the
+    // session follows the inviter's conversation across the swap. Without
+    // this rebind, the hook stays tied to Bob's old offerer conv id and
+    // Alice's FEAT-012 history envelope is dropped on the conversationId
+    // mismatch check.
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsOfferer('bob-conv')
+    })
+    expect(result.current.conversationId).toBe('bob-conv')
+
+    const { encode } = await import('../core/encoding')
+    const offerCode = encode({ type: 'offer', sdp: 'v=0\r\n' })
+
+    await act(async () => {
+      await result.current.politelyAcceptOffer(offerCode, 'alice-conv')
+    })
+
+    // Session is now bound to Alice's conversation, not Bob's.
+    expect(result.current.conversationId).toBe('alice-conv')
+
+    // And a history envelope for Alice's conversation is accepted (the
+    // mismatch warn-and-drop in handleEnvelope must NOT fire).
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const answererChannel = new FakeDataChannel()
+    await act(async () => {
+      lastPc!.emitDataChannel(answererChannel)
+      answererChannel.open()
+      await Promise.resolve()
+    })
+    await act(async () => {
+      lastChannel!.onmessage?.({
+        data: JSON.stringify({
+          v: 1,
+          t: 'history',
+          id: 'h1',
+          sentAt: 1,
+          conversationId: 'alice-conv',
+          messages: [{ id: 'm1', from: 'me', text: 'from alice', at: 50 }],
+        }),
+      })
+      // Allow the apply() microtask + bulkInsert IDB to settle.
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+
+    expect(warn).not.toHaveBeenCalledWith(expect.stringContaining('mismatch'))
+    expect(result.current.hasResumed).toBe(true)
+    warn.mockRestore()
+  })
+
+  it('omitting conversationId keeps the existing binding (Offerer-side path unchanged)', async () => {
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsOfferer('keep-this-conv')
+    })
+
+    const { encode } = await import('../core/encoding')
+    const offerCode = encode({ type: 'offer', sdp: 'v=0\r\n' })
+
+    await act(async () => {
+      await result.current.politelyAcceptOffer(offerCode)
+    })
+
+    expect(result.current.conversationId).toBe('keep-this-conv')
+  })
+
   it('surfaces an error and lands in "failed" when the pasted code cannot be decoded', async () => {
     const { result } = renderHook(() => useChatSession())
     await act(async () => {
