@@ -26,6 +26,15 @@ body,
   height: 100%;
 }
 
+/* `body` is locked so a bounded screen (e.g. the connected chat with its
+   internally-scrolling transcript) can never leak page-level scroll. `#root`
+   becomes the page's scroll container, so intrinsic-height screens (Home,
+   the Offerer/Joiner setup branches, Design System) still scroll their own
+   content on short viewports. */
+#root {
+  overflow-y: auto;
+}
+
 /* Let the UA render native form controls, scrollbars, and selection colors in
    the matching theme so they don't look out-of-place. */
 html {
@@ -41,6 +50,7 @@ html {
 body {
   background-color: #f8fafc; /* slate-50 */
   color: #0f172a; /* slate-900 */
+  overflow: hidden;
 }
 
 @media (prefers-color-scheme: dark) {
