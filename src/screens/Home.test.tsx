@@ -4,6 +4,7 @@ import { IDBFactory } from 'fake-indexeddb'
 import { Home } from './Home'
 import { ScreenChromeContext, type ScreenChromeValue } from '../components/ScreenChrome'
 import { __resetForTests as resetStorage, appendMessage, upsertConversation } from '../core/storage'
+import * as storage from '../core/storage'
 
 const SHOWCASE_CHROME: ScreenChromeValue = {
   landmark: 'region',
@@ -73,13 +74,18 @@ describe('Home empty state (FEAT-012 AC#19)', () => {
 })
 
 describe('Home conversation list (FEAT-012 AC#18 / #20 / #21 / #26)', () => {
-  function seed(id: string, opts: { label?: string; createdAt?: number; lastActivityAt?: number } = {}) {
-    return upsertConversation({
+  // CR-011: also seed a message per conversation so the row survives the
+  // first-load empty-conversation sweep. Individual tests that need the
+  // empty-peek state seed and clear the messages themselves.
+  async function seed(id: string, opts: { label?: string; createdAt?: number; lastActivityAt?: number } = {}) {
+    const lastActivityAt = opts.lastActivityAt ?? Date.now() - 60_000
+    await upsertConversation({
       id,
       createdAt: opts.createdAt ?? Date.now() - 60_000,
-      lastActivityAt: opts.lastActivityAt ?? Date.now() - 60_000,
+      lastActivityAt,
       label: opts.label,
     })
+    await appendMessage(id, { id: `m-${id}`, from: 'me', text: 'hi', at: lastActivityAt })
   }
 
   it('renders a row per past conversation with the label and a Resume button', async () => {
@@ -109,12 +115,11 @@ describe('Home conversation list (FEAT-012 AC#18 / #20 / #21 / #26)', () => {
     expect(onStart).toHaveBeenCalledWith('aaa')
   })
 
-  it('"No messages yet" peek shows for an empty conversation (AC#18)', async () => {
-    await seed('aaa', { label: 'Empty stub' })
-    render(<Home onStart={() => {}} />)
-    const row = await screen.findByTestId('conversation-row-aaa')
-    expect(within(row).getByText(/no messages yet/i)).toBeInTheDocument()
-  })
+  // AC#18's "No messages yet" peek was originally validated against a
+  // freshly-stubbed empty conversation. CR-011 culls those on the first
+  // Home mount, so the empty-peek branch is now only reachable via storage
+  // mid-session corruption — not exercised here. The "polite-defer
+  // reproducer" test below covers the post-CR-011 behavior.
 
   it('shows the last message body (truncated to ~50 chars) as the peek (AC#18)', async () => {
     await seed('aaa', { label: 'With history' })
@@ -178,13 +183,17 @@ describe('Home conversation list (FEAT-012 AC#18 / #20 / #21 / #26)', () => {
 })
 
 describe('Home row menu dismissal (CR-008)', () => {
+  // CR-011: also append a message so the row survives the first-load
+  // empty-conversation sweep.
   async function seedRow(id: string, label: string) {
-    return upsertConversation({
+    const lastActivityAt = Date.now() - 60_000
+    await upsertConversation({
       id,
       createdAt: Date.now() - 60_000,
-      lastActivityAt: Date.now() - 60_000,
+      lastActivityAt,
       label,
     })
+    await appendMessage(id, { id: `m-${id}`, from: 'me', text: 'hi', at: lastActivityAt })
   }
 
   it('closes the open menu on pointerdown outside the row', async () => {
@@ -393,7 +402,11 @@ describe('Home row menu Copy transcript (CR-009)', () => {
   })
 
   it('Copy transcript is disabled when the conversation has no messages', async () => {
-    // Seed the conversation but no messages — preview shows "No messages yet".
+    // CR-011: the first-load sweep would normally cull a zero-message
+    // conversation. To exercise the disabled-menu branch we bypass the
+    // sweep for this test only; the row then renders but its per-row
+    // preview-load resolves to `hasMessages: false` and disables Copy.
+    vi.spyOn(storage, 'cullEmptyConversations').mockResolvedValue([])
     await upsertConversation({
       id: 'aaa',
       createdAt: Date.now() - 60_000,
@@ -415,6 +428,31 @@ describe('Home row menu Copy transcript (CR-009)', () => {
     fireEvent.click(copyItem)
     await new Promise((r) => setTimeout(r, 10))
     expect(writeText).not.toHaveBeenCalled()
+  })
+})
+
+describe('Home culls empty conversations on mount (CR-011)', () => {
+  it('does not render rows for conversations with zero messages (polite-defer reproducer)', async () => {
+    // `inviter` has a message; `abandoned` is a polite-defer leftover stub.
+    await upsertConversation({
+      id: 'inviter',
+      createdAt: Date.now() - 60_000,
+      lastActivityAt: Date.now() - 60_000,
+      label: 'Real chat',
+    })
+    await appendMessage('inviter', { id: 'm1', from: 'me', text: 'hello', at: Date.now() - 10_000 })
+    await upsertConversation({
+      id: 'abandoned',
+      createdAt: Date.now() - 50_000,
+      lastActivityAt: Date.now() - 50_000,
+      label: 'Polite-defer leftover',
+    })
+
+    render(<Home onStart={() => {}} />)
+
+    // The kept row appears; the abandoned stub never does.
+    await screen.findByTestId('conversation-row-inviter')
+    expect(screen.queryByTestId('conversation-row-abandoned')).not.toBeInTheDocument()
   })
 })
 

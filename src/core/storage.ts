@@ -265,6 +265,44 @@ export async function bulkInsertMessages(
   })
 }
 
+/**
+ * CR-011: one-pass sweep that deletes every conversation with zero messages.
+ * Returns the ids of the conversations that were culled. Used by the Home
+ * screen's first list-load to keep stray empty stubs (from cancelled "Start"
+ * flows or polite-defer rebinds) from cluttering the past-chats list.
+ *
+ * Conversations with ≥1 message are never touched — only emptiness triggers
+ * cull. The check uses the existing `by-conversation` index over the
+ * `messages` store so the count is a single getAllKeys() round-trip per
+ * conversation.
+ */
+export async function cullEmptyConversations(): Promise<string[]> {
+  const db = await openDb()
+  const tx = db.transaction([STORE_CONVERSATIONS, STORE_MESSAGES], 'readwrite')
+  const convStore = tx.objectStore(STORE_CONVERSATIONS)
+  const msgStore = tx.objectStore(STORE_MESSAGES)
+  const idx = msgStore.index(INDEX_CONVERSATION)
+  const all = await wrap(convStore.getAll())
+  const removed: string[] = []
+  for (const item of all) {
+    if (!isConversationRecord(item)) continue
+    const keys = await wrap(idx.getAllKeys(IDBKeyRange.only(item.id)))
+    if (keys.length === 0) {
+      convStore.delete(item.id)
+      removed.push(item.id)
+    }
+  }
+  await new Promise<void>((resolve, reject) => {
+    tx.oncomplete = () => resolve()
+    tx.onerror = () => reject(tx.error)
+    tx.onabort = () => reject(tx.error)
+  })
+  for (const id of removed) {
+    console.info('[storage] culled empty conversation', id)
+  }
+  return removed
+}
+
 export async function renameConversation(id: string, label: string): Promise<void> {
   const db = await openDb()
   const tx = db.transaction(STORE_CONVERSATIONS, 'readwrite')

@@ -4,9 +4,10 @@
 // the hook module itself over BroadcastChannel — multi-tab is out of scope
 // per the ticket; single-tab reactivity is all we need for v1.
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   type ConversationRecord,
+  cullEmptyConversations,
   deleteConversation as deleteConv,
   listConversations,
   renameConversation as renameConv,
@@ -36,8 +37,24 @@ export interface UseConversations {
 
 export function useConversations(): UseConversations {
   const [conversations, setConversations] = useState<ConversationRecord[] | null>(null)
+  // CR-011: gate the empty-conversation sweep to the first load of this hook
+  // instance. Subsequent refresh() calls (rename/delete broadcasts, or the
+  // chat send/receive path's notifyConversationsChanged) skip the sweep —
+  // those paths can't create new empty conversations, and the first-message
+  // path immediately makes the row non-empty.
+  const hasSweptRef = useRef(false)
 
   const refresh = useCallback(async () => {
+    // Best-effort sweep on the first load only. A failed sweep falls through
+    // to listConversations() so the Home empty/list state still renders.
+    if (!hasSweptRef.current) {
+      hasSweptRef.current = true
+      try {
+        await cullEmptyConversations()
+      } catch (err) {
+        console.warn('[useConversations] cullEmptyConversations failed', err)
+      }
+    }
     try {
       const list = await listConversations()
       setConversations(list)

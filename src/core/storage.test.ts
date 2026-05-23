@@ -4,6 +4,7 @@ import {
   __resetForTests,
   appendMessage,
   bulkInsertMessages,
+  cullEmptyConversations,
   deleteConversation,
   getConversation,
   listConversations,
@@ -161,6 +162,51 @@ describe('storage deleteConversation cascade (FEAT-012 AC#20)', () => {
     expect(await listMessages('a')).toEqual([])
     // Other conversations' messages are untouched.
     expect(await listMessages('b')).toHaveLength(1)
+  })
+})
+
+describe('storage cullEmptyConversations (CR-011)', () => {
+  it('deletes conversations with zero messages and returns their ids', async () => {
+    await upsertConversation(conv('with-msgs'))
+    await upsertConversation(conv('empty-1'))
+    await upsertConversation(conv('empty-2'))
+    await appendMessage('with-msgs', msg('m1'))
+
+    const removed = await cullEmptyConversations()
+
+    expect(removed.sort()).toEqual(['empty-1', 'empty-2'])
+    expect(await getConversation('empty-1')).toBeNull()
+    expect(await getConversation('empty-2')).toBeNull()
+    expect(await getConversation('with-msgs')).not.toBeNull()
+  })
+
+  it('returns an empty array when every conversation has at least one message', async () => {
+    await upsertConversation(conv('a'))
+    await upsertConversation(conv('b'))
+    await appendMessage('a', msg('m1'))
+    await appendMessage('b', msg('m2'))
+
+    const removed = await cullEmptyConversations()
+
+    expect(removed).toEqual([])
+    expect((await listConversations()).map((c) => c.id).sort()).toEqual(['a', 'b'])
+  })
+
+  it('returns an empty array when the conversation store is empty', async () => {
+    expect(await cullEmptyConversations()).toEqual([])
+  })
+
+  it('logs a single console.info per culled id', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {})
+    await upsertConversation(conv('empty-1'))
+    await upsertConversation(conv('empty-2'))
+
+    await cullEmptyConversations()
+
+    // One info per culled id, in any order.
+    expect(info).toHaveBeenCalledTimes(2)
+    const ids = info.mock.calls.map((args) => args[args.length - 1])
+    expect(ids.sort()).toEqual(['empty-1', 'empty-2'])
   })
 })
 
