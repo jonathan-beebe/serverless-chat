@@ -150,9 +150,7 @@ export function Chat({ messages, onSend, disabled }: Props) {
                 <time
                   aria-hidden="true"
                   dateTime={new Date(m.at).toISOString()}
-                  className={`self-end text-[10px] ${
-                    isMe ? 'text-sky-100/80' : 'text-slate-500 dark:text-slate-300/70'
-                  }`}>
+                  className={`self-end text-xs ${isMe ? 'text-white' : 'text-slate-600 dark:text-slate-400'}`}>
                   {timeFmt.format(new Date(m.at))}
                 </time>
               </div>
