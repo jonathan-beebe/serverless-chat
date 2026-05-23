@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Button } from '../components/Button'
 import { Heading } from '../components/Heading'
 import { ScreenContainer, useScreenChrome } from '../components/ScreenChrome'
@@ -52,13 +52,48 @@ interface RowProps {
   onResume: () => void
   onRename: (label: string) => void
   onDelete: () => void
+  // CR-008: menu open state is lifted to `Home` so at most one row's menu is
+  // open at a time and outside-click / Escape can dismiss from anywhere.
+  isMenuOpen: boolean
+  onOpenMenu: () => void
+  onCloseMenu: () => void
 }
 
-function ConversationRow({ record, onResume, onRename, onDelete }: RowProps) {
+function ConversationRow({ record, onResume, onRename, onDelete, isMenuOpen, onOpenMenu, onCloseMenu }: RowProps) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
-  const [menuOpen, setMenuOpen] = useState(false)
   const [preview, setPreview] = useState<string | null>(null)
+  // CR-008: refs for the outside-click + Escape contract. The container wraps
+  // both the trigger and the popover so clicking the trigger while the menu
+  // is open continues to act as a toggle (the outside-click handler ignores
+  // events whose target is inside the container).
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
+
+  // CR-008: while this row's menu is open, listen for pointerdown anywhere
+  // outside the trigger+menu wrapper (dismiss) and Escape (dismiss + restore
+  // focus to the trigger). Gated on `isMenuOpen` so nothing runs when closed.
+  // `pointerdown` (not `click`) matches the dismiss timing of native menus and
+  // avoids a focus-thrash where the click would fire after the next render.
+  useEffect(() => {
+    if (!isMenuOpen) return
+    const onPointerDown = (e: PointerEvent) => {
+      const container = containerRef.current
+      if (container && !container.contains(e.target as Node)) onCloseMenu()
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onCloseMenu()
+        triggerRef.current?.focus()
+      }
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [isMenuOpen, onCloseMenu])
 
   // Best-effort peek: load the conversation's last message body on mount so
   // each row can show a one-line snippet. Skipping the load gracefully if
@@ -89,7 +124,7 @@ function ConversationRow({ record, onResume, onRename, onDelete }: RowProps) {
   const startRename = () => {
     setDraft(record.label ?? '')
     setEditing(true)
-    setMenuOpen(false)
+    onCloseMenu()
   }
 
   const saveRename = () => {
@@ -103,7 +138,7 @@ function ConversationRow({ record, onResume, onRename, onDelete }: RowProps) {
   }
 
   const doDelete = () => {
-    setMenuOpen(false)
+    onCloseMenu()
     // window.confirm is the pragmatic v1 choice — the design system doesn't
     // yet have a real confirm dialog primitive. AC#20 names exact wording.
     const ok = window.confirm("Delete this chat from your device? This won't notify the other person.")
@@ -160,17 +195,18 @@ function ConversationRow({ record, onResume, onRename, onDelete }: RowProps) {
           <Button variant="primary" size="sm" onClick={onResume}>
             Resume
           </Button>
-          <div className="relative">
+          <div ref={containerRef} className="relative">
             <Button
+              ref={triggerRef}
               variant="secondary"
               size="sm"
               aria-label="More actions"
               aria-haspopup="menu"
-              aria-expanded={menuOpen}
-              onClick={() => setMenuOpen((v) => !v)}>
+              aria-expanded={isMenuOpen}
+              onClick={() => (isMenuOpen ? onCloseMenu() : onOpenMenu())}>
               ⋯
             </Button>
-            {menuOpen && (
+            {isMenuOpen && (
               <div
                 role="menu"
                 className="absolute right-0 z-10 mt-1 min-w-[10rem] rounded-md border border-stone-300 bg-white p-1 shadow-md dark:border-stone-700 dark:bg-stone-900">
@@ -205,6 +241,10 @@ export function Home({ onStart }: Props) {
   const { suppressInitialFocus } = useScreenChrome()
   const startRef = useFocusOnMount<HTMLButtonElement>([], { skip: suppressInitialFocus })
   const { conversations, remove, rename } = useConversations()
+  // CR-008: at most one row's "More actions" menu is open at a time. Lifting
+  // this state here gives us the single-open invariant for free — opening
+  // row B flips row A's `isMenuOpen` prop to false on the same render.
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
 
   const startNew = () => {
     // FEAT-012 AC#5: generate the conversation ID at "Start" click, before
@@ -236,6 +276,9 @@ export function Home({ onStart }: Props) {
                 onResume={() => onStart(c.id)}
                 onRename={(label) => void rename(c.id, label)}
                 onDelete={() => void remove(c.id)}
+                isMenuOpen={openMenuId === c.id}
+                onOpenMenu={() => setOpenMenuId(c.id)}
+                onCloseMenu={() => setOpenMenuId(null)}
               />
             ))}
           </ul>

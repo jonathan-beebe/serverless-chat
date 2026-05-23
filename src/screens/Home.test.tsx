@@ -177,6 +177,88 @@ describe('Home conversation list (FEAT-012 AC#18 / #20 / #21 / #26)', () => {
   })
 })
 
+describe('Home row menu dismissal (CR-008)', () => {
+  async function seedRow(id: string, label: string) {
+    return upsertConversation({
+      id,
+      createdAt: Date.now() - 60_000,
+      lastActivityAt: Date.now() - 60_000,
+      label,
+    })
+  }
+
+  it('closes the open menu on pointerdown outside the row', async () => {
+    await seedRow('aaa', 'Row A')
+    render(<Home onStart={() => {}} />)
+
+    const row = await screen.findByTestId('conversation-row-aaa')
+    fireEvent.click(within(row).getByRole('button', { name: /more actions/i }))
+    expect(screen.getByRole('menu')).toBeInTheDocument()
+
+    // pointerdown on a sibling element outside the row+menu wrapper.
+    const heading = screen.getByRole('heading', { name: /serverless p2p chat/i })
+    fireEvent.pointerDown(heading)
+
+    await waitFor(() => {
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    })
+  })
+
+  it('closes the open menu on Escape and restores focus to the ⋯ trigger', async () => {
+    await seedRow('aaa', 'Row A')
+    render(<Home onStart={() => {}} />)
+
+    const row = await screen.findByTestId('conversation-row-aaa')
+    const trigger = within(row).getByRole('button', { name: /more actions/i })
+    fireEvent.click(trigger)
+    expect(screen.getByRole('menu')).toBeInTheDocument()
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+
+    await waitFor(() => {
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    })
+    expect(document.activeElement).toBe(trigger)
+  })
+
+  it('opening row B`s menu closes row A`s (single-open invariant)', async () => {
+    await seedRow('aaa', 'Row A')
+    await seedRow('bbb', 'Row B')
+    render(<Home onStart={() => {}} />)
+
+    const rowA = await screen.findByTestId('conversation-row-aaa')
+    const rowB = await screen.findByTestId('conversation-row-bbb')
+
+    fireEvent.click(within(rowA).getByRole('button', { name: /more actions/i }))
+    expect(within(rowA).getByRole('menu')).toBeInTheDocument()
+
+    fireEvent.click(within(rowB).getByRole('button', { name: /more actions/i }))
+
+    await waitFor(() => {
+      expect(within(rowA).queryByRole('menu')).not.toBeInTheDocument()
+    })
+    expect(within(rowB).getByRole('menu')).toBeInTheDocument()
+    expect(screen.getAllByRole('menu')).toHaveLength(1)
+  })
+
+  it('toggles closed when the same ⋯ trigger is clicked again (no re-open race)', async () => {
+    await seedRow('aaa', 'Row A')
+    render(<Home onStart={() => {}} />)
+
+    const row = await screen.findByTestId('conversation-row-aaa')
+    const trigger = within(row).getByRole('button', { name: /more actions/i })
+
+    fireEvent.click(trigger)
+    expect(screen.getByRole('menu')).toBeInTheDocument()
+
+    fireEvent.click(trigger)
+
+    await waitFor(() => {
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    })
+  })
+})
+
 describe('Home "Start a chat" (FEAT-012 AC#25)', () => {
   it('calls onStart with a fresh UUID', () => {
     const onStart = vi.fn()
