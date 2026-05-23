@@ -4,6 +4,7 @@ import { Chat } from '../components/Chat'
 import type { ChatSession } from '../hooks/useChatSession'
 import { useFocusOnMount } from '../hooks/useFocusOnMount'
 import { usePageTitle } from '../hooks/usePageTitle'
+import type { ConnectionState } from '../core/rtc'
 
 interface Props {
   session: ChatSession
@@ -15,6 +16,27 @@ function joinerTitle(state: ChatSession['state'], accepted: boolean): string {
   if (state === 'connected') return 'Connected · P2P Chat'
   if (!accepted) return "You've been invited · P2P Chat"
   return 'Send your reply code · P2P Chat'
+}
+
+// Maps the current session state to a screen-reader-friendly status string for
+// the Joiner. A single persistent live region announces these updates as the
+// negotiation progresses (WCAG 4.1.3). `hasLocal` distinguishes the
+// "gathering" sub-states: once a local SDP is encoded the reply code is ready.
+function statusMessage(state: ConnectionState, hasLocal: boolean): string {
+  switch (state) {
+    case 'gathering':
+      return hasLocal ? 'Reply code ready — send it back to your friend.' : 'Preparing your reply code.'
+    case 'awaiting-answer':
+      return 'Reply code ready — send it back to your friend.'
+    case 'connecting':
+      return 'Connecting to your friend.'
+    case 'connected':
+      return 'Connected. You can start chatting.'
+    case 'failed':
+      return 'Connection failed.'
+    default:
+      return ''
+  }
 }
 
 export function Joiner({ session, offerCode, onCancel }: Props) {
@@ -34,9 +56,16 @@ export function Joiner({ session, offerCode, onCancel }: Props) {
     session.state === 'connected' ? 'connected' : accepted ? 'reply' : 'invite'
   const headingRef = useFocusOnMount<HTMLHeadingElement>([branch])
 
+  const liveStatus = (
+    <p role="status" aria-live="polite" className="sr-only">
+      {statusMessage(session.state, !!session.encodedLocal)}
+    </p>
+  )
+
   if (branch === 'connected') {
     return (
       <main className="mx-auto flex h-[calc(100vh-3rem)] max-w-xl flex-col gap-3 px-4 py-6">
+        {liveStatus}
         <header className="flex items-center justify-between">
           <h1 ref={headingRef} tabIndex={-1} className="text-lg font-semibold text-slate-100 focus:outline-none">
             Connected
@@ -100,10 +129,10 @@ export function Joiner({ session, offerCode, onCancel }: Props) {
         </button>
       </header>
 
+      {liveStatus}
+
       {session.state === 'gathering' && (
-        <p role="status" className="text-sm text-slate-400">
-          Preparing reply (gathering network candidates)…
-        </p>
+        <p className="text-sm text-slate-400">Preparing reply (gathering network candidates)…</p>
       )}
 
       {session.encodedLocal && (

@@ -5,10 +5,33 @@ import { currentOfferUrl } from '../core/url'
 import type { ChatSession } from '../hooks/useChatSession'
 import { useFocusOnMount } from '../hooks/useFocusOnMount'
 import { usePageTitle } from '../hooks/usePageTitle'
+import type { ConnectionState } from '../core/rtc'
 
 interface Props {
   session: ChatSession
   onCancel: () => void
+}
+
+// Maps the current session state to a screen-reader-friendly status string.
+// A single persistent live region in the DOM announces these updates as the
+// negotiation progresses (WCAG 4.1.3). `hasLocal` distinguishes the
+// "gathering" sub-states: once a local SDP is encoded we're waiting on the
+// remote peer rather than still gathering candidates.
+function statusMessage(state: ConnectionState, hasLocal: boolean): string {
+  switch (state) {
+    case 'gathering':
+      return hasLocal ? 'Invite ready — send the link to your friend.' : 'Preparing your invite.'
+    case 'awaiting-answer':
+      return 'Invite ready — send the link to your friend.'
+    case 'connecting':
+      return 'Connecting to your friend.'
+    case 'connected':
+      return 'Connected. You can start chatting.'
+    case 'failed':
+      return 'Connection failed.'
+    default:
+      return ''
+  }
 }
 
 export function Offerer({ session, onCancel }: Props) {
@@ -31,9 +54,16 @@ export function Offerer({ session, onCancel }: Props) {
     void session.submitAnswer(answerDraft)
   }
 
+  const liveStatus = (
+    <p role="status" aria-live="polite" className="sr-only">
+      {statusMessage(session.state, !!session.encodedLocal)}
+    </p>
+  )
+
   if (isConnected) {
     return (
       <main className="mx-auto flex h-[calc(100vh-3rem)] max-w-xl flex-col gap-3 px-4 py-6">
+        {liveStatus}
         <header className="flex items-center justify-between">
           <h1 ref={headingRef} tabIndex={-1} className="text-lg font-semibold text-slate-100 focus:outline-none">
             Connected
@@ -54,6 +84,7 @@ export function Offerer({ session, onCancel }: Props) {
 
   return (
     <main className="mx-auto flex max-w-xl flex-col gap-6 px-4 py-12">
+      {liveStatus}
       <header className="flex items-start justify-between">
         <div>
           <h1 ref={headingRef} tabIndex={-1} className="text-2xl font-semibold text-slate-100 focus:outline-none">
@@ -70,9 +101,7 @@ export function Offerer({ session, onCancel }: Props) {
       </header>
 
       {session.state === 'gathering' && (
-        <p role="status" className="text-sm text-slate-400">
-          Preparing invite (gathering network candidates)…
-        </p>
+        <p className="text-sm text-slate-400">Preparing invite (gathering network candidates)…</p>
       )}
 
       {offerUrl && (
