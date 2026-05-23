@@ -22,6 +22,86 @@ function makeSession(overrides: Partial<ChatSession> = {}): ChatSession {
   }
 }
 
+describe('Offerer reply-code Enter-submit (FEAT-003)', () => {
+  // The Connect form renders once `encodedLocal` is non-null AND the screen
+  // hasn't routed into the connected/closed branches — `awaiting-answer` is
+  // the natural state for "we have an offer, waiting on the joiner".
+  function renderWithReplyForm(overrides: Partial<ChatSession> = {}) {
+    const session = makeSession({
+      state: 'awaiting-answer',
+      encodedLocal: 'OFFER-PAYLOAD',
+      ...overrides,
+    })
+    render(<Offerer session={session} onCancel={() => {}} />)
+    return session
+  }
+
+  function getTextarea(): HTMLTextAreaElement {
+    return screen.getByRole('textbox', { name: /paste their reply code/i }) as HTMLTextAreaElement
+  }
+
+  it('submits the form when Enter is pressed with a non-empty draft', () => {
+    const session = renderWithReplyForm()
+    const textarea = getTextarea()
+    fireEvent.change(textarea, { target: { value: 'reply-code' } })
+
+    fireEvent.keyDown(textarea, { key: 'Enter' })
+
+    expect(session.submitAnswer).toHaveBeenCalledWith('reply-code')
+  })
+
+  it('does NOT submit when Shift+Enter is pressed (newline-insert path)', () => {
+    const session = renderWithReplyForm()
+    const textarea = getTextarea()
+    fireEvent.change(textarea, { target: { value: 'reply-code' } })
+
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: true })
+
+    expect(session.submitAnswer).not.toHaveBeenCalled()
+  })
+
+  it('does NOT submit when the draft is empty or whitespace-only', () => {
+    const session = renderWithReplyForm()
+    const textarea = getTextarea()
+    fireEvent.change(textarea, { target: { value: '   \n  ' } })
+
+    fireEvent.keyDown(textarea, { key: 'Enter' })
+
+    expect(session.submitAnswer).not.toHaveBeenCalled()
+  })
+
+  it('does NOT submit while state === "connecting" (prevents double-submit)', () => {
+    const session = renderWithReplyForm({ state: 'connecting' })
+    const textarea = getTextarea()
+    fireEvent.change(textarea, { target: { value: 'reply-code' } })
+
+    fireEvent.keyDown(textarea, { key: 'Enter' })
+
+    expect(session.submitAnswer).not.toHaveBeenCalled()
+  })
+
+  it('does NOT submit while the IME is composing (e.g. CJK input)', () => {
+    const session = renderWithReplyForm()
+    const textarea = getTextarea()
+    fireEvent.change(textarea, { target: { value: 'reply-code' } })
+
+    // React surfaces `nativeEvent.isComposing` via the underlying KeyboardEvent.
+    fireEvent.keyDown(textarea, { key: 'Enter', isComposing: true })
+
+    expect(session.submitAnswer).not.toHaveBeenCalled()
+  })
+
+  it('still submits when the Connect button is clicked (regression guard)', () => {
+    const session = renderWithReplyForm()
+    const textarea = getTextarea()
+    fireEvent.change(textarea, { target: { value: 'reply-code' } })
+
+    fireEvent.click(screen.getByRole('button', { name: /^connect$/i }))
+
+    expect(session.submitAnswer).toHaveBeenCalledWith('reply-code')
+  })
+})
+
 describe('Offerer post-connect drop (BUG-005)', () => {
   it('renders a "Connection lost" view when state === "closed"', () => {
     // Encode any opaque payload — the closed view must NOT show this.

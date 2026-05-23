@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from 'react'
+import { FormEvent, KeyboardEvent, useEffect, useState } from 'react'
 import { CopyBox } from '../components/CopyBox'
 import { Chat } from '../components/Chat'
 import { currentOfferUrl } from '../core/url'
@@ -58,6 +58,18 @@ export function Offerer({ session, onCancel }: Props) {
   const onSubmit = (e: FormEvent) => {
     e.preventDefault()
     if (!answerDraft.trim()) return
+    void session.submitAnswer(answerDraft)
+  }
+
+  // Enter submits the reply code (Slack / Discord / GitHub convention).
+  // Shift+Enter, empty drafts, an active IME composition, and an in-flight
+  // `connecting` state all fall through to the default newline-insert path —
+  // matching the disabled conditions on the Connect button so the keyboard
+  // path can't bypass them.
+  const onAnswerKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return
+    if (!answerDraft.trim() || session.state === 'connecting') return
+    e.preventDefault()
     void session.submitAnswer(answerDraft)
   }
 
@@ -171,6 +183,7 @@ export function Offerer({ session, onCancel }: Props) {
             aria-invalid={session.error ? true : undefined}
             value={answerDraft}
             onChange={(e) => setAnswerDraft(e.target.value)}
+            onKeyDown={onAnswerKeyDown}
             rows={5}
             className="w-full resize-none rounded-md border border-slate-300 bg-white px-3 py-2 font-mono text-xs text-slate-900 focus-visible:border-sky-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
           />
