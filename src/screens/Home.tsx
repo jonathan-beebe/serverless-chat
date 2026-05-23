@@ -1,5 +1,6 @@
 import { Button } from '../components/Button'
 import { Heading } from '../components/Heading'
+import { ScreenContainer } from '../components/ScreenChrome'
 import { useFocusOnMount } from '../hooks/useFocusOnMount'
 import { usePageTitle } from '../hooks/usePageTitle'
 
@@ -11,7 +12,7 @@ export function Home({ onStart }: Props) {
   usePageTitle('P2P Chat')
   const headingRef = useFocusOnMount<HTMLHeadingElement>()
   return (
-    <main className="mx-auto flex max-w-xl flex-col items-center gap-6 px-4 py-12 text-center">
+    <ScreenContainer label="Home" className="mx-auto flex max-w-xl flex-col items-center gap-6 px-4 py-12 text-center">
       <Heading level={1} ref={headingRef}>
         Serverless P2P Chat
       </Heading>
@@ -30,6 +31,6 @@ export function Home({ onStart }: Props) {
           touches a server.
         </p>
       </details>
-    </main>
+    </ScreenContainer>
   )
 }

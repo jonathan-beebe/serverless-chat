@@ -5,6 +5,7 @@ import { Chat } from '../components/Chat'
 import { CopyBox } from '../components/CopyBox'
 import { Heading } from '../components/Heading'
 import { LiveRegion } from '../components/LiveRegion'
+import { ScreenContainer } from '../components/ScreenChrome'
 import type { ChatSession } from '../hooks/useChatSession'
 import { useFocusOnMount } from '../hooks/useFocusOnMount'
 import { usePageTitle } from '../hooks/usePageTitle'
@@ -68,7 +69,9 @@ export function Joiner({ session, offerCode, onCancel }: Props) {
 
   if (branch === 'connected') {
     return (
-      <main className="mx-auto flex h-[calc(100vh-3rem)] max-w-xl flex-col gap-3 px-4 py-6">
+      <ScreenContainer
+        label="Connected"
+        className="mx-auto flex h-[calc(100vh-3rem)] max-w-xl flex-col gap-3 px-4 py-6">
         {liveStatus}
         <header className="flex items-center justify-between">
           {/* No `ref={headingRef}` here — Chat owns focus via FEAT-002 (input
@@ -83,7 +86,7 @@ export function Joiner({ session, offerCode, onCancel }: Props) {
           </Button>
         </header>
         <Chat messages={session.messages} onSend={session.send} />
-      </main>
+      </ScreenContainer>
     )
   }
 
@@ -93,7 +96,9 @@ export function Joiner({ session, offerCode, onCancel }: Props) {
     // PeerConnection and can't be reused. The single CTA resets the session
     // and routes home (`onCancel` is wired to App.goHome). See BUG-005.
     return (
-      <main className="mx-auto flex max-w-xl flex-col items-center gap-6 px-4 py-12 text-center">
+      <ScreenContainer
+        label="Connection lost"
+        className="mx-auto flex max-w-xl flex-col items-center gap-6 px-4 py-12 text-center">
         {liveStatus}
         <Heading level={1} ref={headingRef}>
           Connection lost
@@ -104,13 +109,15 @@ export function Joiner({ session, offerCode, onCancel }: Props) {
         <Button variant="primary" size="lg" onClick={onCancel}>
           Start a new chat
         </Button>
-      </main>
+      </ScreenContainer>
     )
   }
 
   if (branch === 'invite') {
     return (
-      <main className="mx-auto flex max-w-xl flex-col items-center gap-6 px-4 py-12 text-center">
+      <ScreenContainer
+        label="You've been invited to chat"
+        className="mx-auto flex max-w-xl flex-col items-center gap-6 px-4 py-12 text-center">
         <Heading level={1} ref={headingRef}>
           You've been invited to chat
         </Heading>
@@ -126,12 +133,12 @@ export function Joiner({ session, offerCode, onCancel }: Props) {
             Decline
           </Button>
         </div>
-      </main>
+      </ScreenContainer>
     )
   }
 
   return (
-    <main className="mx-auto flex max-w-xl flex-col gap-6 px-4 py-12">
+    <ScreenContainer label="Send this code back" className="mx-auto flex max-w-xl flex-col gap-6 px-4 py-12">
       <header className="flex items-start justify-between">
         <div>
           <Heading level={1} ref={headingRef}>
@@ -171,6 +178,6 @@ export function Joiner({ session, offerCode, onCancel }: Props) {
           Couldn't establish a direct connection. Try a different network.
         </Callout>
       )}
-    </main>
+    </ScreenContainer>
   )
 }

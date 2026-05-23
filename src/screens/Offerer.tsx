@@ -5,6 +5,7 @@ import { Chat } from '../components/Chat'
 import { CopyBox } from '../components/CopyBox'
 import { Heading } from '../components/Heading'
 import { LiveRegion } from '../components/LiveRegion'
+import { ScreenContainer } from '../components/ScreenChrome'
 import { Textarea } from '../components/Textarea'
 import { currentOfferUrl } from '../core/url'
 import type { ChatSession } from '../hooks/useChatSession'
@@ -82,7 +83,9 @@ export function Offerer({ session, onCancel }: Props) {
 
   if (isConnected) {
     return (
-      <main className="mx-auto flex h-[calc(100vh-3rem)] max-w-xl flex-col gap-3 px-4 py-6">
+      <ScreenContainer
+        label="Connected"
+        className="mx-auto flex h-[calc(100vh-3rem)] max-w-xl flex-col gap-3 px-4 py-6">
         {liveStatus}
         <header className="flex items-center justify-between">
           {/* No `ref={headingRef}` here — Chat takes focus on the message
@@ -97,7 +100,7 @@ export function Offerer({ session, onCancel }: Props) {
           </Button>
         </header>
         <Chat messages={session.messages} onSend={session.send} />
-      </main>
+      </ScreenContainer>
     )
   }
 
@@ -108,7 +111,9 @@ export function Offerer({ session, onCancel }: Props) {
     // can't be reused. Show a dedicated "Connection lost" view with a single
     // CTA that resets the session and routes home (handled by `onCancel`).
     return (
-      <main className="mx-auto flex max-w-xl flex-col items-center gap-6 px-4 py-12 text-center">
+      <ScreenContainer
+        label="Connection lost"
+        className="mx-auto flex max-w-xl flex-col items-center gap-6 px-4 py-12 text-center">
         {liveStatus}
         <Heading level={1} ref={headingRef}>
           Connection lost
@@ -119,14 +124,14 @@ export function Offerer({ session, onCancel }: Props) {
         <Button variant="primary" size="lg" onClick={onCancel}>
           Start a new chat
         </Button>
-      </main>
+      </ScreenContainer>
     )
   }
 
   const offerUrl = session.encodedLocal && currentOfferUrl(session.encodedLocal)
 
   return (
-    <main className="mx-auto flex max-w-xl flex-col gap-6 px-4 py-12">
+    <ScreenContainer label="Invite your friend" className="mx-auto flex max-w-xl flex-col gap-6 px-4 py-12">
       {liveStatus}
       <header className="flex items-start justify-between">
         <div>
@@ -195,6 +200,6 @@ export function Offerer({ session, onCancel }: Props) {
           Couldn't establish a direct connection. Try a different network.
         </Callout>
       )}
-    </main>
+    </ScreenContainer>
   )
 }

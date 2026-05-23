@@ -6,6 +6,7 @@ import { CopyBox } from '../components/CopyBox'
 import { Divider } from '../components/Divider'
 import { Heading } from '../components/Heading'
 import { LiveRegion } from '../components/LiveRegion'
+import { ScreenChromeContext, type ScreenChromeValue } from '../components/ScreenChrome'
 import { Textarea } from '../components/Textarea'
 import type { ChatMessage } from '../core/rtc'
 import type { ChatSession } from '../hooks/useChatSession'
@@ -119,16 +120,22 @@ export function DesignSystem() {
         </header>
 
         <Section title="Typography" description="Every text style used by the app.">
+          {/* The Typography swatches show the *visual* style of each heading
+              size — they aren't real headings (the page already has its h1
+              above, and stamping out more h1s here would wreck the document
+              outline). `as="p"` keeps the styling but renders a <p>. */}
           <Row label="Page h1 / 32px">
-            <Heading level={1}>Serverless P2P Chat</Heading>
+            <Heading level={1} as="p">
+              Serverless P2P Chat
+            </Heading>
           </Row>
           <Row label="Screen h1 / 24px">
-            <Heading level={1} size="md">
+            <Heading level={1} size="md" as="p">
               Invite your friend
             </Heading>
           </Row>
           <Row label="In-chat h1 / 18px">
-            <Heading level={1} size="sm">
+            <Heading level={1} size="sm" as="p">
               Connected
             </Heading>
           </Row>
@@ -209,14 +216,23 @@ export function DesignSystem() {
               Medium
             </Button>
           </Row>
+          {/* Same swatch-not-real-heading reasoning as the Typography
+              section above — these rows demo the visual style of each
+              Heading level without polluting the document outline. */}
           <Row label="Heading — level 1">
-            <Heading level={1}>Page heading</Heading>
+            <Heading level={1} as="p">
+              Page heading
+            </Heading>
           </Row>
           <Row label="Heading — level 2">
-            <Heading level={2}>Section heading</Heading>
+            <Heading level={2} as="p">
+              Section heading
+            </Heading>
           </Row>
           <Row label="Heading — level 3">
-            <Heading level={3}>Sub heading</Heading>
+            <Heading level={3} as="p">
+              Sub heading
+            </Heading>
           </Row>
           <Row label="Textarea">
             <Textarea aria-label="Sample textarea" rows={3} placeholder="Type something…" className="max-w-sm" />
@@ -326,12 +342,21 @@ export function DesignSystem() {
   )
 }
 
+// All previewed screens render inside a showcase context that demotes their
+// landmarks and headings: each screen's `<main>` becomes a labelled
+// `<div role="region">` (so the page keeps a single `<main>`), and every
+// `Heading level={1}` inside renders as `<h2>` (so the page keeps a single
+// `<h1>`). The visual styling is unchanged — heading sizes still track the
+// authored level — so the showcase still looks like the real screen. See
+// A11Y-013.
+const SHOWCASE_CHROME: ScreenChromeValue = { landmark: 'region', headingLevelOffset: 1 }
+
 function ScreenPreview({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-2">
       <span className="text-xs font-medium text-slate-600 dark:text-slate-400">{label}</span>
       <div className="rounded-md border border-slate-300 bg-slate-50 dark:border-slate-700 dark:bg-slate-900">
-        {children}
+        <ScreenChromeContext.Provider value={SHOWCASE_CHROME}>{children}</ScreenChromeContext.Provider>
       </div>
     </div>
   )
@@ -341,9 +366,15 @@ function ScreenPreview({ label, children }: { label: string; children: React.Rea
 // without nesting a second Chat instance. The Chat organism above is the
 // interactive one — sharing IDs across two Chat renders would dup the
 // `chat-input` id and break label associations.
+//
+// Note: this is rendered inside `<ScreenPreview>`, which provides a
+// `ScreenChromeContext` that already demotes the heading semantics. We use a
+// `<div>` instead of `<main>` directly because there's no `ScreenContainer`
+// indirection here (real screens use one — this preview is local to the
+// showcase file).
 function ConnectedChromePreview() {
   return (
-    <main className="mx-auto flex max-w-xl flex-col gap-3 px-4 py-6">
+    <div className="mx-auto flex max-w-xl flex-col gap-3 px-4 py-6">
       <header className="flex items-center justify-between">
         <Heading level={1} size="sm">
           Connected
@@ -356,7 +387,7 @@ function ConnectedChromePreview() {
         ↑ The Chat transcript + composer renders below this header on the real screen — see the interactive Chat in the
         Organisms section above.
       </p>
-    </main>
+    </div>
   )
 }
 
@@ -369,7 +400,7 @@ function ConnectedChromePreview() {
 // reply branch in Joiner.tsx.
 function JoinerReplyPreview() {
   return (
-    <main className="mx-auto flex max-w-xl flex-col gap-6 px-4 py-12">
+    <div className="mx-auto flex max-w-xl flex-col gap-6 px-4 py-12">
       <header className="flex items-start justify-between">
         <div>
           <Heading level={1}>Send this code back</Heading>
@@ -386,6 +417,6 @@ function JoinerReplyPreview() {
         value={FAKE_REPLY}
         helpText="Paste this back in the same conversation. Waiting for them to accept…"
       />
-    </main>
+    </div>
   )
 }
