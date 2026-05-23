@@ -89,12 +89,15 @@ export function Offerer({ session, onCancel }: Props) {
           <label htmlFor="answer-input" className="text-sm font-medium text-slate-200">
             Paste their reply code
           </label>
+          <p id="answer-help" className="text-xs text-slate-400">
+            They'll send back a long string — paste it here.
+          </p>
           <textarea
             id="answer-input"
+            aria-describedby="answer-help"
             value={answerDraft}
             onChange={(e) => setAnswerDraft(e.target.value)}
             rows={5}
-            placeholder="They'll send back a long string. Paste it here."
             className="w-full resize-none rounded-md border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-xs text-slate-100 focus:border-sky-500 focus:outline-none"
           />
           <button
