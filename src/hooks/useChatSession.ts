@@ -88,7 +88,18 @@ export function useChatSession(): ChatSession {
     }
   }, [])
 
+  // State-machine guards (CR-006): the controller owns its state machine and
+  // refuses operations that aren't valid for the current state. Without these,
+  // a second start-call before the first resolves overwrites `pcRef.current`
+  // and leaks the previous RTCPeerConnection (its STUN bindings and candidate
+  // gathering keep running until GC), and a re-fired `submitAnswer` while
+  // already 'connected' calls `setRemoteDescription` on a stable signaling
+  // state — the browser rejects with InvalidStateError and the catch branch
+  // kills the live chat. The view-side guards in Offerer/Joiner stay (they
+  // drive UI affordances), but they're no longer the only line of defense.
+
   const startAsOfferer = useCallback(async () => {
+    if (state !== 'idle') return
     setError(null)
     setState('gathering')
     try {
@@ -102,10 +113,11 @@ export function useChatSession(): ChatSession {
       setError(err instanceof Error ? err.message : String(err))
       setState('failed')
     }
-  }, [wireChannel, wirePc])
+  }, [state, wireChannel, wirePc])
 
   const startAsAnswerer = useCallback(
     async (offerCode: string) => {
+      if (state !== 'idle') return
       setError(null)
       setState('gathering')
       try {
@@ -121,23 +133,31 @@ export function useChatSession(): ChatSession {
         setState('failed')
       }
     },
-    [wireChannel, wirePc],
+    [state, wireChannel, wirePc],
   )
 
-  const submitAnswer = useCallback(async (answerCode: string) => {
-    if (!pcRef.current) {
-      setError('No active connection — start a chat first.')
-      return
-    }
-    setError(null)
-    setState('connecting')
-    try {
-      await acceptAnswer(pcRef.current, answerCode)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-      setState('failed')
-    }
-  }, [])
+  const submitAnswer = useCallback(
+    async (answerCode: string) => {
+      // The cold-start case (no pcRef yet) keeps its existing user-facing
+      // error so the dedicated test for it stays green. Other invalid states
+      // ('connected', 'connecting', 'gathering', terminal) silently no-op —
+      // these are programmer errors, not user errors.
+      if (!pcRef.current) {
+        setError('No active connection — start a chat first.')
+        return
+      }
+      if (state !== 'awaiting-answer') return
+      setError(null)
+      setState('connecting')
+      try {
+        await acceptAnswer(pcRef.current, answerCode)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err))
+        setState('failed')
+      }
+    },
+    [state],
+  )
 
   const send = useCallback((text: string) => {
     const trimmed = text.trim()

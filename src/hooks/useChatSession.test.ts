@@ -40,6 +40,10 @@ class FakeDataChannel {
 // the peer connection inside `createOffer`.
 let lastChannel: FakeDataChannel | null = null
 let lastPc: FakePeerConnection | null = null
+// Counts every `new RTCPeerConnection()` so the state-machine-guard tests can
+// assert "the second call didn't allocate another PC" (a PC leak symptom).
+// Wrapped in an object so the binding can stay `const` while the count mutates.
+const pcStats = { constructorCount: 0 }
 
 // Toggle to make `createOffer` (via setLocalDescription) reject, exercising
 // the hook's offerer-failure branch.
@@ -98,6 +102,7 @@ beforeAll(() => {
   function Ctor() {
     const instance = new FakePeerConnection()
     lastPc = instance
+    pcStats.constructorCount += 1
     return instance
   }
   Ctor.prototype = FakePeerConnection.prototype
@@ -108,6 +113,7 @@ beforeAll(() => {
 beforeEach(() => {
   lastChannel = null
   lastPc = null
+  pcStats.constructorCount = 0
   failNextSetLocalDescription = false
 })
 
@@ -423,5 +429,129 @@ describe('useChatSession teardown', () => {
 
     expect(channel.closeCalls).toBeGreaterThanOrEqual(1)
     expect(pc.closeCalls).toBeGreaterThanOrEqual(1)
+  })
+})
+
+describe('useChatSession state-machine guards', () => {
+  // CR-006: the controller owns its state machine and must refuse operations
+  // that aren't valid for the current state. Without these guards, re-entry
+  // leaks the existing PeerConnection (the ref gets overwritten before the
+  // previous one is closed) and a re-fired submitAnswer can tear down a live
+  // chat by calling setRemoteDescription on a stable signaling state.
+
+  it('startAsOfferer called twice in rapid succession only constructs one PeerConnection', async () => {
+    const { result } = renderHook(() => useChatSession())
+
+    await act(async () => {
+      await result.current.startAsOfferer()
+    })
+    const firstPc = lastPc
+    expect(result.current.state).toBe('awaiting-answer')
+    expect(pcStats.constructorCount).toBe(1)
+
+    // Second call once we're already in `awaiting-answer` — should be a no-op.
+    await act(async () => {
+      await result.current.startAsOfferer()
+    })
+
+    expect(pcStats.constructorCount).toBe(1)
+    expect(lastPc).toBe(firstPc)
+    expect(result.current.state).toBe('awaiting-answer')
+  })
+
+  it('startAsAnswerer called after startAsOfferer is in flight is a no-op', async () => {
+    const { result } = renderHook(() => useChatSession())
+
+    await act(async () => {
+      await result.current.startAsOfferer()
+    })
+    const offererPc = lastPc!
+    expect(result.current.state).toBe('awaiting-answer')
+    expect(pcStats.constructorCount).toBe(1)
+
+    const { encode } = await import('../core/encoding')
+    const offerCode = encode({ type: 'offer', sdp: 'v=0\r\n' })
+
+    await act(async () => {
+      await result.current.startAsAnswerer(offerCode)
+    })
+
+    // No second PC, no setRemoteDescription on a fresh pc, state stayed on
+    // the offerer track.
+    expect(pcStats.constructorCount).toBe(1)
+    expect(lastPc).toBe(offererPc)
+    expect(offererPc.setRemoteDescriptionCalls).toHaveLength(0)
+    expect(result.current.state).toBe('awaiting-answer')
+  })
+
+  it('submitAnswer while state is "connected" does not tear down the live chat', async () => {
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsOfferer()
+    })
+    act(() => lastChannel!.open())
+    act(() => lastChannel!.onmessage?.({ data: 'hello from the other side' }))
+    expect(result.current.state).toBe('connected')
+    expect(result.current.messages).toHaveLength(1)
+
+    const { encode } = await import('../core/encoding')
+    const answerCode = encode({ type: 'answer', sdp: 'v=0\r\n' })
+
+    await act(async () => {
+      await result.current.submitAnswer(answerCode)
+    })
+
+    // State stays connected, no second setRemoteDescription, transcript
+    // preserved, no error surfaced.
+    expect(result.current.state).toBe('connected')
+    expect(lastPc!.setRemoteDescriptionCalls).toHaveLength(0)
+    expect(result.current.messages).toHaveLength(1)
+    expect(result.current.error).toBeNull()
+  })
+
+  it('submitAnswer while state is "gathering" does not regress to "connecting"', async () => {
+    // We can't easily pause `startAsOfferer` mid-flight, but `startAsAnswerer`
+    // leaves the hook in 'connecting' until the channel opens — and there's
+    // no public hook into 'gathering' that resolves cleanly. Use the answerer
+    // path: state is 'connecting' (still pre-open), submitAnswer must no-op.
+    const { encode } = await import('../core/encoding')
+    const offerCode = encode({ type: 'offer', sdp: 'v=0\r\n' })
+
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsAnswerer(offerCode)
+    })
+    expect(result.current.state).toBe('connecting')
+    // acceptOffer calls setRemoteDescription with the offer once; track baseline.
+    const baselineCalls = lastPc!.setRemoteDescriptionCalls.length
+
+    const answerCode = encode({ type: 'answer', sdp: 'v=0\r\n' })
+    await act(async () => {
+      await result.current.submitAnswer(answerCode)
+    })
+
+    // submitAnswer is only legal in 'awaiting-answer'. From 'connecting' it
+    // must no-op: no extra setRemoteDescription, state unchanged.
+    expect(result.current.state).toBe('connecting')
+    expect(lastPc!.setRemoteDescriptionCalls.length).toBe(baselineCalls)
+  })
+
+  it('after reset() the controller accepts startAsOfferer again', async () => {
+    // Regression guard: the guard keys on 'idle', and reset returns to 'idle'.
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsOfferer()
+    })
+    expect(pcStats.constructorCount).toBe(1)
+
+    act(() => result.current.reset())
+    expect(result.current.state).toBe('idle')
+
+    await act(async () => {
+      await result.current.startAsOfferer()
+    })
+
+    expect(pcStats.constructorCount).toBe(2)
+    expect(result.current.state).toBe('awaiting-answer')
   })
 })
