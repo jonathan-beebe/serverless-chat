@@ -32,6 +32,15 @@ export interface ChatMessage {
   from: 'me' | 'them'
   text: string
   at: number
+  /**
+   * FEAT-010: only set on outgoing (`from: 'me'`) messages. Starts as
+   * `'pending'` the moment the bubble appears (the chat envelope has been
+   * handed to the data channel); flips to `'delivered'` when a `receipt`
+   * envelope for this id arrives from the peer. Incoming messages leave
+   * this undefined — receipts on the receiver side fire automatically and
+   * never render.
+   */
+  delivery?: 'pending' | 'delivered'
 }
 
 export interface PeerSession {

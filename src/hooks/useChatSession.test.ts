@@ -1,5 +1,5 @@
 import { act, renderHook } from '@testing-library/react'
-import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useChatSession } from './useChatSession'
 
 // Minimal stubs for the slice of WebRTC the hook touches. We don't exercise
@@ -321,22 +321,30 @@ describe('useChatSession submitAnswer', () => {
 })
 
 describe('useChatSession messages', () => {
-  it('appends an incoming string message with from: "them"', async () => {
+  // FEAT-010: payloads are now JSON envelopes. Tests build a chat envelope
+  // string for the incoming-message path.
+  function chatEnvelope(id: string, text: string, sentAt = 1_700_000_000_000): string {
+    return JSON.stringify({ v: 1, t: 'chat', id, sentAt, text })
+  }
+
+  it('appends an incoming chat envelope as a "them" message', async () => {
     const { result } = renderHook(() => useChatSession())
     await act(async () => {
       await result.current.startAsOfferer()
     })
     act(() => lastChannel!.open())
 
-    act(() => lastChannel!.onmessage?.({ data: 'hi there' }))
+    act(() => lastChannel!.onmessage?.({ data: chatEnvelope('m-1', 'hi there') }))
 
     expect(result.current.messages).toHaveLength(1)
     const [msg] = result.current.messages
     expect(msg.from).toBe('them')
     expect(msg.text).toBe('hi there')
+    expect(msg.id).toBe('m-1')
   })
 
-  it('renders a non-string payload as "[binary message]"', async () => {
+  it('drops non-string payloads (FEAT-010 wire is JSON-only post-envelope)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const { result } = renderHook(() => useChatSession())
     await act(async () => {
       await result.current.startAsOfferer()
@@ -345,9 +353,28 @@ describe('useChatSession messages', () => {
 
     act(() => lastChannel!.onmessage?.({ data: new ArrayBuffer(8) }))
 
-    expect(result.current.messages).toHaveLength(1)
-    expect(result.current.messages[0].text).toBe('[binary message]')
-    expect(result.current.messages[0].from).toBe('them')
+    // No spurious "[binary message]" placeholder anymore — the receiver
+    // silently drops binary payloads (with a console.warn) since v1 doesn't
+    // negotiate them.
+    expect(result.current.messages).toHaveLength(0)
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('drops malformed JSON payloads without crashing', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsOfferer()
+    })
+    act(() => lastChannel!.open())
+
+    act(() => lastChannel!.onmessage?.({ data: 'not-json' }))
+    act(() => lastChannel!.onmessage?.({ data: JSON.stringify({ v: 2, t: 'chat', id: 'x', sentAt: 1, text: 'hi' }) }))
+
+    expect(result.current.messages).toHaveLength(0)
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
   })
 
   it('send() drops empty / whitespace-only input as a no-op', async () => {
@@ -361,7 +388,16 @@ describe('useChatSession messages', () => {
     act(() => result.current.send('   '))
 
     expect(result.current.messages).toHaveLength(0)
-    expect(lastChannel!.sent).toHaveLength(0)
+    // Channel.sent may contain a sync-probe (offerer initiates one on open).
+    // No chat envelopes should be present.
+    const chats = lastChannel!.sent.filter((s) => {
+      try {
+        return JSON.parse(s).t === 'chat'
+      } catch {
+        return false
+      }
+    })
+    expect(chats).toHaveLength(0)
   })
 
   it('send() is a no-op when the channel is not open', async () => {
@@ -378,7 +414,7 @@ describe('useChatSession messages', () => {
     expect(lastChannel!.sent).toHaveLength(0)
   })
 
-  it('send() with an open channel calls channel.send and appends from: "me"', async () => {
+  it('send() with an open channel wraps the text in a chat envelope and appends from: "me"', async () => {
     const { result } = renderHook(() => useChatSession())
     await act(async () => {
       await result.current.startAsOfferer()
@@ -387,9 +423,314 @@ describe('useChatSession messages', () => {
 
     act(() => result.current.send('hello'))
 
-    expect(lastChannel!.sent).toEqual(['hello'])
+    // Find the chat envelope in everything the channel sent (offerer's
+    // sync-probe will also be there).
+    const chats = lastChannel!.sent
+      .map((s) => {
+        try {
+          return JSON.parse(s)
+        } catch {
+          return null
+        }
+      })
+      .filter((p) => p && p.t === 'chat')
+    expect(chats).toHaveLength(1)
+    expect(chats[0]).toMatchObject({ v: 1, t: 'chat', text: 'hello' })
+    expect(typeof chats[0].id).toBe('string')
+    expect(typeof chats[0].sentAt).toBe('number')
+
     expect(result.current.messages).toHaveLength(1)
-    expect(result.current.messages[0]).toMatchObject({ from: 'me', text: 'hello' })
+    expect(result.current.messages[0]).toMatchObject({ from: 'me', text: 'hello', delivery: 'pending' })
+  })
+})
+
+describe('useChatSession FEAT-010 telemetry, sync, receipts', () => {
+  function envelope(obj: Record<string, unknown>): string {
+    return JSON.stringify({ v: 1, ...obj })
+  }
+  function findSent(channel: FakeDataChannel, t: string): Record<string, unknown> | null {
+    for (const raw of channel.sent) {
+      try {
+        const parsed = JSON.parse(raw)
+        if (parsed.t === t) return parsed
+      } catch {
+        // skip
+      }
+    }
+    return null
+  }
+
+  it('exposes an empty telemetry object on a fresh hook', () => {
+    const { result } = renderHook(() => useChatSession())
+    expect(result.current.telemetry.connectedAt).toBeNull()
+    expect(result.current.telemetry.sync).toBeNull()
+    expect(result.current.telemetry.samples).toEqual([])
+    expect(result.current.telemetry.summary).toMatchObject({ sampleCount: 0, currentRttMs: null })
+  })
+
+  it('offerer initiates a sync-probe envelope as soon as the channel opens', async () => {
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsOfferer()
+    })
+    await act(async () => {
+      lastChannel!.open()
+      // initiateSync is scheduled via queueMicrotask so we flush the queue.
+      await Promise.resolve()
+    })
+
+    const probe = findSent(lastChannel!, 'sync-probe')
+    expect(probe).not.toBeNull()
+    expect(probe!.id).toBeTypeOf('string')
+    expect(probe!.sentAt).toBeTypeOf('number')
+  })
+
+  it('offerer completes the sync handshake on sync-ack and populates telemetry.sync', async () => {
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsOfferer()
+    })
+    await act(async () => {
+      lastChannel!.open()
+      await Promise.resolve()
+    })
+    const probe = findSent(lastChannel!, 'sync-probe')!
+    const probeId = probe.id as string
+    const t1 = probe.sentAt as number
+
+    // Peer's clock is 100 ms ahead of ours; round-trip is ~50 ms.
+    // Probe seen at t2 = t1 + 50 + 100 (transit + clock skew).
+    // Ack sent at t3 = t2 + 10 (turnaround).
+    // Ack arrives at t4 = t3 - 100 + 50 = t1 + 10 (in our clock).
+    const t2 = t1 + 150
+    const t3 = t2 + 10
+    await act(async () => {
+      lastChannel!.onmessage?.({
+        data: envelope({ t: 'sync-ack', id: 'ack-1', sentAt: t3, replyTo: probeId, probeReceivedAt: t2 }),
+      })
+      // commitTelemetry runs synchronously in handleEnvelope.
+      await Promise.resolve()
+    })
+
+    expect(result.current.telemetry.sync).not.toBeNull()
+    const sync = result.current.telemetry.sync!
+    expect(sync.t1).toBe(t1)
+    expect(sync.t2).toBe(t2)
+    expect(sync.t3).toBe(t3)
+    // t4 is whatever Date.now() returned when the ack was processed; not
+    // pinned, but rtt and offset should be derived from it.
+    expect(typeof sync.rtt).toBe('number')
+    expect(typeof sync.offset).toBe('number')
+
+    // And the offerer sent a sync-done so the answerer can derive too.
+    const done = findSent(lastChannel!, 'sync-done')
+    expect(done).not.toBeNull()
+    expect(done!.t1).toBe(t1)
+    expect(done!.t2).toBe(t2)
+    expect(done!.t3).toBe(t3)
+  })
+
+  it('answerer derives sync from a sync-done envelope (mirrored offset)', async () => {
+    const { encode: encodeSdp } = await import('../core/encoding')
+    const offerCode = encodeSdp({ type: 'offer', sdp: 'v=0\r\n' })
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsAnswerer(offerCode)
+    })
+    // Answerer's channel arrives via `pc.ondatachannel`, not `createDataChannel`.
+    const answererChannel = new FakeDataChannel()
+    await act(async () => {
+      lastPc!.emitDataChannel(answererChannel)
+      answererChannel.open()
+      await Promise.resolve()
+    })
+
+    // No sync-probe from the answerer side — only the offerer initiates.
+    expect(lastChannel!.sent.filter((s) => s.includes('"sync-probe"'))).toHaveLength(0)
+
+    // Simulate the full quad arriving as sync-done.
+    const t1 = 1000
+    const t2 = 1100
+    const t3 = 1110
+    const t4 = 1200
+    await act(async () => {
+      lastChannel!.onmessage?.({
+        data: envelope({ t: 'sync-done', id: 'done-1', sentAt: t3, replyTo: 'ack-1', t1, t2, t3, t4 }),
+      })
+      await Promise.resolve()
+    })
+
+    const sync = result.current.telemetry.sync
+    expect(sync).not.toBeNull()
+    expect(sync!.t1).toBe(t1)
+    expect(sync!.t4).toBe(t4)
+    // Answerer's offset is the negation of the offerer's. For these inputs:
+    // offerer offset = ((t2 - t1) + (t3 - t4)) / 2 = ((100) + (-90)) / 2 = 5
+    // answerer offset = -5
+    expect(sync!.offset).toBe(-5)
+    // RTT is the same magnitude on both sides.
+    expect(sync!.rtt).toBe(t4 - t1 - (t3 - t2))
+  })
+
+  it('sync timeout does not break chat — chat envelopes still flow with sync=null', async () => {
+    vi.useFakeTimers()
+    try {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const { result } = renderHook(() => useChatSession())
+      await act(async () => {
+        await result.current.startAsOfferer()
+      })
+      await act(async () => {
+        lastChannel!.open()
+        await Promise.resolve()
+      })
+
+      // Advance past the 5s sync timeout.
+      await act(async () => {
+        vi.advanceTimersByTime(6000)
+      })
+
+      expect(result.current.telemetry.sync).toBeNull()
+
+      // Chat still works — send a message and assert the channel got it.
+      await act(async () => {
+        result.current.send('still works')
+      })
+      expect(result.current.messages).toHaveLength(1)
+      expect(result.current.messages[0].text).toBe('still works')
+      warn.mockRestore()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('answerer auto-fires a receipt envelope for every incoming chat', async () => {
+    const { encode: encodeSdp } = await import('../core/encoding')
+    const offerCode = encodeSdp({ type: 'offer', sdp: 'v=0\r\n' })
+    const { result: answerer } = renderHook(() => useChatSession())
+    await act(async () => {
+      await answerer.current.startAsAnswerer(offerCode)
+    })
+    // Answerer's channel arrives via `pc.ondatachannel`, not `createDataChannel`.
+    const answererChannel = new FakeDataChannel()
+    await act(async () => {
+      lastPc!.emitDataChannel(answererChannel)
+      answererChannel.open()
+      await Promise.resolve()
+    })
+
+    // Receiver sees an incoming chat envelope; it must turn around with a receipt.
+    await act(async () => {
+      lastChannel!.onmessage?.({
+        data: envelope({ t: 'chat', id: 'chat-1', sentAt: 1000, text: 'ping' }),
+      })
+      await Promise.resolve()
+    })
+
+    const receipt = findSent(lastChannel!, 'receipt')
+    expect(receipt).not.toBeNull()
+    expect(receipt!.replyTo).toBe('chat-1')
+    expect(typeof receipt!.messageReceivedAt).toBe('number')
+  })
+
+  it('outgoing chat starts as delivery:"pending" and flips to "delivered" when a receipt arrives', async () => {
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsOfferer()
+    })
+    await act(async () => {
+      lastChannel!.open()
+      await Promise.resolve()
+    })
+
+    await act(async () => {
+      result.current.send('hi')
+    })
+    const sent = result.current.messages[0]
+    expect(sent.delivery).toBe('pending')
+
+    // Peer sends a receipt referencing our message id.
+    await act(async () => {
+      lastChannel!.onmessage?.({
+        data: envelope({
+          t: 'receipt',
+          id: 'r-1',
+          sentAt: Date.now(),
+          replyTo: sent.id,
+          messageReceivedAt: Date.now(),
+        }),
+      })
+      await Promise.resolve()
+    })
+
+    expect(result.current.messages[0].delivery).toBe('delivered')
+    // A "receipt" sample is appended with an rtt.
+    const receiptSamples = result.current.telemetry.samples.filter((s) => s.kind === 'receipt')
+    expect(receiptSamples).toHaveLength(1)
+    expect(typeof (receiptSamples[0] as { rttMs: number }).rttMs).toBe('number')
+  })
+
+  it('receipt for an unknown message id is ignored without crash', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsOfferer()
+    })
+    await act(async () => {
+      lastChannel!.open()
+      await Promise.resolve()
+    })
+
+    await act(async () => {
+      lastChannel!.onmessage?.({
+        data: envelope({
+          t: 'receipt',
+          id: 'r-stray',
+          sentAt: Date.now(),
+          replyTo: 'never-sent',
+          messageReceivedAt: Date.now(),
+        }),
+      })
+      await Promise.resolve()
+    })
+
+    // No state corruption: no messages added, no receipt sample appended.
+    expect(result.current.messages).toHaveLength(0)
+    expect(result.current.telemetry.samples.filter((s) => s.kind === 'receipt')).toHaveLength(0)
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('state-change samples accumulate as the connection progresses', async () => {
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsOfferer()
+    })
+    await act(async () => {
+      lastChannel!.open()
+      await Promise.resolve()
+    })
+
+    const states = result.current.telemetry.samples
+      .filter((s): s is Extract<typeof s, { kind: 'state-change' }> => s.kind === 'state-change')
+      .map((s) => s.state)
+    // The offerer should pass through gathering → awaiting-answer → connected.
+    expect(states).toContain('gathering')
+    expect(states).toContain('awaiting-answer')
+    expect(states).toContain('connected')
+  })
+
+  it('telemetry.connectedAt is set when the channel opens', async () => {
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsOfferer()
+    })
+    expect(result.current.telemetry.connectedAt).toBeNull()
+    await act(async () => {
+      lastChannel!.open()
+      await Promise.resolve()
+    })
+    expect(typeof result.current.telemetry.connectedAt).toBe('number')
   })
 })
 
@@ -490,7 +831,12 @@ describe('useChatSession state-machine guards', () => {
       await result.current.startAsOfferer()
     })
     act(() => lastChannel!.open())
-    act(() => lastChannel!.onmessage?.({ data: 'hello from the other side' }))
+    // FEAT-010: incoming wire payloads are JSON envelopes now.
+    act(() =>
+      lastChannel!.onmessage?.({
+        data: JSON.stringify({ v: 1, t: 'chat', id: 'm-other', sentAt: 1, text: 'hello from the other side' }),
+      }),
+    )
     expect(result.current.state).toBe('connected')
     expect(result.current.messages).toHaveLength(1)
 

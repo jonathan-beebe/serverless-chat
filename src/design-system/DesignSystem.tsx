@@ -14,6 +14,7 @@ import type { ChatSession } from '../hooks/useChatSession'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { Home } from '../screens/Home'
 import { Joiner } from '../screens/Joiner'
+import { Network } from '../network/Network'
 import { Offerer } from '../screens/Offerer'
 import { Section, Row } from './Section'
 
@@ -27,11 +28,15 @@ function buildChatFixture(): ChatMessage[] {
   const day1AfternoonLocal = new Date(2026, 4, 21, 14, 5).getTime()
   const day1EveningLocal = new Date(2026, 4, 21, 18, 32).getTime()
   const day2MorningLocal = new Date(2026, 4, 22, 9, 14).getTime()
+  // FEAT-010: two outgoing fixtures exercise the delivery indicator —
+  // ds-2 is delivered (filled check), ds-4 is still pending (hollow check).
+  // Reviewers can see both states at once instead of having to wait for a
+  // live receipt to flip the glyph.
   return [
     { id: 'ds-1', from: 'them', text: 'Hey! Got the invite.\nLooks neat.', at: day1AfternoonLocal },
-    { id: 'ds-2', from: 'me', text: 'Glad it worked.', at: day1AfternoonLocal + 60_000 },
+    { id: 'ds-2', from: 'me', text: 'Glad it worked.', at: day1AfternoonLocal + 60_000, delivery: 'delivered' },
     { id: 'ds-3', from: 'them', text: 'Are you around tomorrow?', at: day1EveningLocal },
-    { id: 'ds-4', from: 'me', text: 'Yep, after 10am.', at: day1EveningLocal + 90_000 },
+    { id: 'ds-4', from: 'me', text: 'Yep, after 10am.', at: day1EveningLocal + 90_000, delivery: 'pending' },
     { id: 'ds-5', from: 'them', text: 'Cool, talk then.', at: day2MorningLocal },
   ]
 }
@@ -45,6 +50,12 @@ function stubSession(overrides: Partial<ChatSession> = {}): ChatSession {
     error: null,
     encodedLocal: null,
     messages: [],
+    telemetry: {
+      connectedAt: null,
+      sync: null,
+      samples: [],
+      summary: { sampleCount: 0, currentRttMs: null, medianRttMs: null, p95RttMs: null },
+    },
     startAsOfferer: async () => {},
     startAsAnswerer: async () => {},
     submitAnswer: async () => {},
@@ -93,7 +104,10 @@ export function DesignSystem() {
   // without negotiating a peer. `onSend` appends a new "me" message.
   const [showcaseMessages, setShowcaseMessages] = useState<ChatMessage[]>(buildChatFixture)
   const onShowcaseSend = (text: string) => {
-    setShowcaseMessages((prev) => [...prev, { id: crypto.randomUUID(), from: 'me', text, at: Date.now() }])
+    setShowcaseMessages((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), from: 'me', text, at: Date.now(), delivery: 'pending' },
+    ])
   }
 
   // Scope the dark/light override to the page root. The custom variant in
@@ -363,10 +377,45 @@ export function DesignSystem() {
           <ScreenPreview label="Connected chat layout (header chrome)">
             <ConnectedChromePreview />
           </ScreenPreview>
+
+          <ScreenPreview label="Network telemetry — empty state">
+            <Network session={stubSession()} />
+          </ScreenPreview>
+
+          <ScreenPreview label="Network telemetry — active session">
+            <Network session={stubSession({ telemetry: buildNetworkFixture() })} />
+          </ScreenPreview>
         </Section>
       </main>
     </div>
   )
+}
+
+// FEAT-010: a fixture telemetry blob so the design-system preview renders
+// every section of the Network page without needing a real session.
+function buildNetworkFixture(): ChatSession['telemetry'] {
+  const connectedAt = Date.now() - 60_000
+  return {
+    connectedAt,
+    sync: { t1: 100, t2: 175, t3: 180, t4: 225, rtt: 80, offset: 25 },
+    samples: [
+      { kind: 'state-change', at: connectedAt - 2_000, state: 'gathering' },
+      { kind: 'state-change', at: connectedAt - 1_400, state: 'awaiting-answer' },
+      { kind: 'state-change', at: connectedAt, state: 'connected' },
+      { kind: 'sent', at: connectedAt + 5_000, messageId: 'aaaa1111bbbb', sentAt: connectedAt + 5_000 },
+      { kind: 'receipt', at: connectedAt + 5_080, messageId: 'aaaa1111bbbb', rttMs: 80 },
+      {
+        kind: 'received',
+        at: connectedAt + 7_000,
+        messageId: 'bbbb2222cccc',
+        sentAt: connectedAt + 6_950,
+        transitMs: 50,
+      },
+      { kind: 'sent', at: connectedAt + 12_000, messageId: 'cccc3333dddd', sentAt: connectedAt + 12_000 },
+      { kind: 'receipt', at: connectedAt + 12_140, messageId: 'cccc3333dddd', rttMs: 140 },
+    ],
+    summary: { sampleCount: 3, currentRttMs: 140, medianRttMs: 80, p95RttMs: 140 },
+  }
 }
 
 // All previewed screens render inside a showcase context that demotes their

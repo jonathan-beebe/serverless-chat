@@ -173,6 +173,13 @@ export function Chat({ messages, onSend, disabled }: Props) {
               }
               const m = item.message
               const isMe = m.from === 'me'
+              // FEAT-010: outgoing bubbles render a delivery indicator next
+              // to the time. Pending = hollow/dim check (the message is
+              // "sent locally" — handed to the transport); Delivered =
+              // filled check (peer's receipt envelope arrived). Incoming
+              // bubbles render no check (parity with WhatsApp — receipts on
+              // the receiver side fire automatically without rendering).
+              const delivered = m.delivery === 'delivered'
               return (
                 <li key={m.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
                   {/* Visually-hidden prefix so the log announcement includes the speaker (A11Y-004). */}
@@ -187,12 +194,27 @@ export function Chat({ messages, onSend, disabled }: Props) {
                     <span data-testid={`message-text-${m.id}`} className="whitespace-pre-wrap break-words">
                       {m.text}
                     </span>
-                    <time
-                      aria-hidden="true"
-                      dateTime={new Date(m.at).toISOString()}
-                      className={`self-end text-xs ${isMe ? 'text-white' : 'text-stone-600 dark:text-stone-400'}`}>
-                      {timeFmt.format(new Date(m.at))}
-                    </time>
+                    <span
+                      className={`flex items-center gap-1 self-end text-xs ${
+                        isMe ? 'text-white' : 'text-stone-600 dark:text-stone-400'
+                      }`}>
+                      <time aria-hidden="true" dateTime={new Date(m.at).toISOString()}>
+                        {timeFmt.format(new Date(m.at))}
+                      </time>
+                      {isMe && (
+                        <span
+                          data-testid={`delivery-${m.id}`}
+                          aria-label={delivered ? 'Delivered' : 'Pending'}
+                          role="img"
+                          // Hollow check until delivered (faint sky tint over
+                          // the sky-700 bubble); filled white on delivery.
+                          // Same glyph either way so the bubble doesn't shift
+                          // when the receipt lands.
+                          className={`inline-block leading-none ${delivered ? 'text-white' : 'text-sky-100/60'}`}>
+                          {'✓'}
+                        </span>
+                      )}
+                    </span>
                   </div>
                 </li>
               )

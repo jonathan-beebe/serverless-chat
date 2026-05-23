@@ -139,6 +139,36 @@ describe('App routing', () => {
     expect(document.title).toBe('Design system · P2P Chat')
   })
 
+  it('renders the network telemetry page when the hash is #network on mount (FEAT-010)', () => {
+    history.replaceState(null, '', '/#network')
+    render(<App />)
+    expect(screen.getByRole('heading', { level: 1, name: /network telemetry/i })).toBeInTheDocument()
+  })
+
+  it('routes into #network when the hash changes after mount (FEAT-010)', () => {
+    render(<App />)
+    expect(screen.getByRole('heading', { name: /serverless p2p chat/i })).toBeInTheDocument()
+
+    act(() => {
+      history.replaceState(null, '', '/#network')
+      window.dispatchEvent(new HashChangeEvent('hashchange'))
+    })
+
+    expect(screen.getByRole('heading', { level: 1, name: /network telemetry/i })).toBeInTheDocument()
+  })
+
+  it('does NOT scrub the hash when entering #network — page is bookmarkable (FEAT-010)', () => {
+    history.replaceState(null, '', '/#network')
+    render(<App />)
+    expect(location.hash).toBe('#network')
+  })
+
+  it('sets document.title for the network page (FEAT-010)', () => {
+    history.replaceState(null, '', '/#network')
+    render(<App />)
+    expect(document.title).toBe('Network telemetry · P2P Chat')
+  })
+
   it('updates document.title to reflect the current screen (WCAG 2.4.2)', () => {
     // Home keeps the base title.
     render(<App />)

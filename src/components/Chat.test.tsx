@@ -446,6 +446,42 @@ describe('Chat transcript keyboard focusability (A11Y-021)', () => {
   })
 })
 
+describe('Chat delivery indicator (FEAT-010)', () => {
+  function outgoing(id: string, text: string, delivery?: ChatMessage['delivery']): ChatMessage {
+    return { id, from: 'me', text, at: DEFAULT_AT, delivery }
+  }
+
+  it('renders a pending check next to the timestamp on a freshly-sent outgoing message', () => {
+    render(<Chat messages={[outgoing('o1', 'hi', 'pending')]} onSend={() => {}} />)
+    const indicator = screen.getByTestId('delivery-o1')
+    expect(indicator).toBeTruthy()
+    expect(indicator.getAttribute('aria-label')).toBe('Pending')
+    expect(indicator.textContent).toContain('✓')
+  })
+
+  it('flips the indicator to "Delivered" when the message.delivery state transitions', () => {
+    const { rerender } = render(<Chat messages={[outgoing('o1', 'hi', 'pending')]} onSend={() => {}} />)
+    expect(screen.getByTestId('delivery-o1').getAttribute('aria-label')).toBe('Pending')
+
+    rerender(<Chat messages={[outgoing('o1', 'hi', 'delivered')]} onSend={() => {}} />)
+    expect(screen.getByTestId('delivery-o1').getAttribute('aria-label')).toBe('Delivered')
+  })
+
+  it('does NOT render a delivery indicator on incoming messages', () => {
+    const messages: ChatMessage[] = [{ id: 'i1', from: 'them', text: 'hi', at: DEFAULT_AT }]
+    render(<Chat messages={messages} onSend={() => {}} />)
+    expect(screen.queryByTestId('delivery-i1')).toBeNull()
+  })
+
+  it('preserves the bubble timestamp alongside the indicator', () => {
+    // The indicator must sit *next to* the time, not replace it.
+    render(<Chat messages={[outgoing('o1', 'hi', 'pending')]} onSend={() => {}} />)
+    const bubble = screen.getByTestId('message-bubble')
+    expect(bubble.querySelector('time')).toBeTruthy()
+    expect(bubble.querySelector('[data-testid="delivery-o1"]')).toBeTruthy()
+  })
+})
+
 describe('Chat outer wrapper layout contract (CR-007)', () => {
   // JSDOM doesn't lay out scrollable elements, so a "document didn't scroll"
   // assertion isn't reliably testable here. Instead we pin the *class

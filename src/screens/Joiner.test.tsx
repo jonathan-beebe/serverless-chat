@@ -12,6 +12,12 @@ function makeSession(overrides: Partial<ChatSession> = {}): ChatSession {
     error: null,
     encodedLocal: null,
     messages: [],
+    telemetry: {
+      connectedAt: null,
+      sync: null,
+      samples: [],
+      summary: { sampleCount: 0, currentRttMs: null, medianRttMs: null, p95RttMs: null },
+    },
     startAsOfferer: vi.fn().mockResolvedValue(undefined),
     startAsAnswerer: vi.fn().mockResolvedValue(undefined),
     submitAnswer: vi.fn().mockResolvedValue(undefined),

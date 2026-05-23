@@ -3,14 +3,21 @@ import { DesignSystem } from './design-system/DesignSystem'
 import { Home } from './screens/Home'
 import { Offerer } from './screens/Offerer'
 import { Joiner } from './screens/Joiner'
+import { Network } from './network/Network'
 import { clearHash, readHashParam } from './core/url'
 import { useChatSession } from './hooks/useChatSession'
 
-type Route = { kind: 'home' } | { kind: 'offerer' } | { kind: 'joiner'; offerCode: string } | { kind: 'design-system' }
+type Route =
+  | { kind: 'home' }
+  | { kind: 'offerer' }
+  | { kind: 'joiner'; offerCode: string }
+  | { kind: 'design-system' }
+  | { kind: 'network' }
 
 function routeFromHash(): Route {
   const hash = location.hash.startsWith('#') ? location.hash.slice(1) : location.hash
   if (hash === 'design-system') return { kind: 'design-system' }
+  if (hash === 'network') return { kind: 'network' }
   const offer = readHashParam(location.hash, 'offer')
   return offer ? { kind: 'joiner', offerCode: offer } : { kind: 'home' }
 }
@@ -26,7 +33,7 @@ export function App() {
   useEffect(() => {
     const onHashChange = () => {
       const next = routeFromHash()
-      if (next.kind === 'joiner' || next.kind === 'design-system' || next.kind === 'home') {
+      if (next.kind === 'joiner' || next.kind === 'design-system' || next.kind === 'network' || next.kind === 'home') {
         setRoute(next)
       }
     }
@@ -58,5 +65,7 @@ export function App() {
       return <Joiner session={session} offerCode={route.offerCode} onCancel={goHome} />
     case 'design-system':
       return <DesignSystem />
+    case 'network':
+      return <Network session={session} />
   }
 }
