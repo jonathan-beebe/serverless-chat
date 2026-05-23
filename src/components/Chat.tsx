@@ -36,7 +36,11 @@ function buildItems(messages: ChatMessage[]): TranscriptItem[] {
 
 export function Chat({ messages, onSend, disabled }: Props) {
   const [draft, setDraft] = useState('')
-  const transcriptRef = useRef<HTMLOListElement | null>(null)
+  // Scroll surface + log live region are the same wrapper <div> (A11Y-018):
+  // putting `role="log"` on a wrapper (instead of swapping the <ol>'s implicit
+  // list role) lets the empty-state placeholder sit *outside* the live region
+  // and keeps native list semantics for the message list itself.
+  const transcriptRef = useRef<HTMLDivElement | null>(null)
   const composerRef = useRef<HTMLTextAreaElement | null>(null)
   // Tracks whether the user was near the bottom as of their last scroll input.
   // Updated only by `onScroll`, so by the time a new message commits this
@@ -112,52 +116,75 @@ export function Chat({ messages, onSend, disabled }: Props) {
 
   return (
     <div className="flex h-full flex-col gap-3">
-      <ol
+      {/*
+        A11Y-018: the transcript is exposed as a log surface, not a plain list.
+        `role="log"` implies `aria-live="polite"`, `aria-relevant="additions"`,
+        and `aria-atomic="false"`; we keep them explicit for older AT that
+        doesn't resolve implicit role attributes. The wrapper is also the
+        scroll container (so auto-scroll math reads from the same element AT
+        navigates to as "Chat transcript"). The empty-state placeholder sits
+        as a sibling of the <ol> *inside* this wrapper but is marked
+        aria-hidden so AT doesn't read it on first paint or as it leaves when
+        the first message arrives.
+      */}
+      <div
         ref={transcriptRef}
         onScroll={onScroll}
+        role="log"
         aria-label="Chat transcript"
         aria-live="polite"
-        className="flex-1 space-y-2 overflow-y-auto rounded-md border border-slate-300 bg-white/50 p-3 dark:border-slate-700 dark:bg-slate-900/50">
-        {messages.length === 0 && (
-          <li className="text-sm text-slate-600 dark:text-slate-400">No messages yet. Say hello.</li>
+        aria-relevant="additions"
+        aria-atomic="false"
+        className="flex-1 overflow-y-auto rounded-md border border-slate-300 bg-white/50 p-3 dark:border-slate-700 dark:bg-slate-900/50">
+        {messages.length === 0 ? (
+          <p aria-hidden="true" className="text-sm text-slate-600 dark:text-slate-400">
+            No messages yet. Say hello.
+          </p>
+        ) : (
+          <ol className="space-y-2">
+            {items.map((item) => {
+              if (item.kind === 'date') {
+                // Chrome, not content. `role="presentation"` neutralizes the
+                // list-item semantics so the <ol>'s item count doesn't include
+                // dividers; `aria-hidden` keeps the text out of any
+                // live-region announcement on day rollover.
+                return (
+                  <li key={item.key} role="presentation" aria-hidden="true" data-testid="date-header" className="py-1">
+                    <Divider>
+                      <time dateTime={item.date.toISOString().slice(0, 10)}>{dateFmt.format(item.date)}</time>
+                    </Divider>
+                  </li>
+                )
+              }
+              const m = item.message
+              const isMe = m.from === 'me'
+              return (
+                <li key={m.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                  {/* Visually-hidden prefix so the log announcement includes the speaker (A11Y-004). */}
+                  <span className="sr-only">{isMe ? 'You said: ' : 'They said: '}</span>
+                  <div
+                    data-testid="message-bubble"
+                    className={`flex max-w-[80%] flex-col gap-0.5 rounded-lg px-3 py-1 text-sm ${
+                      isMe
+                        ? 'bg-sky-700 text-white'
+                        : 'bg-slate-200 text-slate-900 dark:bg-slate-700 dark:text-slate-100'
+                    }`}>
+                    <span data-testid={`message-text-${m.id}`} className="whitespace-pre-wrap break-words">
+                      {m.text}
+                    </span>
+                    <time
+                      aria-hidden="true"
+                      dateTime={new Date(m.at).toISOString()}
+                      className={`self-end text-xs ${isMe ? 'text-white' : 'text-slate-600 dark:text-slate-400'}`}>
+                      {timeFmt.format(new Date(m.at))}
+                    </time>
+                  </div>
+                </li>
+              )
+            })}
+          </ol>
         )}
-        {items.map((item) => {
-          if (item.kind === 'date') {
-            // Chrome, not content. `aria-hidden` keeps the polite live region
-            // from announcing day rollovers as if they were messages.
-            return (
-              <li key={item.key} aria-hidden="true" data-testid="date-header" className="py-1">
-                <Divider>
-                  <time dateTime={item.date.toISOString().slice(0, 10)}>{dateFmt.format(item.date)}</time>
-                </Divider>
-              </li>
-            )
-          }
-          const m = item.message
-          const isMe = m.from === 'me'
-          return (
-            <li key={m.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
-              {/* Visually-hidden prefix so the aria-live announcement includes the speaker (A11Y-004). */}
-              <span className="sr-only">{isMe ? 'You said: ' : 'They said: '}</span>
-              <div
-                data-testid="message-bubble"
-                className={`flex max-w-[80%] flex-col gap-0.5 rounded-lg px-3 py-1 text-sm ${
-                  isMe ? 'bg-sky-700 text-white' : 'bg-slate-200 text-slate-900 dark:bg-slate-700 dark:text-slate-100'
-                }`}>
-                <span data-testid={`message-text-${m.id}`} className="whitespace-pre-wrap break-words">
-                  {m.text}
-                </span>
-                <time
-                  aria-hidden="true"
-                  dateTime={new Date(m.at).toISOString()}
-                  className={`self-end text-xs ${isMe ? 'text-white' : 'text-slate-600 dark:text-slate-400'}`}>
-                  {timeFmt.format(new Date(m.at))}
-                </time>
-              </div>
-            </li>
-          )
-        })}
-      </ol>
+      </div>
 
       <form onSubmit={onSubmit} className="flex items-end gap-2">
         <label htmlFor="chat-input" className="sr-only">

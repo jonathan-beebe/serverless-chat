@@ -25,7 +25,10 @@ function msg(id: string, text: string, from: ChatMessage['from'] = 'them', at: n
 }
 
 function getTranscript() {
-  return screen.getByRole('list', { name: /chat transcript/i }) as HTMLOListElement
+  // A11Y-018: the transcript surface is the wrapper <div role="log"> — also
+  // the scroll container, so this is the right element for both AT-name and
+  // scroll-metrics assertions.
+  return screen.getByRole('log', { name: /chat transcript/i }) as HTMLDivElement
 }
 
 describe('Chat auto-scroll', () => {
@@ -328,5 +331,77 @@ describe('Chat date headers + per-message timestamps (FEAT-006)', () => {
     // hidden-ness comes from the parent <li>, not an attribute on the <time>.
     const time = getTranscript().querySelector('[data-testid="message-bubble"] time') as HTMLElement
     expect(time.getAttribute('aria-hidden')).toBe('true')
+  })
+})
+
+describe('Chat transcript log surface (A11Y-018)', () => {
+  it('exposes the transcript as role="log" with the right live-region attributes', () => {
+    render(<Chat messages={[msg('a', 'hi', 'them')]} onSend={() => {}} />)
+
+    const log = getTranscript()
+    // Idiomatic chat/log surface: role="log" gives AT a typed signal to
+    // specialize on, and the explicit attrs are belt-and-braces for older AT
+    // that don't fully resolve role-implied values.
+    expect(log.getAttribute('role')).toBe('log')
+    expect(log.getAttribute('aria-label')).toMatch(/chat transcript/i)
+    expect(log.getAttribute('aria-live')).toBe('polite')
+    expect(log.getAttribute('aria-relevant')).toBe('additions')
+    expect(log.getAttribute('aria-atomic')).toBe('false')
+  })
+
+  it('does NOT apply aria-live directly to the inner <ol>', () => {
+    // A11Y-018 regression guard: the previous (broken) shape put aria-live on
+    // the <ol> itself, which (a) exposed a "list" role instead of a "log" and
+    // (b) put date dividers + the empty-state inside the live region.
+    render(<Chat messages={[msg('a', 'hi', 'them')]} onSend={() => {}} />)
+
+    const list = screen.getByRole('list')
+    expect(list.tagName).toBe('OL')
+    expect(list.hasAttribute('aria-live')).toBe(false)
+    expect(list.hasAttribute('role')).toBe(false)
+  })
+
+  it('renders the empty-state OUTSIDE the message <ol> and marked aria-hidden', () => {
+    render(<Chat messages={[]} onSend={() => {}} />)
+
+    // No <ol> at all in the empty state — the live region is "quiet" until
+    // the first real message arrives, which then mounts the <ol>.
+    expect(screen.queryByRole('list')).toBeNull()
+
+    const log = getTranscript()
+    const emptyState = log.querySelector('p')
+    expect(emptyState).toBeTruthy()
+    expect(emptyState?.textContent).toMatch(/no messages yet/i)
+    // aria-hidden so the placeholder isn't read as a live-region addition on
+    // first paint or as a "removal" jitter when the first message arrives.
+    expect(emptyState?.getAttribute('aria-hidden')).toBe('true')
+  })
+
+  it('marks date dividers role="presentation" + aria-hidden so they do not count toward list items', () => {
+    // Two days, two messages → one <ol> with two date dividers + two bubbles.
+    // Only the bubbles should count as <li>s exposed to AT.
+    const day1At = new Date(2026, 4, 22, 23, 30).getTime()
+    const day2At = new Date(2026, 4, 23, 0, 30).getTime()
+    const messages: ChatMessage[] = [msg('a', 'late', 'them', day1At), msg('b', 'morning', 'me', day2At)]
+    render(<Chat messages={messages} onSend={() => {}} />)
+
+    const dividers = Array.from(document.querySelectorAll('[data-testid="date-header"]')) as HTMLElement[]
+    expect(dividers).toHaveLength(2)
+    for (const d of dividers) {
+      expect(d.getAttribute('role')).toBe('presentation')
+      expect(d.getAttribute('aria-hidden')).toBe('true')
+    }
+  })
+
+  it('preserves the A11Y-004 sr-only speaker prefix inside the log surface', () => {
+    // The log announcement text is the sr-only prefix + the message text;
+    // this assertion guards against a regression where the prefix is dropped
+    // during the live-region rework.
+    const messages: ChatMessage[] = [msg('a', 'hi there', 'them'), msg('b', 'hello back', 'me')]
+    render(<Chat messages={messages} onSend={() => {}} />)
+
+    const log = getTranscript()
+    expect(log.textContent).toContain('They said: hi there')
+    expect(log.textContent).toContain('You said: hello back')
   })
 })
