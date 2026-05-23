@@ -14,17 +14,15 @@ export function Home({ onStart }: Props) {
   // would otherwise race siblings to programmatically focus its heading and
   // teleport AT users mid-page. See A11Y-022.
   const { suppressInitialFocus } = useScreenChrome()
-  const headingRef = useFocusOnMount<HTMLHeadingElement>([], { skip: suppressInitialFocus })
+  const startRef = useFocusOnMount<HTMLButtonElement>([], { skip: suppressInitialFocus })
   return (
     <ScreenContainer label="Home" className="mx-auto flex max-w-xl flex-col items-center gap-6 px-4 py-12 text-center">
-      <Heading level={1} ref={headingRef}>
-        Serverless P2P Chat
-      </Heading>
+      <Heading level={1}>Serverless P2P Chat</Heading>
       <p className="text-slate-700 dark:text-slate-300">
         Two people, one shared link. Real-time chat directly between your browsers — no chat server, no accounts, no
         history.
       </p>
-      <Button variant="primary" size="lg" onClick={onStart}>
+      <Button ref={startRef} variant="primary" size="lg" onClick={onStart}>
         Start a chat
       </Button>
       <details className="w-full rounded-md border border-slate-300 bg-white/50 p-3 text-left text-sm text-slate-700 open:bg-white dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-300 dark:open:bg-slate-900">

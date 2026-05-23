@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes } from 'react'
+import type { ButtonHTMLAttributes, Ref } from 'react'
 
 type Variant = 'primary' | 'secondary' | 'ghost'
 type Size = 'sm' | 'md' | 'lg'
@@ -6,6 +6,7 @@ type Size = 'sm' | 'md' | 'lg'
 interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant
   size?: Size
+  ref?: Ref<HTMLButtonElement>
 }
 
 const base =
@@ -28,7 +29,7 @@ const sizes: Record<Size, string> = {
   lg: 'px-5 py-2.5 text-base font-medium',
 }
 
-export function Button({ variant = 'primary', size = 'md', type, className, ...rest }: Props) {
+export function Button({ variant = 'primary', size = 'md', type, className, ref, ...rest }: Props) {
   const composed = [base, variants[variant], sizes[size], className].filter(Boolean).join(' ')
-  return <button type={type ?? 'button'} className={composed} {...rest} />
+  return <button ref={ref} type={type ?? 'button'} className={composed} {...rest} />
 }

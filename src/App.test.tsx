@@ -59,11 +59,12 @@ describe('App routing', () => {
     expect(screen.getByRole('heading', { name: /you've been invited to chat/i })).toBeInTheDocument()
   })
 
-  it('moves focus to the new screen heading on navigation (WCAG 2.4.3)', () => {
-    // Home renders → its h1 should receive programmatic focus so keyboard /
-    // screen-reader users land on a meaningful starting point.
+  it('moves focus to a meaningful element on each screen on navigation (WCAG 2.4.3)', () => {
+    // Home renders → its primary "Start a chat" button receives programmatic
+    // focus so keyboard users can act immediately; other screens still focus
+    // their h1 (no comparable single primary action above the fold).
     render(<App />)
-    expect(screen.getByRole('heading', { name: /serverless p2p chat/i })).toHaveFocus()
+    expect(screen.getByRole('button', { name: /start a chat/i })).toHaveFocus()
 
     // Routing into Joiner via the hash should move focus to that screen's h1.
     const payload = encode({ type: 'offer', sdp: 'v=0\r\n' })

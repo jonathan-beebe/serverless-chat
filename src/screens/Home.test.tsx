@@ -10,30 +10,28 @@ const SHOWCASE_CHROME: ScreenChromeValue = {
 }
 
 describe('Home focus-on-mount (A11Y-005 + A11Y-022)', () => {
-  it('focuses the <h1> on mount under the default ScreenChrome context (A11Y-005 regression guard)', async () => {
+  it('focuses the "Start a chat" button on mount under the default ScreenChrome context', async () => {
     render(<Home onStart={() => {}} />)
-    const heading = screen.getByRole('heading', { level: 1, name: /serverless p2p chat/i })
+    const startButton = screen.getByRole('button', { name: /start a chat/i })
 
     await waitFor(() => {
-      expect(document.activeElement).toBe(heading)
+      expect(document.activeElement).toBe(startButton)
     })
   })
 
-  it('does NOT focus the heading when rendered inside a showcase context with suppressInitialFocus: true (A11Y-022)', async () => {
+  it('does NOT focus the "Start a chat" button when rendered inside a showcase context with suppressInitialFocus: true (A11Y-022)', async () => {
     render(
       <ScreenChromeContext.Provider value={SHOWCASE_CHROME}>
         <Home onStart={() => {}} />
       </ScreenChromeContext.Provider>,
     )
-    // The heading exists (now demoted to <h2> by the showcase chrome).
-    const heading = screen.getByRole('heading', { level: 2, name: /serverless p2p chat/i })
+    const startButton = screen.getByRole('button', { name: /start a chat/i })
 
-    // Effects flush — give react a chance to run mount effects.
     await waitFor(() => {
-      expect(heading).toBeInTheDocument()
+      expect(startButton).toBeInTheDocument()
     })
 
-    expect(document.activeElement).not.toBe(heading)
+    expect(document.activeElement).not.toBe(startButton)
     expect(document.activeElement?.closest('[role="region"]')).toBeNull()
   })
 })
