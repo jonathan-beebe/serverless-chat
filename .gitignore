@@ -2,5 +2,5 @@ node_modules
 __local__
 dist
 .DS_Store
-.claude
+.claude/settings.local.json
 .devcontainer/.env
