@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useRef, useState } from 'react'
 
 interface Props {
   value: string
@@ -12,6 +12,8 @@ interface Props {
 
 export function CopyBox({ value, label, helpText, variant = 'code' }: Props) {
   const [copied, setCopied] = useState(false)
+  const textareaId = useId()
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const onCopy = async () => {
     try {
@@ -20,18 +22,18 @@ export function CopyBox({ value, label, helpText, variant = 'code' }: Props) {
       setTimeout(() => setCopied(false), 1500)
     } catch {
       // Clipboard can fail on http: or in restrictive iframes; fall back to selecting.
-      const el = document.getElementById(`copybox-${label}`) as HTMLTextAreaElement | null
-      el?.select()
+      textareaRef.current?.select()
     }
   }
 
   return (
     <div className="flex flex-col gap-2">
-      <label htmlFor={`copybox-${label}`} className="text-sm font-medium text-slate-200">
+      <label htmlFor={textareaId} className="text-sm font-medium text-slate-200">
         {label}
       </label>
       <textarea
-        id={`copybox-${label}`}
+        id={textareaId}
+        ref={textareaRef}
         readOnly
         value={value}
         rows={variant === 'url' ? 2 : 6}
