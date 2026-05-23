@@ -1,11 +1,15 @@
 import { useRef, useState } from 'react'
 import { Button } from '../components/Button'
+import { Callout } from '../components/Callout'
 import { Heading } from '../components/Heading'
+import { LiveRegion } from '../components/LiveRegion'
 import { ScreenContainer, useScreenChrome } from '../components/ScreenChrome'
 import { useFocusOnMount } from '../hooks/useFocusOnMount'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { useConversations } from '../hooks/useConversations'
+import { copyTextToClipboard } from '../core/clipboard'
 import { listMessages, type ConversationRecord } from '../core/storage'
+import { formatTranscript } from '../core/transcript'
 import { useEffect } from 'react'
 
 interface Props {
@@ -52,6 +56,10 @@ interface RowProps {
   onResume: () => void
   onRename: (label: string) => void
   onDelete: () => void
+  // CR-009: announce copy outcomes via the Home-level LiveRegion so AT
+  // hears one stable region across all rows. Per-row mount churn would
+  // silence the announcement.
+  onAnnounce: (text: string) => void
   // CR-008: menu open state is lifted to `Home` so at most one row's menu is
   // open at a time and outside-click / Escape can dismiss from anywhere.
   isMenuOpen: boolean
@@ -59,16 +67,45 @@ interface RowProps {
   onCloseMenu: () => void
 }
 
-function ConversationRow({ record, onResume, onRename, onDelete, isMenuOpen, onOpenMenu, onCloseMenu }: RowProps) {
+// CR-009: how long the inline "Copied transcript" badge stays visible
+// before auto-dismissing. Matches FEAT-011's `COPY_FLASH_MS` in Chat.tsx so
+// the two surfaces feel consistent.
+const COPY_FLASH_MS = 1500
+
+function ConversationRow({
+  record,
+  onResume,
+  onRename,
+  onDelete,
+  onAnnounce,
+  isMenuOpen,
+  onOpenMenu,
+  onCloseMenu,
+}: RowProps) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const [preview, setPreview] = useState<string | null>(null)
+  // CR-009: tracked alongside `preview` from the same IDB read so the menu
+  // can render "Copy transcript" as disabled when the conversation has
+  // zero messages. Avoids a second IDB hit at click time.
+  const [hasMessages, setHasMessages] = useState(false)
+  // CR-009: row-local copy feedback. `'copied'` shows the inline badge
+  // (auto-dismissed); `'manual'` shows the Ctrl+C / Cmd+C hint and keeps
+  // the fallback textarea selected.
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'manual'>('idle')
   // CR-008: refs for the outside-click + Escape contract. The container wraps
   // both the trigger and the popover so clicking the trigger while the menu
   // is open continues to act as a toggle (the outside-click handler ignores
   // events whose target is inside the container).
   const containerRef = useRef<HTMLDivElement | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
+  // CR-009: hidden fallback textarea for the legacy `execCommand('copy')`
+  // path. Always-mounted so the ref is stable; written + selected only
+  // inside the copy handler via the shared `copyTextToClipboard` helper.
+  const fallbackTextareaRef = useRef<HTMLTextAreaElement | null>(null)
+  // setTimeout handle for the inline "Copied transcript" auto-dismiss.
+  // Cleared on unmount so a fast remount doesn't fire into a dead row.
+  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // CR-008: while this row's menu is open, listen for pointerdown anywhere
   // outside the trigger+menu wrapper (dismiss) and Escape (dismiss + restore
@@ -97,7 +134,10 @@ function ConversationRow({ record, onResume, onRename, onDelete, isMenuOpen, onO
 
   // Best-effort peek: load the conversation's last message body on mount so
   // each row can show a one-line snippet. Skipping the load gracefully if
-  // storage fails — the row still renders, just without the peek.
+  // storage fails — the row still renders, just without the peek. CR-009
+  // extends this to also track `hasMessages` from the same fetch so the
+  // row menu can render "Copy transcript" disabled for empty rows without
+  // a second IDB round-trip at click time.
   useEffect(() => {
     let cancelled = false
     void (async () => {
@@ -106,20 +146,72 @@ function ConversationRow({ record, onResume, onRename, onDelete, isMenuOpen, onO
         if (cancelled) return
         if (msgs.length === 0) {
           setPreview(null)
+          setHasMessages(false)
         } else {
           const last = msgs[msgs.length - 1]
           // Truncate ~50 chars per AC #18.
           const text = last.text.length > 50 ? `${last.text.slice(0, 47)}…` : last.text
           setPreview(text)
+          setHasMessages(true)
         }
       } catch {
         setPreview(null)
+        setHasMessages(false)
       }
     })()
     return () => {
       cancelled = true
     }
   }, [record.id, record.lastActivityAt])
+
+  // CR-009: tear down any pending "Copied transcript" flash timer on unmount
+  // so the setState callback doesn't fire against a dead row (mirrors
+  // FEAT-011's pattern in Chat.tsx).
+  useEffect(() => {
+    return () => {
+      if (flashTimerRef.current) {
+        clearTimeout(flashTimerRef.current)
+        flashTimerRef.current = null
+      }
+    }
+  }, [])
+
+  // CR-009: schedule the auto-dismiss of the inline "Copied transcript"
+  // badge. Replaces any in-flight timer so back-to-back copies restart the
+  // window instead of compounding.
+  const scheduleCopyFlashDismiss = () => {
+    if (flashTimerRef.current) clearTimeout(flashTimerRef.current)
+    flashTimerRef.current = setTimeout(() => {
+      setCopyState('idle')
+      flashTimerRef.current = null
+    }, COPY_FLASH_MS)
+  }
+
+  // CR-009: load the conversation's messages, format as markdown, and copy
+  // to the clipboard via the shared two-tier helper. Defaults match the
+  // in-chat toolbar (`includeTimestamps: true`); per the ticket there is no
+  // toggle UI on the row menu — a single click does a single thing.
+  const onCopyTranscript = async () => {
+    onCloseMenu()
+    // Defensive guard — the disabled state on the menu item should prevent
+    // this from ever firing for an empty conversation, but a stale render
+    // (e.g. messages purged in another tab) shouldn't silently succeed
+    // with an empty clipboard.
+    if (!hasMessages) return
+    const msgs = await listMessages(record.id)
+    if (msgs.length === 0) return
+    const markdown = formatTranscript(msgs, { includeTimestamps: true })
+    const result = await copyTextToClipboard(markdown, fallbackTextareaRef.current)
+    setCopyState(result)
+    if (result === 'copied') {
+      onAnnounce('Transcript copied to clipboard')
+      scheduleCopyFlashDismiss()
+    } else {
+      // The fallback textarea is already selected; the visible Callout
+      // below + this LiveRegion message together explain the state.
+      onAnnounce('Transcript selected. Press Control C or Command C to copy.')
+    }
+  }
 
   const startRename = () => {
     setDraft(record.label ?? '')
@@ -217,6 +309,18 @@ function ConversationRow({ record, onResume, onRename, onDelete, isMenuOpen, onO
                   className="block w-full rounded px-2 py-1 text-left text-sm hover:bg-stone-100 dark:hover:bg-stone-800">
                   Rename
                 </button>
+                {/* CR-009: Copy transcript sits between Rename and Delete.
+                    Delete is destructive and stays last per the ticket. The
+                    item disables when the row has no messages — silently
+                    succeeding with an empty clipboard is a worse UX. */}
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={!hasMessages}
+                  onClick={() => void onCopyTranscript()}
+                  className="block w-full rounded px-2 py-1 text-left text-sm hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-stone-800">
+                  Copy transcript
+                </button>
                 <button
                   type="button"
                   role="menuitem"
@@ -229,6 +333,30 @@ function ConversationRow({ record, onResume, onRename, onDelete, isMenuOpen, onO
           </div>
         </div>
       )}
+      {/* CR-009: row-local copy feedback. The badge is aria-hidden — the
+          LiveRegion at the screen level is the AT surface, matching FEAT-011's
+          shape in Chat.tsx. */}
+      {copyState === 'copied' && (
+        <Callout variant="success" aria-hidden="true">
+          Copied transcript
+        </Callout>
+      )}
+      {copyState === 'manual' && (
+        <Callout variant="warning" className="text-xs font-medium">
+          Press Ctrl+C / Cmd+C to copy
+        </Callout>
+      )}
+      {/* CR-009: hidden fallback textarea for the legacy `execCommand('copy')`
+          path. Always mounted (stable ref); offscreen so it doesn't appear in
+          tab order or visual layout. aria-hidden so AT ignores it. */}
+      <textarea
+        ref={fallbackTextareaRef}
+        aria-hidden="true"
+        tabIndex={-1}
+        readOnly
+        defaultValue=""
+        className="absolute left-[-9999px] h-px w-px opacity-0"
+      />
     </li>
   )
 }
@@ -245,6 +373,11 @@ export function Home({ onStart }: Props) {
   // this state here gives us the single-open invariant for free — opening
   // row B flips row A's `isMenuOpen` prop to false on the same render.
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+  // CR-009: one screen-level LiveRegion so AT receives copy-outcome
+  // announcements from any row through a stable, always-mounted surface.
+  // Per-row mounting would dismount/remount the live region and silence
+  // the announcement entirely.
+  const [announcement, setAnnouncement] = useState('')
 
   const startNew = () => {
     // FEAT-012 AC#5: generate the conversation ID at "Start" click, before
@@ -276,6 +409,7 @@ export function Home({ onStart }: Props) {
                 onResume={() => onStart(c.id)}
                 onRename={(label) => void rename(c.id, label)}
                 onDelete={() => void remove(c.id)}
+                onAnnounce={setAnnouncement}
                 isMenuOpen={openMenuId === c.id}
                 onOpenMenu={() => setOpenMenuId(c.id)}
                 onCloseMenu={() => setOpenMenuId(null)}
@@ -284,6 +418,10 @@ export function Home({ onStart }: Props) {
           </ul>
         </section>
       )}
+      {/* CR-009 live region for copy outcomes. Stays mounted across renders
+          so screen readers receive content-change announcements; quiet
+          string between events keeps the region from making noise. */}
+      <LiveRegion>{announcement}</LiveRegion>
       <details className="w-full rounded-md border border-stone-300 bg-white/50 p-3 text-left text-sm text-stone-700 open:bg-white dark:border-stone-700 dark:bg-stone-900/50 dark:text-stone-300 dark:open:bg-stone-900">
         <summary className="cursor-pointer text-stone-800 dark:text-stone-200">How does this work?</summary>
         <p className="mt-2">

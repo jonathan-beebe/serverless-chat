@@ -259,6 +259,165 @@ describe('Home row menu dismissal (CR-008)', () => {
   })
 })
 
+describe('Home row menu Copy transcript (CR-009)', () => {
+  // Clipboard / execCommand stubs mirror the Chat.test.tsx patterns.
+  function setClipboardWriteText(impl: (text: string) => Promise<void>) {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: impl },
+    })
+  }
+
+  function setExecCommand(impl: (cmd: string) => boolean) {
+    Object.defineProperty(document, 'execCommand', {
+      configurable: true,
+      value: impl,
+    })
+  }
+
+  async function seedWithMessages(id: string, count: number) {
+    await upsertConversation({
+      id,
+      createdAt: Date.now() - 60_000,
+      lastActivityAt: Date.now() - 60_000,
+      label: 'A chat',
+    })
+    for (let i = 0; i < count; i += 1) {
+      await appendMessage(id, {
+        id: `m${i}`,
+        from: i % 2 === 0 ? 'me' : 'them',
+        text: `message ${i}`,
+        at: Date.now() - (count - i) * 1000,
+      })
+    }
+  }
+
+  it('renders Copy transcript between Rename and Delete in the row menu', async () => {
+    await seedWithMessages('aaa', 1)
+    render(<Home onStart={() => {}} />)
+
+    const row = await screen.findByTestId('conversation-row-aaa')
+    // Wait for the preview-load to settle so the disabled/enabled state of
+    // the Copy transcript item is stable before we open the menu.
+    await within(row).findByText(/message 0/i)
+    fireEvent.click(within(row).getByRole('button', { name: /more actions/i }))
+
+    const items = screen.getAllByRole('menuitem').map((el) => el.textContent)
+    expect(items).toEqual(['Rename', 'Copy transcript', 'Delete chat'])
+  })
+
+  it('Copy transcript writes the formatted (timestamped) markdown to the clipboard', async () => {
+    await seedWithMessages('aaa', 2)
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    setClipboardWriteText(writeText)
+    render(<Home onStart={() => {}} />)
+
+    const row = await screen.findByTestId('conversation-row-aaa')
+    await within(row).findByText(/message 1/i)
+    fireEvent.click(within(row).getByRole('button', { name: /more actions/i }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /copy transcript/i }))
+
+    await waitFor(() => expect(writeText).toHaveBeenCalled())
+    const written = writeText.mock.calls[0][0] as string
+    // Default matches Chat's default (includeTimestamps: true): opens with `# `
+    // and includes both per-message headings.
+    expect(written).toMatch(/^# /)
+    expect(written).toContain('**You** · ')
+    expect(written).toContain('**Them** · ')
+    expect(written).toContain('message 0')
+    expect(written).toContain('message 1')
+  })
+
+  it('Copy transcript closes the menu after a successful copy', async () => {
+    await seedWithMessages('aaa', 1)
+    setClipboardWriteText(vi.fn().mockResolvedValue(undefined))
+    render(<Home onStart={() => {}} />)
+
+    const row = await screen.findByTestId('conversation-row-aaa')
+    await within(row).findByText(/message 0/i)
+    fireEvent.click(within(row).getByRole('button', { name: /more actions/i }))
+    expect(screen.getByRole('menu')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('menuitem', { name: /copy transcript/i }))
+
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument())
+  })
+
+  it('Copy transcript falls back to execCommand when writeText rejects', async () => {
+    await seedWithMessages('aaa', 1)
+    setClipboardWriteText(vi.fn().mockRejectedValue(new Error('blocked')))
+    const execCommand = vi.fn().mockReturnValue(true)
+    setExecCommand(execCommand)
+    render(<Home onStart={() => {}} />)
+
+    const row = await screen.findByTestId('conversation-row-aaa')
+    await within(row).findByText(/message 0/i)
+    fireEvent.click(within(row).getByRole('button', { name: /more actions/i }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /copy transcript/i }))
+
+    await waitFor(() => expect(execCommand).toHaveBeenCalledWith('copy'))
+  })
+
+  it('Copy transcript surfaces the manual-copy hint when both paths fail', async () => {
+    await seedWithMessages('aaa', 1)
+    setClipboardWriteText(vi.fn().mockRejectedValue(new Error('blocked')))
+    setExecCommand(vi.fn().mockReturnValue(false))
+    render(<Home onStart={() => {}} />)
+
+    const row = await screen.findByTestId('conversation-row-aaa')
+    await within(row).findByText(/message 0/i)
+    fireEvent.click(within(row).getByRole('button', { name: /more actions/i }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /copy transcript/i }))
+
+    // The "Press Ctrl+C / Cmd+C to copy" hint matches Chat's wording — one
+    // shared pattern across the app.
+    await waitFor(() => expect(screen.getByText(/Ctrl\+C/)).toBeInTheDocument())
+    // And the LiveRegion announces the manual-copy state.
+    const live = document.querySelector('[role="status"]') as HTMLElement
+    expect(live.textContent).toMatch(/Control C or Command C/i)
+  })
+
+  it('Copy transcript announces success via the live region', async () => {
+    await seedWithMessages('aaa', 1)
+    setClipboardWriteText(vi.fn().mockResolvedValue(undefined))
+    render(<Home onStart={() => {}} />)
+
+    const row = await screen.findByTestId('conversation-row-aaa')
+    await within(row).findByText(/message 0/i)
+    fireEvent.click(within(row).getByRole('button', { name: /more actions/i }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /copy transcript/i }))
+
+    await waitFor(() => {
+      const live = document.querySelector('[role="status"]') as HTMLElement
+      expect(live.textContent).toMatch(/transcript copied to clipboard/i)
+    })
+  })
+
+  it('Copy transcript is disabled when the conversation has no messages', async () => {
+    // Seed the conversation but no messages — preview shows "No messages yet".
+    await upsertConversation({
+      id: 'aaa',
+      createdAt: Date.now() - 60_000,
+      lastActivityAt: Date.now() - 60_000,
+      label: 'Empty',
+    })
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    setClipboardWriteText(writeText)
+    render(<Home onStart={() => {}} />)
+
+    const row = await screen.findByTestId('conversation-row-aaa')
+    await within(row).findByText(/no messages yet/i)
+    fireEvent.click(within(row).getByRole('button', { name: /more actions/i }))
+
+    const copyItem = screen.getByRole('menuitem', { name: /copy transcript/i })
+    expect(copyItem).toBeDisabled()
+
+    // Clicking a disabled menuitem must not invoke the clipboard.
+    fireEvent.click(copyItem)
+    await new Promise((r) => setTimeout(r, 10))
+    expect(writeText).not.toHaveBeenCalled()
+  })
+})
+
 describe('Home "Start a chat" (FEAT-012 AC#25)', () => {
   it('calls onStart with a fresh UUID', () => {
     const onStart = vi.fn()

@@ -5,6 +5,7 @@ import { Divider } from './Divider'
 import { LiveRegion } from './LiveRegion'
 import { Textarea } from './Textarea'
 import type { ChatMessage } from '../core/rtc'
+import { copyTextToClipboard } from '../core/clipboard'
 import { formatTranscript } from '../core/transcript'
 
 interface Props {
@@ -201,15 +202,10 @@ export function Chat({ messages, onSend, disabled, hasResumed }: Props) {
     }, COPY_FLASH_MS)
   }
 
-  // FEAT-011: copy the entire transcript as markdown. Two-tier fallback
-  // mirrors `CopyBox.onCopy`:
-  //   1. `navigator.clipboard.writeText` (the modern path; may throw or reject
-  //      on http:, sandboxed iframes, or permission-denied).
-  //   2. Hidden textarea + `document.execCommand('copy')` (deprecated but
-  //      widely implemented, works in many contexts where #1 is blocked).
-  // If both fail, surface a "Press Ctrl+C / Cmd+C to copy" warning — the
-  // hidden textarea is already selected at that point so a single keystroke
-  // completes the copy.
+  // FEAT-011: copy the entire transcript as markdown. CR-009 lifted the
+  // two-tier write strategy (modern `navigator.clipboard` → legacy hidden
+  // textarea + `execCommand`) into `src/core/clipboard.ts` so this and the
+  // Home row-menu "Copy transcript" action share one implementation.
   //
   // We compute the markdown lazily here (not in React state). The transcript
   // can be long; recomputing on every render for a value only needed on click
@@ -217,41 +213,19 @@ export function Chat({ messages, onSend, disabled, hasResumed }: Props) {
   const onCopy = async () => {
     if (messages.length === 0) return
     const markdown = formatTranscript(messages, { includeTimestamps })
-
-    // Primary path.
-    try {
-      await navigator.clipboard.writeText(markdown)
+    const result = await copyTextToClipboard(markdown, fallbackTextareaRef.current)
+    if (result === 'copied') {
       setCopyState('copied')
       scheduleCopyFlashDismiss()
-      // FEAT-002 parallel: the Copy action is incidental, the composer is the
-      // user's primary surface. `preventScroll` so this focus call doesn't
-      // yank the transcript.
+      // FEAT-002 parallel: the Copy action is incidental, the composer is
+      // the user's primary surface. `preventScroll` so this focus call
+      // doesn't yank the transcript.
       composerRef.current?.focus({ preventScroll: true })
       return
-    } catch {
-      // Fall through to the legacy path.
     }
-
-    // Fallback path.
-    const ta = fallbackTextareaRef.current
-    if (ta) {
-      ta.value = markdown
-      ta.select()
-      try {
-        if (document.execCommand('copy')) {
-          setCopyState('copied')
-          scheduleCopyFlashDismiss()
-          composerRef.current?.focus({ preventScroll: true })
-          return
-        }
-      } catch {
-        // Some environments throw rather than returning false.
-      }
-    }
-
-    // Both paths failed. Leave the textarea selected so the user can finish
-    // the copy with a single keystroke; surface the visible hint and an AT
-    // announcement explaining the state.
+    // 'manual' → both paths failed. The fallback textarea is already
+    // selected by `copyTextToClipboard`, so a single Ctrl+C / Cmd+C
+    // finishes the copy; surface the visible hint and AT announcement.
     setCopyState('manual')
   }
 
