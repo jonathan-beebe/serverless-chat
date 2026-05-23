@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react'
 import { CopyBox } from '../components/CopyBox'
 import { Chat } from '../components/Chat'
-import { buildOfferUrl } from '../core/url'
+import { currentOfferUrl } from '../core/url'
 import type { ChatSession } from '../hooks/useChatSession'
 
 interface Props {
@@ -41,8 +41,7 @@ export function Offerer({ session, onCancel }: Props) {
     )
   }
 
-  const offerUrl =
-    session.encodedLocal && buildOfferUrl(location.origin, import.meta.env.BASE_URL, session.encodedLocal)
+  const offerUrl = session.encodedLocal && currentOfferUrl(session.encodedLocal)
 
   return (
     <div className="mx-auto flex max-w-xl flex-col gap-6 px-4 py-12">
