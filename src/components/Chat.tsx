@@ -15,6 +15,7 @@ const NEAR_BOTTOM_THRESHOLD_PX = 32
 export function Chat({ messages, onSend, disabled }: Props) {
   const [draft, setDraft] = useState('')
   const transcriptRef = useRef<HTMLOListElement | null>(null)
+  const inputRef = useRef<HTMLInputElement | null>(null)
   // Tracks whether the user was near the bottom as of their last scroll input.
   // Updated only by `onScroll`, so by the time a new message commits this
   // reflects the pre-update intent (the effect runs *after* the DOM grows,
@@ -44,7 +45,23 @@ export function Chat({ messages, onSend, disabled }: Props) {
     if (!draft.trim()) return
     onSend(draft)
     setDraft('')
+    // Enter naturally retains focus on the input, but clicking Send moves it
+    // to the now-disabled button — leaving keyboard users on a dead element
+    // and dismissing the soft keyboard on touch. Pin focus back to the input.
+    // `preventScroll` keeps the transcript from being yanked by this call,
+    // protecting the auto-scroll logic above (CR-005).
+    inputRef.current?.focus({ preventScroll: true })
   }
+
+  // Auto-focus the input on initial mount (initial connect) and whenever it
+  // transitions from disabled → enabled (reconnect). Skip if some other
+  // element is currently focused so we never override an explicit user focus.
+  useEffect(() => {
+    if (disabled) return
+    const active = document.activeElement
+    if (active && active !== document.body) return
+    inputRef.current?.focus({ preventScroll: true })
+  }, [disabled])
 
   return (
     <div className="flex h-full flex-col gap-3">
@@ -83,6 +100,7 @@ export function Chat({ messages, onSend, disabled }: Props) {
         </label>
         <input
           id="chat-input"
+          ref={inputRef}
           type="text"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}

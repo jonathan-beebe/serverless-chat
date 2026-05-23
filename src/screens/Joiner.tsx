@@ -71,10 +71,11 @@ export function Joiner({ session, offerCode, onCancel }: Props) {
       <main className="mx-auto flex h-[calc(100vh-3rem)] max-w-xl flex-col gap-3 px-4 py-6">
         {liveStatus}
         <header className="flex items-center justify-between">
-          <h1
-            ref={headingRef}
-            tabIndex={-1}
-            className="text-lg font-semibold text-slate-900 focus:outline-none dark:text-slate-100">
+          {/* No `ref={headingRef}` here — Chat owns focus via FEAT-002 (input
+              is the meaningful starting point on the connected screen). A
+              parent useFocusOnMount call would run *after* Chat's child
+              effect and steal the focus back to the h1. */}
+          <h1 tabIndex={-1} className="text-lg font-semibold text-slate-900 focus:outline-none dark:text-slate-100">
             Connected
           </h1>
           <button

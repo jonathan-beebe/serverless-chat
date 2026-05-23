@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { Chat } from './Chat'
 import type { ChatMessage } from '../core/rtc'
 
@@ -81,6 +81,72 @@ describe('Chat auto-scroll', () => {
     rerender(<Chat messages={[...initial, msg('b', 'two')]} onSend={() => {}} />)
 
     expect(transcript.scrollTop).toBe(460)
+  })
+})
+
+describe('Chat input focus (FEAT-002)', () => {
+  it('focuses #chat-input on initial mount when enabled (initial connect)', () => {
+    render(<Chat messages={[]} onSend={() => {}} />)
+    expect(screen.getByLabelText(/message/i)).toHaveFocus()
+  })
+
+  it('keeps focus on #chat-input after submitting via Enter', () => {
+    const onSend = vi.fn()
+    render(<Chat messages={[]} onSend={onSend} />)
+    const input = screen.getByLabelText(/message/i) as HTMLInputElement
+    input.focus()
+    fireEvent.change(input, { target: { value: 'hi' } })
+    fireEvent.submit(input.closest('form') as HTMLFormElement)
+
+    expect(onSend).toHaveBeenCalledWith('hi')
+    expect(input).toHaveFocus()
+  })
+
+  it('returns focus to #chat-input after clicking the Send button', () => {
+    const onSend = vi.fn()
+    render(<Chat messages={[]} onSend={onSend} />)
+    const input = screen.getByLabelText(/message/i) as HTMLInputElement
+    fireEvent.change(input, { target: { value: 'hello' } })
+
+    const send = screen.getByRole('button', { name: /send/i })
+    // The Send button is enabled now that the draft is non-empty.
+    expect(send).not.toBeDisabled()
+    fireEvent.click(send)
+
+    expect(onSend).toHaveBeenCalledWith('hello')
+    expect(input).toHaveFocus()
+  })
+
+  it('moves focus to #chat-input when `disabled` transitions from true to false (reconnect)', () => {
+    const { rerender } = render(<Chat messages={[]} onSend={() => {}} disabled />)
+    const input = screen.getByLabelText(/message/i)
+    // Disabled inputs can't receive focus, so it's elsewhere (body).
+    expect(input).not.toHaveFocus()
+
+    rerender(<Chat messages={[]} onSend={() => {}} disabled={false} />)
+    expect(input).toHaveFocus()
+  })
+
+  it('does not steal focus on disabled→enabled if the user has focused another element', () => {
+    const { rerender } = render(
+      <div>
+        <button>Other</button>
+        <Chat messages={[]} onSend={() => {}} disabled />
+      </div>,
+    )
+    const other = screen.getByRole('button', { name: /other/i })
+    other.focus()
+    expect(other).toHaveFocus()
+
+    rerender(
+      <div>
+        <button>Other</button>
+        <Chat messages={[]} onSend={() => {}} disabled={false} />
+      </div>,
+    )
+
+    // The user's explicit focus on the other button must be preserved.
+    expect(other).toHaveFocus()
   })
 })
 

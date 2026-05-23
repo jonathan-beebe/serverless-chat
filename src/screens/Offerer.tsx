@@ -72,10 +72,11 @@ export function Offerer({ session, onCancel }: Props) {
       <main className="mx-auto flex h-[calc(100vh-3rem)] max-w-xl flex-col gap-3 px-4 py-6">
         {liveStatus}
         <header className="flex items-center justify-between">
-          <h1
-            ref={headingRef}
-            tabIndex={-1}
-            className="text-lg font-semibold text-slate-900 focus:outline-none dark:text-slate-100">
+          {/* No `ref={headingRef}` here — Chat takes focus on the message
+              input via FEAT-002, which is the meaningful starting point on
+              the connected screen. Letting useFocusOnMount race here would
+              override Chat's focus call (parent effects run after children's). */}
+          <h1 tabIndex={-1} className="text-lg font-semibold text-slate-900 focus:outline-none dark:text-slate-100">
             Connected
           </h1>
           <button
