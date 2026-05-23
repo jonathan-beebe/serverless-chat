@@ -29,16 +29,30 @@ export interface PeerSession {
   encodedLocal: string
 }
 
-function waitForIceComplete(pc: RTCPeerConnection): Promise<void> {
+// If gathering stalls (STUN blocked, network change, browser quirk), we
+// resolve anyway after this many ms with whatever candidates the local
+// description has so far. The downstream `connectionState === 'failed'`
+// listener will surface a recoverable error if that partial set can't connect.
+const ICE_GATHERING_TIMEOUT_MS = 5000
+
+export function waitForIceComplete(pc: RTCPeerConnection, timeoutMs: number = ICE_GATHERING_TIMEOUT_MS): Promise<void> {
   return new Promise((resolve) => {
     if (pc.iceGatheringState === 'complete') return resolve()
+    const cleanup = () => {
+      pc.removeEventListener('icegatheringstatechange', handle)
+      clearTimeout(timer)
+    }
     const handle = () => {
       if (pc.iceGatheringState === 'complete') {
-        pc.removeEventListener('icegatheringstatechange', handle)
+        cleanup()
         resolve()
       }
     }
     pc.addEventListener('icegatheringstatechange', handle)
+    const timer = setTimeout(() => {
+      cleanup()
+      resolve()
+    }, timeoutMs)
   })
 }
 
