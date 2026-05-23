@@ -1,15 +1,24 @@
 @import "tailwindcss";
 
-/* FEAT-007 / AC #11 — Register class-driven dark/light variants additively to
-   Tailwind v4's default `@media (prefers-color-scheme: dark)`. With these in
-   place, wrapping a subtree in `<div className="dark">` flips every `dark:`
-   utility inside, while the rest of the app (with no wrapping class) still
-   tracks the OS via the media query — FEAT-001's invariant. The design
-   system page uses this to scope its theme toggle without leaking into
-   feature routes. The light variant gives the override symmetry: forcing
-   light wins over the OS pref. */
-@custom-variant dark (&:where(.dark, .dark *));
-@custom-variant light (&:where(.light, .light *));
+/* FEAT-007 / AC #11 — Redefine `dark:` so it matches BOTH a `.dark` ancestor
+   AND `@media (prefers-color-scheme: dark)`, with `.light` opting out of the
+   media-query path. The shorthand form `@custom-variant dark (selector)`
+   REPLACES the default media-query behavior, which silently broke OS-driven
+   dark mode across the app. The block form below preserves both:
+     - `.dark` ancestor → always applies (showcase force-Dark toggle).
+     - OS dark + no `.light` ancestor → applies (FEAT-001's default).
+     - `.light` ancestor → never applies (showcase force-Light toggle wins
+       over the OS pref). */
+@custom-variant dark {
+  &:where(.dark, .dark *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(:not(.light, .light *)) {
+      @slot;
+    }
+  }
+}
 
 html,
 body,
