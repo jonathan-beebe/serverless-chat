@@ -1,0 +1,5 @@
+#!/bin/sh
+# Pre-commit hook: run CI checks before allowing a commit.
+# Runs format check, typecheck, lint, tests, and build.
+
+npm run ci

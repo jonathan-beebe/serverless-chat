@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>P2P Chat</title>
+    <script>
+      // GH Pages serves 404.html for any unknown path. Save the original URL,
+      // then redirect to the SPA root so index.html can restore it. The hash
+      // (which carries `#offer=...` signaling payloads) survives the redirect.
+      sessionStorage.redirect = location.href
+      location.replace('/')
+    </script>
+  </head>
+  <body></body>
+</html>
