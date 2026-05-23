@@ -115,17 +115,33 @@ export function DesignSystem() {
           </p>
           <div role="group" aria-label="Theme" className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Theme:</span>
-            {(['system', 'light', 'dark'] as const).map((m) => (
-              <Button
-                key={m}
-                variant="secondary"
-                size="sm"
-                aria-pressed={mode === m}
-                onClick={() => setMode(m)}
-                className={mode === m ? 'ring-2 ring-sky-400' : ''}>
-                {m === 'system' ? 'System' : m === 'light' ? 'Light' : 'Dark'}
-              </Button>
-            ))}
+            {(['system', 'light', 'dark'] as const).map((m) => {
+              // A11Y-023: the selected state used to be `ring-2 ring-sky-400`,
+              // which is visually identical to the Button primitive's base
+              // `focus-visible:ring-2 focus-visible:ring-sky-400`. Tabbing
+              // through the group produced two ringed buttons with no way to
+              // tell selected from focused (WCAG 2.4.7 / 1.4.11). Selected
+              // state now uses a tinted fill + recolored border + recolored
+              // text; focus keeps the standard ring. Both cues co-occur
+              // legibly on the focused+selected button (ring sits outside the
+              // fill, separated by the ring-offset matched to the page bg —
+              // same pattern as A11Y-017). `aria-pressed` is untouched.
+              const selectedClasses =
+                'bg-sky-100 text-sky-900 border-sky-700 dark:bg-sky-900 dark:text-sky-100 dark:border-sky-400'
+              const ringOffset =
+                'focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:focus-visible:ring-offset-slate-900'
+              return (
+                <Button
+                  key={m}
+                  variant="secondary"
+                  size="sm"
+                  aria-pressed={mode === m}
+                  onClick={() => setMode(m)}
+                  className={mode === m ? `${selectedClasses} ${ringOffset}` : ringOffset}>
+                  {m === 'system' ? 'System' : m === 'light' ? 'Light' : 'Dark'}
+                </Button>
+              )
+            })}
           </div>
         </header>
 
