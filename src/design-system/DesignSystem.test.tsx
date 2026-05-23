@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { DesignSystem } from './DesignSystem'
 
@@ -289,6 +290,98 @@ describe('DesignSystem showcase', () => {
       fireEvent.click(light)
       expect(system.className).not.toMatch(/\bbg-sky-100\b/)
       expect(light.className).toMatch(/\bbg-sky-100\b/)
+    })
+  })
+
+  describe('screen previews are inert (A11Y-024)', () => {
+    // Each previewed screen mounts real production components wired to
+    // no-op handlers (`onCancel={() => {}}`, etc.). Without `inert` on the
+    // preview wrapper, the showcase route contributes ~20 dead tab stops —
+    // buttons advertising actions they never perform, plus a CopyBox Copy
+    // button that quietly succeeds and overwrites the reviewer's clipboard.
+    // The fix wraps each preview's content in `[inert]` so the subtree is
+    // removed from focus order, hit testing, and AT exposure while still
+    // rendering for sighted visual review. These tests are the sentinel.
+
+    it('marks every ScreenPreview content wrapper with the inert attribute', () => {
+      const { container } = render(<DesignSystem />)
+      // Each preview label sits as a sibling <span> above its inert
+      // content wrapper. Walking labels → next-sibling div is the most
+      // direct way to assert the relationship from the rendered DOM.
+      const labels = [
+        'Home',
+        'Offerer — Invite your friend',
+        'Offerer — Connection lost',
+        "Joiner — You've been invited",
+        'Joiner — Send this code back',
+        'Joiner — Connection lost',
+        'Connected chat layout (header chrome)',
+      ]
+      for (const label of labels) {
+        const labelEl = Array.from(container.querySelectorAll('span')).find((el) => el.textContent === label)
+        expect(labelEl, `label "${label}" not found`).toBeTruthy()
+        const wrapper = labelEl!.nextElementSibling as HTMLElement | null
+        expect(wrapper, `wrapper for "${label}" not found`).toBeTruthy()
+        // jsdom serializes the React 19 boolean prop to the empty-string
+        // attribute form (`inert=""`). `hasAttribute` is the most robust
+        // assertion across attribute-presence semantics.
+        expect(wrapper!.hasAttribute('inert')).toBe(true)
+      }
+    })
+
+    it('wraps every focusable control inside a preview region with an inert ancestor', () => {
+      // jsdom does not honor the live `inert` semantics for Tab navigation
+      // (no real focus engine), so we cannot directly assert "Tab does not
+      // land here" the way a browser would. Instead, we assert the
+      // structural precondition that *would* prevent focus landing in a
+      // real browser: every focusable element that lives inside a preview
+      // wrapper must have an `[inert]` ancestor between it and <body>.
+      // Combined with the per-wrapper inert assertion above, this fully
+      // exercises the contract — a regression that strips `inert` would
+      // flip this assertion. Manual smoke (recorded in the ticket) covers
+      // the live-focus path in real browsers.
+      const { container } = render(<DesignSystem />)
+      const previewWrappers = Array.from(container.querySelectorAll('[inert]'))
+      expect(previewWrappers.length).toBeGreaterThanOrEqual(7)
+
+      // All natively focusable controls inside any inert wrapper.
+      const focusableSelector = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      let countInsideInert = 0
+      for (const wrapper of previewWrappers) {
+        const focusables = wrapper.querySelectorAll(focusableSelector)
+        for (const focusable of focusables) {
+          // Sanity: every match must indeed have an inert ancestor — i.e.
+          // the wrapper itself or a closer one.
+          expect((focusable as HTMLElement).closest('[inert]')).not.toBeNull()
+          countInsideInert++
+        }
+      }
+      // The previews contribute well over a dozen controls; assert a
+      // generous floor so a future change that accidentally renders
+      // previews without their inert wrapper is loud about it.
+      expect(countInsideInert).toBeGreaterThan(10)
+    })
+
+    it('keeps the interactive Chat composer keyboard-operable (regression guard for the Organisms section)', async () => {
+      // The Chat organism above the Screen previews section is the one
+      // interactive composite in the showcase and must remain fully
+      // keyboard-driven after this ticket lands. It is rendered *outside*
+      // <ScreenPreview>, so it must NOT inherit the inert wrapper.
+      render(<DesignSystem />)
+      const composer = screen.getByLabelText(/^message$/i) as HTMLTextAreaElement
+      expect(composer.closest('[inert]')).toBeNull()
+
+      composer.focus()
+      expect(document.activeElement).toBe(composer)
+
+      const user = userEvent.setup()
+      await user.type(composer, 'still typeable')
+      expect(composer.value).toBe('still typeable')
+
+      // Submit via Enter — same wiring as the existing organism test, but
+      // exercised through `userEvent` to verify the full keyboard path.
+      await user.keyboard('{Enter}')
+      expect(screen.getByText('still typeable')).toBeInTheDocument()
     })
   })
 })

@@ -387,10 +387,28 @@ const SHOWCASE_CHROME: ScreenChromeValue = {
 }
 
 function ScreenPreview({ label, children }: { label: string; children: React.ReactNode }) {
+  // A11Y-024: each previewed screen mounts real production components wired
+  // to no-op handlers (`onCancel={() => {}}`, etc.), so every button and
+  // form control inside would otherwise advertise interactivity it does not
+  // have — ~20 dead tab stops on a single route, with the added hazard that
+  // a few (e.g. CopyBox's Copy button) accidentally *do* fire and quietly
+  // mutate the reviewer's clipboard. `inert` removes the entire subtree
+  // from the focus order, hit testing, and AT exposure in one attribute,
+  // while leaving the DOM rendered for sighted visual review. The outer
+  // `<span>` label remains live, so AT users still get a heading-list /
+  // landmark trail by label without entering the inert region. React 19's
+  // JSX boolean prop for `inert` makes this a one-line change; if the
+  // project ever downgrades below React 19 this needs the ref +
+  // `setAttribute('inert', '')` workaround instead. The `aria-label` is
+  // belt-and-suspenders for any tool that surfaces the wrapper from
+  // outside (DOM-walker dev tools, certain magnifiers).
   return (
     <div className="flex flex-col gap-2">
       <span className="text-xs font-medium text-slate-600 dark:text-slate-400">{label}</span>
-      <div className="rounded-md border border-slate-300 bg-slate-50 dark:border-slate-700 dark:bg-slate-900">
+      <div
+        inert
+        aria-label={`${label} (preview, non-interactive)`}
+        className="rounded-md border border-slate-300 bg-slate-50 dark:border-slate-700 dark:bg-slate-900">
         <ScreenChromeContext.Provider value={SHOWCASE_CHROME}>{children}</ScreenChromeContext.Provider>
       </div>
     </div>
