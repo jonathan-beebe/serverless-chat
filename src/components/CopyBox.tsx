@@ -42,14 +42,24 @@ export function CopyBox({ value, label, helpText, variant = 'code' }: Props) {
       />
       <div className="flex items-center justify-between gap-3">
         {helpText && <p className="text-xs text-slate-400">{helpText}</p>}
-        <button
-          type="button"
-          onClick={onCopy}
-          className="ml-auto rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
-          aria-live="polite">
-          {copied ? 'Copied!' : 'Copy'}
-        </button>
+        <div className="ml-auto flex items-center gap-2">
+          {copied && (
+            <span aria-hidden="true" className="text-xs font-medium text-emerald-400">
+              Copied!
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={onCopy}
+            className="rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400">
+            Copy
+          </button>
+        </div>
       </div>
+      {/* Status message announced to AT without disturbing the button's name or focus. */}
+      <span role="status" aria-live="polite" className="sr-only">
+        {copied ? `${label} copied to clipboard` : ''}
+      </span>
     </div>
   )
 }
