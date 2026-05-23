@@ -40,6 +40,11 @@ export function formatTranscript(messages: ChatMessage[], opts: FormatTranscript
 
   const parts: string[] = []
   let lastDay: string | null = null
+  // CR-012: track the previously emitted message's author so consecutive
+  // same-author messages share a single heading. `null` forces a heading on
+  // the next iteration — used for the first message and after a `##` date
+  // rollover (a date divider always restarts the run, mirroring Chat.tsx).
+  let prevFrom: ChatMessage['from'] | null = null
 
   for (const m of messages) {
     const date = new Date(m.at)
@@ -54,16 +59,26 @@ export function formatTranscript(messages: ChatMessage[], opts: FormatTranscript
       const prefix = parts.length === 0 ? '#' : '##'
       parts.push(`${prefix} ${formatted}`)
       parts.push('')
+      // Restart the author run across a date divider so the next message
+      // always gets a fresh heading even if the same sender continued past
+      // midnight.
+      prevFrom = null
     }
 
-    const label = m.from === 'me' ? SELF_LABEL : PEER_LABEL
-    const heading = opts.includeTimestamps ? `${label}${DOT}${timeFmt.format(date)}` : label
-    parts.push(heading)
+    const writeAuthorHeading = prevFrom === null || m.from !== prevFrom
+    if (writeAuthorHeading) {
+      const label = m.from === 'me' ? SELF_LABEL : PEER_LABEL
+      const heading = opts.includeTimestamps ? `${label}${DOT}${timeFmt.format(date)}` : label
+      parts.push(heading)
+    }
     parts.push(renderBody(m.text))
     // Blank line between turns. The trailing-newline normalization at the
     // bottom of this function strips the final blank so we always end with
-    // exactly one `\n`.
+    // exactly one `\n`. 2nd-Nth messages in a same-author run skip the
+    // heading above but still emit this trailing blank, giving each body its
+    // own paragraph.
     parts.push('')
+    prevFrom = m.from
   }
 
   // Join on `\n` (POSIX, portable; the clipboard layer normalizes for the host

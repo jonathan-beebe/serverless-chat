@@ -180,6 +180,104 @@ describe('formatTranscript — edge cases', () => {
   })
 })
 
+describe('formatTranscript — CR-012: groups consecutive same-author messages under one heading', () => {
+  // Tight, evenly-spaced timestamps so all messages stay within day1.
+  const t1 = new Date(2026, 4, 22, 14, 5).getTime()
+  const t2 = new Date(2026, 4, 22, 14, 7).getTime()
+  const t3 = new Date(2026, 4, 22, 14, 9).getTime()
+  const t4 = new Date(2026, 4, 22, 14, 11).getTime()
+  const t5 = new Date(2026, 4, 22, 14, 13).getTime()
+
+  it('names-only: three "me" then two "them" produces exactly one **You** and one **Them** heading', () => {
+    const messages: ChatMessage[] = [
+      msg('a', 'message A', 'me', t1),
+      msg('b', 'message B', 'me', t2),
+      msg('c', 'message C', 'me', t3),
+      msg('d', 'message D', 'them', t4),
+      msg('e', 'message E', 'them', t5),
+    ]
+    const out = formatTranscript(messages, { includeTimestamps: false })
+
+    expect(out.match(/^\*\*You\*\*$/gm)).toHaveLength(1)
+    expect(out.match(/^\*\*Them\*\*$/gm)).toHaveLength(1)
+    // Bodies still appear in order.
+    expect(out.indexOf('message A')).toBeLessThan(out.indexOf('message B'))
+    expect(out.indexOf('message B')).toBeLessThan(out.indexOf('message C'))
+    expect(out.indexOf('message C')).toBeLessThan(out.indexOf('message D'))
+    expect(out.indexOf('message D')).toBeLessThan(out.indexOf('message E'))
+  })
+
+  it('names-only: alternating senders still get one heading per turn (regression guard)', () => {
+    const messages: ChatMessage[] = [
+      msg('a', 'A', 'me', t1),
+      msg('b', 'B', 'them', t2),
+      msg('c', 'C', 'me', t3),
+      msg('d', 'D', 'them', t4),
+    ]
+    const out = formatTranscript(messages, { includeTimestamps: false })
+
+    expect(out.match(/^\*\*You\*\*$/gm)).toHaveLength(2)
+    expect(out.match(/^\*\*Them\*\*$/gm)).toHaveLength(2)
+  })
+
+  it('timestamped: only the first message of a run keeps its time; subsequent bodies render bare', () => {
+    const messages: ChatMessage[] = [
+      msg('a', 'message A', 'me', t1),
+      msg('b', 'message B', 'me', t2),
+      msg('c', 'message C', 'me', t3),
+      msg('d', 'message D', 'them', t4),
+      msg('e', 'message E', 'them', t5),
+    ]
+    const out = formatTranscript(messages, { includeTimestamps: true })
+
+    const youTime = TIME_FMT.format(new Date(t1))
+    const themTime = TIME_FMT.format(new Date(t4))
+
+    // Exactly one heading per author run, anchored at the run-start time.
+    expect(out.match(/^\*\*You\*\* · /gm)).toHaveLength(1)
+    expect(out.match(/^\*\*Them\*\* · /gm)).toHaveLength(1)
+    expect(out).toContain(`**You** · ${youTime}\nmessage A`)
+    expect(out).toContain(`**Them** · ${themTime}\nmessage D`)
+    // Bodies for 2nd-Nth in a run render bare — no `**You** · {time}` for B/C/E.
+    expect(out).not.toMatch(/\*\*You\*\* · [^\n]+\nmessage B/)
+    expect(out).not.toMatch(/\*\*You\*\* · [^\n]+\nmessage C/)
+    expect(out).not.toMatch(/\*\*Them\*\* · [^\n]+\nmessage E/)
+  })
+
+  it('date rollover breaks the run even if the author did not change', () => {
+    // Two "me" messages straddling local midnight.
+    const messages: ChatMessage[] = [msg('a', 'late', 'me', day1At), msg('b', 'morning', 'me', day2At)]
+    const out = formatTranscript(messages, { includeTimestamps: true })
+
+    // The post-rollover message must get a fresh `**You** · {time}` heading.
+    expect(out.match(/^\*\*You\*\* · /gm)).toHaveLength(2)
+    const themTime2 = TIME_FMT.format(new Date(day2At))
+    expect(out).toContain(`**You** · ${themTime2}\nmorning`)
+  })
+
+  it('single-message transcript renders identically — no regression for the trivial case', () => {
+    const messages: ChatMessage[] = [msg('a', 'hi', 'me', day1At)]
+    const outNoTs = formatTranscript(messages, { includeTimestamps: false })
+    const outTs = formatTranscript(messages, { includeTimestamps: true })
+
+    expect(outNoTs).toBe('**You**\nhi\n')
+    expect(outTs.endsWith(`**You** · ${TIME_FMT.format(new Date(day1At))}\nhi\n`)).toBe(true)
+  })
+
+  it('hard-break bodies survive grouping — `\\n` inside a 2nd-in-run message still renders `  \\n`', () => {
+    const messages: ChatMessage[] = [
+      msg('a', 'first', 'me', t1),
+      msg('b', 'line one\nline two', 'me', t2),
+      msg('c', 'third', 'me', t3),
+    ]
+    const out = formatTranscript(messages, { includeTimestamps: false })
+
+    expect(out).toContain('line one  \nline two')
+    // And only the run's opening heading is emitted.
+    expect(out.match(/^\*\*You\*\*$/gm)).toHaveLength(1)
+  })
+})
+
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
