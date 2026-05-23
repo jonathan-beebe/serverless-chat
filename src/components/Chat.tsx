@@ -150,9 +150,9 @@ export function Chat({ messages, onSend, disabled }: Props) {
         aria-relevant="additions"
         aria-atomic="false"
         tabIndex={0}
-        className="flex-1 overflow-y-auto rounded-md border border-slate-300 bg-white/50 p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 dark:border-slate-700 dark:bg-slate-900/50">
+        className="flex-1 overflow-y-auto rounded-md border border-stone-300 bg-white/50 p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 dark:border-stone-700 dark:bg-stone-900/50">
         {messages.length === 0 ? (
-          <p aria-hidden="true" className="text-sm text-slate-600 dark:text-slate-400">
+          <p aria-hidden="true" className="text-sm text-stone-600 dark:text-stone-400">
             No messages yet. Say hello.
           </p>
         ) : (
@@ -182,7 +182,7 @@ export function Chat({ messages, onSend, disabled }: Props) {
                     className={`flex max-w-[80%] flex-col gap-0.5 rounded-lg px-3 py-1 text-sm ${
                       isMe
                         ? 'bg-sky-700 text-white'
-                        : 'bg-slate-200 text-slate-900 dark:bg-slate-700 dark:text-slate-100'
+                        : 'bg-stone-200 text-stone-900 dark:bg-stone-700 dark:text-stone-100'
                     }`}>
                     <span data-testid={`message-text-${m.id}`} className="whitespace-pre-wrap break-words">
                       {m.text}
@@ -190,7 +190,7 @@ export function Chat({ messages, onSend, disabled }: Props) {
                     <time
                       aria-hidden="true"
                       dateTime={new Date(m.at).toISOString()}
-                      className={`self-end text-xs ${isMe ? 'text-white' : 'text-slate-600 dark:text-slate-400'}`}>
+                      className={`self-end text-xs ${isMe ? 'text-white' : 'text-stone-600 dark:text-stone-400'}`}>
                       {timeFmt.format(new Date(m.at))}
                     </time>
                   </div>
@@ -219,7 +219,7 @@ export function Chat({ messages, onSend, disabled }: Props) {
           // on Chrome 123+ / Safari 18+. Older browsers ignore it and render
           // at the explicit `rows={1}` height with internal scroll — still
           // functional, just not auto-growing.
-          className="flex-1 resize-none placeholder-slate-500 [field-sizing:content] max-h-40 disabled:opacity-50 dark:placeholder-slate-400"
+          className="flex-1 resize-none placeholder-stone-500 [field-sizing:content] max-h-40 disabled:opacity-50 dark:placeholder-stone-400"
         />
         <Button type="submit" variant="primary" size="md" disabled={disabled || !draft.trim()}>
           Send

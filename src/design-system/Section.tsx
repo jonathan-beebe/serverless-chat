@@ -9,12 +9,12 @@ interface Props {
 
 export function Section({ title, description, children }: Props) {
   return (
-    <section className="flex flex-col gap-4 border-t border-slate-300 pt-6 dark:border-slate-700">
+    <section className="flex flex-col gap-4 border-t border-stone-300 pt-6 dark:border-stone-700">
       <div>
         <Heading level={2} size="md">
           {title}
         </Heading>
-        {description && <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{description}</p>}
+        {description && <p className="mt-1 text-sm text-stone-600 dark:text-stone-400">{description}</p>}
       </div>
       <div className="grid grid-cols-1 gap-4">{children}</div>
     </section>
@@ -31,7 +31,7 @@ interface RowProps {
 export function Row({ label, children }: RowProps) {
   return (
     <div className="grid grid-cols-1 gap-2 md:grid-cols-[14rem_1fr] md:items-center">
-      <span className="text-xs font-medium text-slate-600 dark:text-slate-400">{label}</span>
+      <span className="text-xs font-medium text-stone-600 dark:text-stone-400">{label}</span>
       <div className="flex flex-wrap items-center gap-3">{children}</div>
     </div>
   )

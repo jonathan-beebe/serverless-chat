@@ -36,8 +36,8 @@ describe('Heading primitive', () => {
   it('carries both light and dark text classes', () => {
     render(<Heading level={1}>Home</Heading>)
     const h = screen.getByRole('heading', { name: 'Home' })
-    expect(h.className).toMatch(/text-slate-900/)
-    expect(h.className).toMatch(/dark:text-slate-100/)
+    expect(h.className).toMatch(/text-stone-900/)
+    expect(h.className).toMatch(/dark:text-stone-100/)
   })
 
   it('forwards refs to the underlying heading element', () => {

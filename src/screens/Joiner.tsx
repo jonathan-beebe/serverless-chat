@@ -109,7 +109,7 @@ export function Joiner({ session, offerCode, onCancel }: Props) {
         className="mx-auto flex max-w-xl flex-col items-center gap-6 px-4 py-12 text-center">
         {liveStatus}
         <Heading level={1}>Connection lost</Heading>
-        <p className="text-slate-700 dark:text-slate-300">
+        <p className="text-stone-700 dark:text-stone-300">
           The chat ended. Your friend may have closed the tab, or the network dropped.
         </p>
         <Button ref={restartRef} variant="primary" size="lg" onClick={onCancel}>
@@ -125,7 +125,7 @@ export function Joiner({ session, offerCode, onCancel }: Props) {
         label="You've been invited to chat"
         className="mx-auto flex max-w-xl flex-col items-center gap-6 px-4 py-12 text-center">
         <Heading level={1}>You've been invited to chat</Heading>
-        <p className="text-slate-700 dark:text-slate-300">
+        <p className="text-stone-700 dark:text-stone-300">
           Accepting opens a direct, peer-to-peer connection. You'll receive a short reply code to send back to your
           friend.
         </p>
@@ -146,7 +146,7 @@ export function Joiner({ session, offerCode, onCancel }: Props) {
       <header className="flex items-start justify-between">
         <div>
           <Heading level={1}>Send this code back</Heading>
-          <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+          <p className="mt-1 text-sm text-stone-600 dark:text-stone-400">
             Once they paste it, the connection opens and the chat starts automatically.
           </p>
         </div>

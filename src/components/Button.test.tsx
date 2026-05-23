@@ -20,14 +20,14 @@ describe('Button primitive', () => {
     expect(btn.className).toMatch(/focus-visible:ring-2/)
   })
 
-  it('secondary variant carries slate border + dark mode classes', () => {
+  it('secondary variant carries stone border + dark mode classes', () => {
     render(<Button variant="secondary">Cancel</Button>)
     const btn = screen.getByRole('button', { name: 'Cancel' })
-    // A11Y-016: bumped from `slate-300 / slate-700` to `slate-400 / slate-500`
+    // A11Y-016: bumped from `stone-300 / stone-700` to `stone-400 / stone-500`
     // so the resting-state border clears WCAG 1.4.11's 3:1 non-text contrast
     // floor (the boundary is the button's only visual delimiter).
-    expect(btn.className).toMatch(/border-slate-400/)
-    expect(btn.className).toMatch(/dark:border-slate-500/)
+    expect(btn.className).toMatch(/border-stone-400/)
+    expect(btn.className).toMatch(/dark:border-stone-500/)
   })
 
   it('size="sm" uses tighter padding than size="md"', () => {

@@ -217,7 +217,7 @@ export function Offerer({ session, onCancel }: Props) {
         className="mx-auto flex max-w-xl flex-col items-center gap-6 px-4 py-12 text-center">
         {liveStatus}
         <Heading level={1}>Connection lost</Heading>
-        <p className="text-slate-700 dark:text-slate-300">
+        <p className="text-stone-700 dark:text-stone-300">
           The chat ended. Your friend may have closed the tab, or the network dropped.
         </p>
         <Button ref={restartRef} variant="primary" size="lg" onClick={onCancel}>
@@ -237,7 +237,7 @@ export function Offerer({ session, onCancel }: Props) {
         <header className="flex items-start justify-between">
           <div>
             <Heading level={1}>Send this code back</Heading>
-            <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+            <p className="mt-1 text-sm text-stone-600 dark:text-stone-400">
               Once they paste it, the connection opens and the chat starts automatically.
             </p>
           </div>
@@ -286,7 +286,7 @@ export function Offerer({ session, onCancel }: Props) {
       <header className="flex items-start justify-between">
         <div>
           <Heading level={1}>Invite your friend</Heading>
-          <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+          <p className="mt-1 text-sm text-stone-600 dark:text-stone-400">
             Keep this tab open — your friend's reply lands here.
           </p>
         </div>
@@ -311,10 +311,10 @@ export function Offerer({ session, onCancel }: Props) {
 
       {session.encodedLocal && (
         <form onSubmit={onSubmit} className="flex flex-col gap-2">
-          <label htmlFor="answer-input" className="text-sm font-medium text-slate-800 dark:text-slate-200">
+          <label htmlFor="answer-input" className="text-sm font-medium text-stone-800 dark:text-stone-200">
             Paste their reply code
           </label>
-          <p id="answer-help" className="text-xs text-slate-600 dark:text-slate-400">
+          <p id="answer-help" className="text-xs text-stone-600 dark:text-stone-400">
             They'll send back a long string — paste it here.
           </p>
           <Textarea

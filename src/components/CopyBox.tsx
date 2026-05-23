@@ -85,7 +85,7 @@ export function CopyBox({ value, label, helpText, variant = 'code', autoFocus = 
 
   return (
     <div className="flex flex-col gap-2">
-      <label htmlFor={textareaId} className="text-sm font-medium text-slate-800 dark:text-slate-200">
+      <label htmlFor={textareaId} className="text-sm font-medium text-stone-800 dark:text-stone-200">
         {label}
       </label>
       <Textarea
@@ -99,7 +99,7 @@ export function CopyBox({ value, label, helpText, variant = 'code', autoFocus = 
         aria-describedby={needsManualCopy ? manualCopyHintId : undefined}
       />
       <div className="flex items-center justify-between gap-3">
-        {helpText && <p className="text-xs text-slate-600 dark:text-slate-400">{helpText}</p>}
+        {helpText && <p className="text-xs text-stone-600 dark:text-stone-400">{helpText}</p>}
         <div className="ml-auto flex items-center gap-2">
           {copied && (
             <Callout variant="success" aria-hidden="true">

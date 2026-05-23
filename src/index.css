@@ -48,14 +48,14 @@ html {
    an explicit override here; it'd just shadow the platform-native font and
    re-open the door to webfont requests. (FEAT-005) */
 body {
-  background-color: #f8fafc; /* slate-50 */
-  color: #0f172a; /* slate-900 */
+  background-color: #fafaf9; /* stone-50 */
+  color: #1c1917; /* stone-900 */
   overflow: hidden;
 }
 
 @media (prefers-color-scheme: dark) {
   body {
-    background-color: #0f172a; /* slate-900 */
-    color: #f1f5f9; /* slate-100 */
+    background-color: #1c1917; /* stone-900 */
+    color: #f5f5f4; /* stone-100 */
   }
 }

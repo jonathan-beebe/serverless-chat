@@ -9,7 +9,7 @@ interface Props extends Omit<HTMLAttributes<HTMLParagraphElement>, 'role'> {
 }
 
 const variants: Record<Variant, string> = {
-  info: 'text-sm text-slate-600 dark:text-slate-400',
+  info: 'text-sm text-stone-600 dark:text-stone-400',
   success: 'text-xs font-medium text-emerald-700 dark:text-emerald-400',
   warning: 'text-amber-700 dark:text-amber-300',
   error:

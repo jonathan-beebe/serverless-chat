@@ -59,8 +59,8 @@ const FAKE_OFFER = 'eyJzZHAiOiJ2PTBcclxubz1mYWtlIDQ5ODc2NTQzMjEgMSBJTiBJUDQgMTI3
 const FAKE_REPLY = 'eyJzZHAiOiJ2PTBcclxubz1yZXBseSAxMjM0NTY3ODkgMSBJTiBJUDQgMTI3LjAuMC4xXHJcbiJ9'
 
 const SWATCHES: { name: string; light: string; dark: string; label: string }[] = [
-  { name: 'slate-50', light: 'bg-slate-50', dark: 'bg-slate-50', label: 'page light bg' },
-  { name: 'slate-900', light: 'bg-slate-900', dark: 'bg-slate-900', label: 'page dark bg' },
+  { name: 'stone-50', light: 'bg-stone-50', dark: 'bg-stone-50', label: 'page light bg' },
+  { name: 'stone-900', light: 'bg-stone-900', dark: 'bg-stone-900', label: 'page dark bg' },
   { name: 'sky-700', light: 'bg-sky-700', dark: 'bg-sky-700', label: 'brand / primary' },
   { name: 'emerald-700', light: 'bg-emerald-700', dark: 'bg-emerald-700', label: 'success' },
   { name: 'amber-700', light: 'bg-amber-700', dark: 'bg-amber-700', label: 'warning' },
@@ -71,9 +71,9 @@ const SWATCHES: { name: string; light: string; dark: string; label: string }[] =
 function Swatch({ className, label, name }: { className: string; label: string; name: string }) {
   return (
     <div className="flex flex-col items-start gap-1">
-      <div className={`h-12 w-20 rounded-md border border-slate-300 dark:border-slate-700 ${className}`} />
-      <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{name}</span>
-      <span className="text-xs text-slate-500 dark:text-slate-400">{label}</span>
+      <div className={`h-12 w-20 rounded-md border border-stone-300 dark:border-stone-700 ${className}`} />
+      <span className="text-xs font-medium text-stone-700 dark:text-stone-300">{name}</span>
+      <span className="text-xs text-stone-500 dark:text-stone-400">{label}</span>
     </div>
   )
 }
@@ -105,17 +105,17 @@ export function DesignSystem() {
 
   return (
     <div className={themeClass}>
-      <main className="mx-auto flex max-w-4xl flex-col gap-8 bg-slate-50 px-4 py-12 text-slate-900 dark:bg-slate-900 dark:text-slate-100">
+      <main className="mx-auto flex max-w-4xl flex-col gap-8 bg-stone-50 px-4 py-12 text-stone-900 dark:bg-stone-900 dark:text-stone-100">
         <header className="flex flex-col gap-4">
           <Heading level={1} ref={headingRef}>
             Design system
           </Heading>
-          <p className="text-slate-700 dark:text-slate-300">
+          <p className="text-stone-700 dark:text-stone-300">
             Live preview of every primitive and screen this app ships. Importing the same files the features consume, so
             a tweak here is a tweak everywhere.
           </p>
           <div role="group" aria-label="Theme" className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Theme:</span>
+            <span className="text-xs font-medium text-stone-600 dark:text-stone-400">Theme:</span>
             {(['system', 'light', 'dark'] as const).map((m) => {
               // A11Y-023: the selected state used to be `ring-2 ring-sky-400`,
               // which is visually identical to the Button primitive's base
@@ -130,7 +130,7 @@ export function DesignSystem() {
               const selectedClasses =
                 'bg-sky-100 text-sky-900 border-sky-700 dark:bg-sky-900 dark:text-sky-100 dark:border-sky-400'
               const ringOffset =
-                'focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:focus-visible:ring-offset-slate-900'
+                'focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50 dark:focus-visible:ring-offset-stone-900'
               return (
                 <Button
                   key={m}
@@ -170,30 +170,30 @@ export function DesignSystem() {
             <Heading level={2}>Section heading</Heading>
           </Row>
           <Row label="Body / 16px">
-            <p className="text-slate-700 dark:text-slate-300">The quick brown fox jumps over the lazy dog.</p>
+            <p className="text-stone-700 dark:text-stone-300">The quick brown fox jumps over the lazy dog.</p>
           </Row>
           <Row label="Small / help / 12px">
-            <p className="text-xs text-slate-600 dark:text-slate-400">Help text and metadata.</p>
+            <p className="text-xs text-stone-600 dark:text-stone-400">Help text and metadata.</p>
           </Row>
           <Row label="Mono code">
-            <code className="font-mono text-xs text-slate-900 dark:text-slate-100">eyJzZHAiOiJ2PTBccl…</code>
+            <code className="font-mono text-xs text-stone-900 dark:text-stone-100">eyJzZHAiOiJ2PTBccl…</code>
           </Row>
           <Row label="sr-only sample">
-            <span className="text-xs italic text-slate-500 dark:text-slate-400">
+            <span className="text-xs italic text-stone-500 dark:text-stone-400">
               (visually hidden — only announced to assistive tech)
             </span>
             <span className="sr-only">You are not meant to see this. Screen readers will.</span>
           </Row>
         </Section>
 
-        <Section title="Color & surface" description="The slate / sky / accent palette + card surface.">
+        <Section title="Color & surface" description="The stone / sky / accent palette + card surface.">
           <Row label="Swatches">
             {SWATCHES.map((s) => (
               <Swatch key={s.name} className={s.light} label={s.label} name={s.name} />
             ))}
           </Row>
           <Row label="Card surface">
-            <div className="w-full max-w-sm rounded-md border border-slate-300 bg-white/50 p-3 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-300">
+            <div className="w-full max-w-sm rounded-md border border-stone-300 bg-white/50 p-3 text-sm text-stone-700 dark:border-stone-700 dark:bg-stone-900/50 dark:text-stone-300">
               A muted card surface that reads on both the light and dark page background.
             </div>
           </Row>
@@ -286,7 +286,7 @@ export function DesignSystem() {
             </div>
           </Row>
           <Row label="LiveRegion">
-            <span className="text-xs italic text-slate-500 dark:text-slate-400">
+            <span className="text-xs italic text-stone-500 dark:text-stone-400">
               (visually hidden — emits polite announcements to AT)
             </span>
             <LiveRegion>Sample status message.</LiveRegion>
@@ -405,11 +405,11 @@ function ScreenPreview({ label, children }: { label: string; children: React.Rea
   // outside (DOM-walker dev tools, certain magnifiers).
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-xs font-medium text-slate-600 dark:text-slate-400">{label}</span>
+      <span className="text-xs font-medium text-stone-600 dark:text-stone-400">{label}</span>
       <div
         inert
         aria-label={`${label} (preview, non-interactive)`}
-        className="rounded-md border border-slate-300 bg-slate-50 dark:border-slate-700 dark:bg-slate-900">
+        className="rounded-md border border-stone-300 bg-stone-50 dark:border-stone-700 dark:bg-stone-900">
         <ScreenChromeContext.Provider value={SHOWCASE_CHROME}>{children}</ScreenChromeContext.Provider>
       </div>
     </div>
@@ -437,7 +437,7 @@ function ConnectedChromePreview() {
           End chat
         </Button>
       </header>
-      <p className="rounded-md border border-dashed border-slate-300 p-3 text-xs italic text-slate-500 dark:border-slate-700 dark:text-slate-400">
+      <p className="rounded-md border border-dashed border-stone-300 p-3 text-xs italic text-stone-500 dark:border-stone-700 dark:text-stone-400">
         ↑ The Chat transcript + composer renders below this header on the real screen — see the interactive Chat in the
         Organisms section above.
       </p>
@@ -458,7 +458,7 @@ function JoinerReplyPreview() {
       <header className="flex items-start justify-between">
         <div>
           <Heading level={1}>Send this code back</Heading>
-          <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+          <p className="mt-1 text-sm text-stone-600 dark:text-stone-400">
             Once they paste it, the connection opens and the chat starts automatically.
           </p>
         </div>

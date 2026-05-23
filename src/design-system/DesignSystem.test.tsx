@@ -251,8 +251,8 @@ describe('DesignSystem showcase', () => {
       const dark = screen.getByRole('button', { name: /^dark$/i })
       for (const btn of [system, light, dark]) {
         expect(btn.className).toMatch(/\bfocus-visible:ring-offset-2\b/)
-        expect(btn.className).toMatch(/\bfocus-visible:ring-offset-slate-50\b/)
-        expect(btn.className).toMatch(/\bdark:focus-visible:ring-offset-slate-900\b/)
+        expect(btn.className).toMatch(/\bfocus-visible:ring-offset-stone-50\b/)
+        expect(btn.className).toMatch(/\bdark:focus-visible:ring-offset-stone-900\b/)
       }
     })
 
