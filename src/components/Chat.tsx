@@ -53,19 +53,23 @@ export function Chat({ messages, onSend, disabled }: Props) {
         onScroll={onScroll}
         aria-label="Chat transcript"
         aria-live="polite"
-        className="flex-1 space-y-2 overflow-y-auto rounded-md border border-slate-700 bg-slate-900/50 p-3">
-        {messages.length === 0 && <li className="text-sm text-slate-400">No messages yet. Say hello.</li>}
+        className="flex-1 space-y-2 overflow-y-auto rounded-md border border-slate-300 bg-white/50 p-3 dark:border-slate-700 dark:bg-slate-900/50">
+        {messages.length === 0 && (
+          <li className="text-sm text-slate-600 dark:text-slate-400">No messages yet. Say hello.</li>
+        )}
         {messages.map((m) => (
           <li key={m.id} className={`flex flex-col ${m.from === 'me' ? 'items-end' : 'items-start'}`}>
             {/* Visible caption so sighted users who can't distinguish color/alignment still see authorship. */}
-            <span aria-hidden="true" className="px-1 text-xs text-slate-400">
+            <span aria-hidden="true" className="px-1 text-xs text-slate-600 dark:text-slate-400">
               {m.from === 'me' ? 'You' : 'Them'}
             </span>
             {/* Visually-hidden prefix so the aria-live announcement includes the speaker. */}
             <span className="sr-only">{m.from === 'me' ? 'You said: ' : 'They said: '}</span>
             <span
               className={`max-w-[80%] rounded-lg px-3 py-1.5 text-sm ${
-                m.from === 'me' ? 'bg-sky-600 text-white' : 'bg-slate-700 text-slate-100'
+                m.from === 'me'
+                  ? 'bg-sky-600 text-white'
+                  : 'bg-slate-200 text-slate-900 dark:bg-slate-700 dark:text-slate-100'
               }`}>
               {m.text}
             </span>
@@ -85,7 +89,7 @@ export function Chat({ messages, onSend, disabled }: Props) {
           placeholder={disabled ? 'Waiting for connection…' : 'Type a message'}
           disabled={disabled}
           autoComplete="off"
-          className="flex-1 rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder-slate-400 focus-visible:border-sky-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 disabled:opacity-50"
+          className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-500 focus-visible:border-sky-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder-slate-400"
         />
         <button
           type="submit"

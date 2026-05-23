@@ -6,9 +6,15 @@ body,
   height: 100%;
 }
 
+/* Let the UA render native form controls, scrollbars, and selection colors in
+   the matching theme so they don't look out-of-place. */
+html {
+  color-scheme: light dark;
+}
+
 body {
-  background-color: #0f172a;
-  color: #f1f5f9;
+  background-color: #f8fafc; /* slate-50 */
+  color: #0f172a; /* slate-900 */
   font-family:
     ui-sans-serif,
     system-ui,
@@ -16,4 +22,11 @@ body {
     "Segoe UI",
     Roboto,
     sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background-color: #0f172a; /* slate-900 */
+    color: #f1f5f9; /* slate-100 */
+  }
 }

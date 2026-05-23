@@ -57,7 +57,7 @@ export function CopyBox({ value, label, helpText, variant = 'code' }: Props) {
 
   return (
     <div className="flex flex-col gap-2">
-      <label htmlFor={textareaId} className="text-sm font-medium text-slate-200">
+      <label htmlFor={textareaId} className="text-sm font-medium text-slate-800 dark:text-slate-200">
         {label}
       </label>
       <textarea
@@ -66,14 +66,14 @@ export function CopyBox({ value, label, helpText, variant = 'code' }: Props) {
         readOnly
         value={value}
         rows={variant === 'url' ? 2 : 6}
-        className="w-full resize-none rounded-md border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-xs text-slate-100 focus-visible:border-sky-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+        className="w-full resize-none rounded-md border border-slate-300 bg-white px-3 py-2 font-mono text-xs text-slate-900 focus-visible:border-sky-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
         onFocus={(e) => e.currentTarget.select()}
       />
       <div className="flex items-center justify-between gap-3">
-        {helpText && <p className="text-xs text-slate-400">{helpText}</p>}
+        {helpText && <p className="text-xs text-slate-600 dark:text-slate-400">{helpText}</p>}
         <div className="ml-auto flex items-center gap-2">
           {copied && (
-            <span aria-hidden="true" className="text-xs font-medium text-emerald-400">
+            <span aria-hidden="true" className="text-xs font-medium text-emerald-700 dark:text-emerald-400">
               Copied!
             </span>
           )}
@@ -89,7 +89,7 @@ export function CopyBox({ value, label, helpText, variant = 'code' }: Props) {
           sandboxed iframes, permission-denied). The textarea is already
           selected at that point, so a single keystroke completes the copy. */}
       {needsManualCopy && (
-        <p className="text-xs font-medium text-amber-300" aria-hidden="true">
+        <p className="text-xs font-medium text-amber-700 dark:text-amber-300" aria-hidden="true">
           Press Ctrl+C / Cmd+C to copy
         </p>
       )}
