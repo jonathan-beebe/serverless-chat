@@ -264,6 +264,23 @@ describe('useChatSession lifecycle', () => {
     act(() => lastChannel!.onclose?.())
     expect(result.current.state).toBe('failed')
   })
+
+  it('channel onclose after onopen transitions state to "closed", not "failed"', async () => {
+    // Repros BUG-005: a post-connect drop must be distinguishable from a setup
+    // failure so the screens can render a "Connection lost" view instead of
+    // falling back to the now-stale invite/reply UI. We keep "failed" reserved
+    // for pre-connect failures (BUG-002) and add a separate terminal "closed"
+    // state for "we were connected, then the channel went away".
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsOfferer()
+    })
+    act(() => lastChannel!.open())
+    expect(result.current.state).toBe('connected')
+
+    act(() => lastChannel!.onclose?.())
+    expect(result.current.state).toBe('closed')
+  })
 })
 
 describe('useChatSession submitAnswer', () => {

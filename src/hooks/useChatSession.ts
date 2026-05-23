@@ -59,11 +59,21 @@ export function useChatSession(): ChatSession {
     } else {
       channel.onopen = () => setState('connected')
     }
-    // A close from any pre-terminal state means the connection never recovered;
-    // escalate to 'failed' so the UI can offer a fresh invite exchange. Skip
-    // states that are already terminal ('idle' after teardown, 'failed' already)
-    // so a deliberate reset() isn't clobbered into a spurious error screen.
-    channel.onclose = () => setState((prev) => (prev === 'idle' || prev === 'failed' ? prev : 'failed'))
+    // A close splits into two terminal states depending on whether we'd ever
+    // reached `'connected'`:
+    //   - prev === 'connected'  → 'closed' (post-connect drop; chat was live)
+    //   - any other non-terminal → 'failed' (pre-connect, ICE/setup gave up)
+    // Terminal states ('idle' after teardown, plus 'failed'/'closed' already)
+    // are preserved so a deliberate reset() isn't clobbered into a spurious
+    // error screen and a redundant close event doesn't downgrade 'closed' to
+    // 'failed'. See BUG-002 (pre-connect escalation) and BUG-005 (separate
+    // closed state so the UI can render a "Connection lost" view instead of
+    // the stale invite/reply setup screen).
+    channel.onclose = () =>
+      setState((prev) => {
+        if (prev === 'idle' || prev === 'failed' || prev === 'closed') return prev
+        return prev === 'connected' ? 'closed' : 'failed'
+      })
     channel.onmessage = (event) => {
       const text = typeof event.data === 'string' ? event.data : '[binary message]'
       setMessages((prev) => [...prev, { id: nextId(), from: 'them', text, at: Date.now() }])

@@ -14,6 +14,7 @@ interface Props {
 
 function joinerTitle(state: ChatSession['state'], accepted: boolean): string {
   if (state === 'connected') return 'Connected · P2P Chat'
+  if (state === 'closed') return 'Connection lost · P2P Chat'
   if (!accepted) return "You've been invited · P2P Chat"
   return 'Send your reply code · P2P Chat'
 }
@@ -34,6 +35,8 @@ function statusMessage(state: ConnectionState, hasLocal: boolean): string {
       return 'Connected. You can start chatting.'
     case 'failed':
       return 'Connection failed.'
+    case 'closed':
+      return 'Connection lost.'
     default:
       return ''
   }
@@ -49,11 +52,12 @@ export function Joiner({ session, offerCode, onCancel }: Props) {
     }
   }, [accepted, offerCode, session])
 
-  // Joiner has three branches (invite → reply-code → connected). Recompute
-  // focus when that branch flips so keyboard / screen-reader users land on
-  // the new heading instead of <body>.
-  const branch: 'connected' | 'invite' | 'reply' =
-    session.state === 'connected' ? 'connected' : accepted ? 'reply' : 'invite'
+  // Joiner has four branches (invite → reply-code → connected → closed).
+  // Recompute focus when that branch flips so keyboard / screen-reader users
+  // land on the new heading instead of <body>. `closed` is the post-connect
+  // drop view added for BUG-005.
+  const branch: 'connected' | 'closed' | 'invite' | 'reply' =
+    session.state === 'connected' ? 'connected' : session.state === 'closed' ? 'closed' : accepted ? 'reply' : 'invite'
   const headingRef = useFocusOnMount<HTMLHeadingElement>([branch])
 
   const liveStatus = (
@@ -78,6 +82,28 @@ export function Joiner({ session, offerCode, onCancel }: Props) {
           </button>
         </header>
         <Chat messages={session.messages} onSend={session.send} />
+      </main>
+    )
+  }
+
+  if (branch === 'closed') {
+    // Post-connect drop: the chat was live and just ended. Don't render the
+    // stale reply-code CopyBox — that code is bound to the now-closed
+    // PeerConnection and can't be reused. The single CTA resets the session
+    // and routes home (`onCancel` is wired to App.goHome). See BUG-005.
+    return (
+      <main className="mx-auto flex max-w-xl flex-col items-center gap-6 px-4 py-12 text-center">
+        {liveStatus}
+        <h1 ref={headingRef} tabIndex={-1} className="text-2xl font-semibold text-slate-100 focus:outline-none">
+          Connection lost
+        </h1>
+        <p className="text-slate-300">The chat ended. Your friend may have closed the tab, or the network dropped.</p>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-md bg-sky-600 px-5 py-2.5 text-base font-medium text-white hover:bg-sky-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400">
+          Start a new chat
+        </button>
       </main>
     )
   }

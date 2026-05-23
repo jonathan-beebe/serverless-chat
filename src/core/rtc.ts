@@ -13,7 +13,19 @@ export const ICE_CONFIG: RTCConfiguration = {
   ],
 }
 
-export type ConnectionState = 'idle' | 'gathering' | 'awaiting-answer' | 'connecting' | 'connected' | 'failed'
+// `failed` covers pre-connect failures (ICE never converged, setup blew up).
+// `closed` covers post-connect drops (channel was open, then went away — peer
+// closed the tab, transport died mid-session). The screens render different
+// UI for each: "Try a different network" for setup failures, "Connection
+// lost — start a new chat" for runtime drops. See BUG-005.
+export type ConnectionState =
+  | 'idle'
+  | 'gathering'
+  | 'awaiting-answer'
+  | 'connecting'
+  | 'connected'
+  | 'failed'
+  | 'closed'
 
 export interface ChatMessage {
   id: string

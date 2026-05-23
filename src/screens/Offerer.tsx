@@ -29,6 +29,8 @@ function statusMessage(state: ConnectionState, hasLocal: boolean): string {
       return 'Connected. You can start chatting.'
     case 'failed':
       return 'Connection failed.'
+    case 'closed':
+      return 'Connection lost.'
     default:
       return ''
   }
@@ -37,10 +39,15 @@ function statusMessage(state: ConnectionState, hasLocal: boolean): string {
 export function Offerer({ session, onCancel }: Props) {
   const [answerDraft, setAnswerDraft] = useState('')
   const isConnected = session.state === 'connected'
-  usePageTitle(isConnected ? 'Connected · P2P Chat' : 'Invite a friend · P2P Chat')
-  // Refocus when the rendered branch swaps (invite ↔ connected), so the
-  // user lands on the new heading instead of being dropped to <body>.
-  const headingRef = useFocusOnMount<HTMLHeadingElement>([isConnected])
+  const isClosed = session.state === 'closed'
+  usePageTitle(
+    isConnected ? 'Connected · P2P Chat' : isClosed ? 'Connection lost · P2P Chat' : 'Invite a friend · P2P Chat',
+  )
+  // Refocus when the rendered branch swaps (invite ↔ connected ↔ closed) so
+  // the user lands on the new heading instead of being dropped to <body>.
+  // The branch identifier collapses the three possible views into one dep.
+  const branch: 'connected' | 'closed' | 'invite' = isConnected ? 'connected' : isClosed ? 'closed' : 'invite'
+  const headingRef = useFocusOnMount<HTMLHeadingElement>([branch])
 
   // Kick off offer generation on first mount; the hook owns the connection
   // so re-renders won't restart it.
@@ -76,6 +83,29 @@ export function Offerer({ session, onCancel }: Props) {
           </button>
         </header>
         <Chat messages={session.messages} onSend={session.send} />
+      </main>
+    )
+  }
+
+  if (isClosed) {
+    // Post-connect drop: the chat was live and just ended (peer closed the
+    // tab, network died, transport gave up). Don't render the invite/reply
+    // setup UI — the SDP codes are bound to the now-closed PeerConnection and
+    // can't be reused. Show a dedicated "Connection lost" view with a single
+    // CTA that resets the session and routes home (handled by `onCancel`).
+    return (
+      <main className="mx-auto flex max-w-xl flex-col items-center gap-6 px-4 py-12 text-center">
+        {liveStatus}
+        <h1 ref={headingRef} tabIndex={-1} className="text-2xl font-semibold text-slate-100 focus:outline-none">
+          Connection lost
+        </h1>
+        <p className="text-slate-300">The chat ended. Your friend may have closed the tab, or the network dropped.</p>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-md bg-sky-600 px-5 py-2.5 text-base font-medium text-white hover:bg-sky-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400">
+          Start a new chat
+        </button>
       </main>
     )
   }
