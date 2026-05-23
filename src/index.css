@@ -12,16 +12,15 @@ html {
   color-scheme: light dark;
 }
 
+/* font-family is intentionally inherited from Tailwind v4 preflight
+   (`--default-font-family` on `html`) — a system-only stack that lets each OS
+   render in its native UI font (SF on Apple, Segoe UI Variable on Windows,
+   Roboto on Android, the user's configured font on Linux). Don't reintroduce
+   an explicit override here; it'd just shadow the platform-native font and
+   re-open the door to webfont requests. (FEAT-005) */
 body {
   background-color: #f8fafc; /* slate-50 */
   color: #0f172a; /* slate-900 */
-  font-family:
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    Roboto,
-    sans-serif;
 }
 
 @media (prefers-color-scheme: dark) {
