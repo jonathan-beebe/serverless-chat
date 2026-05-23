@@ -67,4 +67,43 @@ describe('CopyBox copy behavior', () => {
     // "Copied!" must NOT appear — the clipboard was not actually written.
     expect(screen.queryByText('Copied!')).not.toBeInTheDocument()
   })
+
+  it('exposes the manual-copy hint to assistive tech (A11Y-019: not aria-hidden, wired via aria-describedby)', async () => {
+    setClipboardWriteText(vi.fn().mockRejectedValue(new Error('blocked')))
+    Object.defineProperty(document, 'execCommand', {
+      configurable: true,
+      value: vi.fn().mockReturnValue(false),
+    })
+
+    render(<CopyBox value="payload-value" label="Answer code" />)
+    const textarea = screen.getByLabelText(/answer code/i) as HTMLTextAreaElement
+
+    // Before the failed-copy state: textarea has no dangling describedby reference.
+    expect(textarea.getAttribute('aria-describedby')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: /copy/i }))
+
+    // The hint must be reachable via accessible text (regression guard against
+    // a future `aria-hidden="true"` reintroduction — `getByText` would still
+    // resolve the node, so we additionally assert the attribute is absent).
+    const hint = await screen.findByText(/Ctrl\+C/)
+    expect(hint).not.toHaveAttribute('aria-hidden', 'true')
+
+    // The hint is wired to the textarea so screen readers announce it on focus.
+    const describedBy = textarea.getAttribute('aria-describedby')
+    expect(describedBy).toBeTruthy()
+    expect(describedBy).toBe(hint.id)
+  })
+
+  it('keeps the success "Copied!" callout aria-hidden (out of scope for A11Y-019; success is a confirmation, not an instruction)', async () => {
+    setClipboardWriteText(vi.fn().mockResolvedValue(undefined))
+
+    render(<CopyBox value="payload-value" label="Answer code" />)
+    fireEvent.click(screen.getByRole('button', { name: /copy/i }))
+
+    const copied = await screen.findByText('Copied!')
+    // The success callout's AT path is the live region; the visible callout
+    // stays aria-hidden so SRs don't double-announce the confirmation.
+    expect(copied).toHaveAttribute('aria-hidden', 'true')
+  })
 })

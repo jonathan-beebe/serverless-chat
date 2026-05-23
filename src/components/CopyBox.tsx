@@ -18,6 +18,7 @@ export function CopyBox({ value, label, helpText, variant = 'code' }: Props) {
   const [copied, setCopied] = useState(false)
   const [needsManualCopy, setNeedsManualCopy] = useState(false)
   const textareaId = useId()
+  const manualCopyHintId = `${textareaId}-manual-copy`
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const flashCopied = () => {
@@ -72,6 +73,7 @@ export function CopyBox({ value, label, helpText, variant = 'code' }: Props) {
         rows={variant === 'url' ? 2 : 6}
         className="resize-none font-mono text-xs"
         onFocus={(e) => e.currentTarget.select()}
+        aria-describedby={needsManualCopy ? manualCopyHintId : undefined}
       />
       <div className="flex items-center justify-between gap-3">
         {helpText && <p className="text-xs text-slate-600 dark:text-slate-400">{helpText}</p>}
@@ -88,18 +90,25 @@ export function CopyBox({ value, label, helpText, variant = 'code' }: Props) {
       </div>
       {/* Manual-copy hint surfaces when both clipboard paths fail (e.g. http:,
           sandboxed iframes, permission-denied). The textarea is already
-          selected at that point, so a single keystroke completes the copy. */}
+          selected at that point, so a single keystroke completes the copy.
+          The Callout is a durable part of the accessibility tree (no
+          `aria-hidden`) and is wired to the textarea via `aria-describedby`
+          so screen readers announce the instruction on textarea focus and
+          browse-mode users can re-discover it by ordinary navigation. */}
       {needsManualCopy && (
-        <Callout variant="warning" aria-hidden="true" className="text-xs font-medium">
+        <Callout id={manualCopyHintId} variant="warning" className="text-xs font-medium">
           Press Ctrl+C / Cmd+C to copy
         </Callout>
       )}
-      {/* Status message announced to AT without disturbing the button's name or focus. */}
+      {/* Status message announced to AT without disturbing the button's name or focus.
+          For the manual-copy branch, the live region acts as an attention-getter that
+          points at the persistent Callout above — it does not carry the full keystroke
+          instruction, because the Callout is the durable surface for that. */}
       <LiveRegion>
         {copied
           ? `${label} copied to clipboard`
           : needsManualCopy
-            ? `${label} selected. Press Control C or Command C to copy.`
+            ? `Copy failed. ${label} is selected — see instructions below.`
             : ''}
       </LiveRegion>
     </div>
