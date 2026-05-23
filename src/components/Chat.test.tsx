@@ -1,5 +1,5 @@
-import { fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Chat } from './Chat'
 import type { ChatMessage } from '../core/rtc'
 
@@ -479,6 +479,175 @@ describe('Chat delivery indicator (FEAT-010)', () => {
     const bubble = screen.getByTestId('message-bubble')
     expect(bubble.querySelector('time')).toBeTruthy()
     expect(bubble.querySelector('[data-testid="delivery-o1"]')).toBeTruthy()
+  })
+})
+
+describe('Chat copy-transcript toolbar (FEAT-011)', () => {
+  // Clipboard / execCommand stubs: jsdom doesn't implement either, so each
+  // test wires the impl it cares about. `restoreAllMocks` in afterEach is
+  // enough to reset spies between tests, but the navigator.clipboard /
+  // document.execCommand `defineProperty` writes need an explicit teardown
+  // (configurable: true ensures re-defining works).
+  function setClipboardWriteText(impl: (text: string) => Promise<void>) {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: impl },
+    })
+  }
+
+  function setExecCommand(impl: (cmd: string) => boolean) {
+    Object.defineProperty(document, 'execCommand', {
+      configurable: true,
+      value: impl,
+    })
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.useRealTimers()
+  })
+
+  it('renders the copy toolbar (checkbox + button) above the transcript', () => {
+    render(<Chat messages={[msg('a', 'hi', 'them')]} onSend={() => {}} />)
+    const checkbox = screen.getByRole('checkbox', { name: /include timestamps/i })
+    const copyBtn = screen.getByRole('button', { name: /^copy$/i })
+    expect(checkbox).toBeInTheDocument()
+    expect(copyBtn).toBeInTheDocument()
+    // Toolbar precedes transcript in source order (tab traversal).
+    const transcript = getTranscript()
+    expect(copyBtn.compareDocumentPosition(transcript) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('checkbox defaults to checked (timestamps on by default)', () => {
+    render(<Chat messages={[msg('a', 'hi', 'them')]} onSend={() => {}} />)
+    expect(screen.getByRole('checkbox', { name: /include timestamps/i })).toBeChecked()
+  })
+
+  it('Copy button is disabled when messages is empty and enabled when ≥1 message exists', () => {
+    const { rerender } = render(<Chat messages={[]} onSend={() => {}} />)
+    expect(screen.getByRole('button', { name: /^copy$/i })).toBeDisabled()
+
+    rerender(<Chat messages={[msg('a', 'hi', 'them')]} onSend={() => {}} />)
+    expect(screen.getByRole('button', { name: /^copy$/i })).not.toBeDisabled()
+  })
+
+  it('clicking Copy with toggle ON writes the timestamped markdown to the clipboard', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    setClipboardWriteText(writeText)
+
+    const messages: ChatMessage[] = [msg('a', 'hello', 'me'), msg('b', 'hi back', 'them')]
+    render(<Chat messages={messages} onSend={() => {}} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /^copy$/i }))
+
+    await waitFor(() => expect(writeText).toHaveBeenCalled())
+    const written = writeText.mock.calls[0][0] as string
+    // Timestamped form: starts with `# ` and includes `**You** · ` / `**Them** · `.
+    expect(written).toMatch(/^# /)
+    expect(written).toContain('**You** · ')
+    expect(written).toContain('**Them** · ')
+    expect(written).toContain('hello')
+    expect(written).toContain('hi back')
+  })
+
+  it('clicking Copy with toggle OFF writes the names-only markdown to the clipboard', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    setClipboardWriteText(writeText)
+
+    const messages: ChatMessage[] = [msg('a', 'hello', 'me')]
+    render(<Chat messages={messages} onSend={() => {}} />)
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /include timestamps/i }))
+    expect(screen.getByRole('checkbox', { name: /include timestamps/i })).not.toBeChecked()
+
+    fireEvent.click(screen.getByRole('button', { name: /^copy$/i }))
+
+    await waitFor(() => expect(writeText).toHaveBeenCalled())
+    const written = writeText.mock.calls[0][0] as string
+    expect(written).not.toMatch(/^# /)
+    expect(written).not.toContain('·')
+    expect(written).toContain('**You**\nhello')
+  })
+
+  it('shows the "Copied!" badge after a successful clipboard write and clears it after ~1500ms', async () => {
+    // Fake timers from the start so the setTimeout scheduled inside the
+    // click handler is captured by `vi.advanceTimersByTime` below. The async
+    // clipboard promise resolves on the microtask queue, which `await
+    // Promise.resolve()` (and `waitFor` with `vi.advanceTimersByTimeAsync`)
+    // flushes — but here we use the simpler explicit pattern: schedule fake
+    // timers, click, then drain microtasks and advance.
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    setClipboardWriteText(vi.fn().mockResolvedValue(undefined))
+
+    render(<Chat messages={[msg('a', 'hi', 'me')]} onSend={() => {}} />)
+    fireEvent.click(screen.getByRole('button', { name: /^copy$/i }))
+
+    await waitFor(() => expect(screen.getByText('Copied!')).toBeInTheDocument())
+
+    // The badge auto-dismisses ~1500ms later (FEAT-011 AC #13).
+    act(() => {
+      vi.advanceTimersByTime(1500)
+    })
+    expect(screen.queryByText('Copied!')).not.toBeInTheDocument()
+  })
+
+  it('falls back to document.execCommand("copy") when writeText rejects, and still flashes "Copied!"', async () => {
+    setClipboardWriteText(vi.fn().mockRejectedValue(new Error('blocked')))
+    const execCommand = vi.fn().mockReturnValue(true)
+    setExecCommand(execCommand)
+
+    render(<Chat messages={[msg('a', 'hi', 'me')]} onSend={() => {}} />)
+    fireEvent.click(screen.getByRole('button', { name: /^copy$/i }))
+
+    await waitFor(() => expect(screen.getByText('Copied!')).toBeInTheDocument())
+    expect(execCommand).toHaveBeenCalledWith('copy')
+  })
+
+  it('renders the warning callout when both clipboard paths fail', async () => {
+    setClipboardWriteText(vi.fn().mockRejectedValue(new Error('blocked')))
+    setExecCommand(vi.fn().mockReturnValue(false))
+
+    render(<Chat messages={[msg('a', 'hi', 'me')]} onSend={() => {}} />)
+    fireEvent.click(screen.getByRole('button', { name: /^copy$/i }))
+
+    await waitFor(() => expect(screen.getByText(/Ctrl\+C/)).toBeInTheDocument())
+    expect(screen.queryByText('Copied!')).not.toBeInTheDocument()
+  })
+
+  it('returns focus to the composer after a successful copy', async () => {
+    setClipboardWriteText(vi.fn().mockResolvedValue(undefined))
+
+    render(<Chat messages={[msg('a', 'hi', 'me')]} onSend={() => {}} />)
+    const copy = screen.getByRole('button', { name: /^copy$/i })
+    // Move focus to the Copy button first (simulating the user clicking it).
+    copy.focus()
+    fireEvent.click(copy)
+
+    await waitFor(() => expect(screen.getByLabelText(/message/i)).toHaveFocus())
+  })
+
+  it('announces "Transcript copied to clipboard" via the live region on success', async () => {
+    setClipboardWriteText(vi.fn().mockResolvedValue(undefined))
+
+    render(<Chat messages={[msg('a', 'hi', 'me')]} onSend={() => {}} />)
+    fireEvent.click(screen.getByRole('button', { name: /^copy$/i }))
+
+    await waitFor(() => {
+      // LiveRegion is a `role="status"` paragraph; check it carries the text.
+      const live = document.querySelector('[role="status"]') as HTMLElement
+      expect(live).toBeTruthy()
+      expect(live.textContent).toMatch(/transcript copied to clipboard/i)
+    })
+  })
+
+  it('keeps the "Copied!" badge aria-hidden (live region is the AT surface)', async () => {
+    setClipboardWriteText(vi.fn().mockResolvedValue(undefined))
+
+    render(<Chat messages={[msg('a', 'hi', 'me')]} onSend={() => {}} />)
+    fireEvent.click(screen.getByRole('button', { name: /^copy$/i }))
+
+    const badge = await screen.findByText('Copied!')
+    expect(badge).toHaveAttribute('aria-hidden', 'true')
   })
 })
 
