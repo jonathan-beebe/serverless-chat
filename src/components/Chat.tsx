@@ -126,6 +126,12 @@ export function Chat({ messages, onSend, disabled }: Props) {
         as a sibling of the <ol> *inside* this wrapper but is marked
         aria-hidden so AT doesn't read it on first paint or as it leaves when
         the first message arrives.
+
+        A11Y-021: `tabIndex={0}` makes the scroll container reachable by
+        keyboard on Firefox and Safari (Chromium auto-promotes scroll
+        containers since M126, but Gecko and WebKit do not). Lets keyboard-only
+        / screen-magnifier / switch users scroll the transcript with Arrow /
+        PageUp / PageDown / Home / End.
       */}
       <div
         ref={transcriptRef}
@@ -135,7 +141,8 @@ export function Chat({ messages, onSend, disabled }: Props) {
         aria-live="polite"
         aria-relevant="additions"
         aria-atomic="false"
-        className="flex-1 overflow-y-auto rounded-md border border-slate-300 bg-white/50 p-3 dark:border-slate-700 dark:bg-slate-900/50">
+        tabIndex={0}
+        className="flex-1 overflow-y-auto rounded-md border border-slate-300 bg-white/50 p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 dark:border-slate-700 dark:bg-slate-900/50">
         {messages.length === 0 ? (
           <p aria-hidden="true" className="text-sm text-slate-600 dark:text-slate-400">
             No messages yet. Say hello.

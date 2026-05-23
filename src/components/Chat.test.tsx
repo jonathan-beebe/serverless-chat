@@ -405,3 +405,43 @@ describe('Chat transcript log surface (A11Y-018)', () => {
     expect(log.textContent).toContain('You said: hello back')
   })
 })
+
+describe('Chat transcript keyboard focusability (A11Y-021)', () => {
+  it('exposes the transcript as a keyboard tab stop (A11Y-021)', () => {
+    // Without tabIndex={0}, Firefox/Safari users can't focus the scroll
+    // container and therefore can't scroll history with the keyboard.
+    // Chromium auto-promotes since M126 which masks the bug there.
+    render(<Chat messages={[msg('a', 'hi', 'them')]} onSend={() => {}} />)
+    const log = getTranscript()
+    expect(log.tabIndex).toBe(0)
+  })
+
+  it('places the transcript tab stop before the composer in source order (A11Y-021)', () => {
+    // Tab traversal in JSDOM is unreliable, but source-order is the contract:
+    // a natural tab stop on the transcript should land before the composer.
+    render(<Chat messages={[msg('a', 'hi', 'them')]} onSend={() => {}} />)
+    const log = getTranscript()
+    const composer = screen.getByLabelText(/message/i)
+    // Bitmask 4 = DOCUMENT_POSITION_FOLLOWING — composer follows the log in source order.
+    expect(log.compareDocumentPosition(composer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('carries the app focus-visible style (A11Y-021)', () => {
+    // JSDOM can't render real focus styles, so we assert the Tailwind classes
+    // are present (same pattern A11Y-007 / A11Y-017 tests use). Without a
+    // visible focus ring, the new tab stop is functionally invisible to
+    // sighted keyboard users.
+    render(<Chat messages={[msg('a', 'hi', 'them')]} onSend={() => {}} />)
+    const log = getTranscript()
+    expect(log.className).toContain('focus-visible:outline-none')
+    expect(log.className).toContain('focus-visible:ring-2')
+    expect(log.className).toContain('focus-visible:ring-sky-400')
+  })
+
+  it('does not steal initial focus from the composer (A11Y-021 regression of FEAT-002)', () => {
+    // The composer-focus useEffect should still run; the transcript becoming
+    // a tab stop does not change initial-focus policy.
+    render(<Chat messages={[msg('a', 'hi', 'them')]} onSend={() => {}} />)
+    expect(screen.getByLabelText(/message/i)).toHaveFocus()
+  })
+})
