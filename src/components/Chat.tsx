@@ -7,16 +7,37 @@ interface Props {
   disabled?: boolean
 }
 
+// Distance (in px) from the bottom within which we still consider the user
+// "pinned" — forgives small mis-scrolls and elastic-bounce pixels without
+// hijacking an intentional scroll-up to read history.
+const NEAR_BOTTOM_THRESHOLD_PX = 32
+
 export function Chat({ messages, onSend, disabled }: Props) {
   const [draft, setDraft] = useState('')
   const transcriptRef = useRef<HTMLOListElement | null>(null)
+  // Tracks whether the user was near the bottom as of their last scroll input.
+  // Updated only by `onScroll`, so by the time a new message commits this
+  // reflects the pre-update intent (the effect runs *after* the DOM grows,
+  // making an in-effect measurement unreliable). Defaults to true so the
+  // initial render still scrolls to the latest message.
+  const wasNearBottomRef = useRef(true)
 
-  // Keep the latest message in view as new ones stream in.
+  // Keep the latest message in view as new ones stream in — but only if the
+  // user hasn't scrolled up to read history. Yanking them back to the bottom
+  // is the well-known "chat scroll" antipattern.
   useEffect(() => {
     const el = transcriptRef.current
     if (!el) return
+    if (!wasNearBottomRef.current) return
     el.scrollTop = el.scrollHeight
   }, [messages])
+
+  const onScroll = () => {
+    const el = transcriptRef.current
+    if (!el) return
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    wasNearBottomRef.current = distanceFromBottom < NEAR_BOTTOM_THRESHOLD_PX
+  }
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault()
@@ -29,6 +50,7 @@ export function Chat({ messages, onSend, disabled }: Props) {
     <div className="flex h-full flex-col gap-3">
       <ol
         ref={transcriptRef}
+        onScroll={onScroll}
         aria-label="Chat transcript"
         aria-live="polite"
         className="flex-1 space-y-2 overflow-y-auto rounded-md border border-slate-700 bg-slate-900/50 p-3">
