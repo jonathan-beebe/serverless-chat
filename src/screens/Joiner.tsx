@@ -85,7 +85,7 @@ export function Joiner({ session, offerCode, conversationId, onCancel }: Props) 
   // Each focuses its primary action (not the heading) so keyboard users can
   // act immediately: invite → Accept button, reply → CopyBox's Copy button
   // (handled internally via `autoFocus`), connected → Chat input (handled by
-  // Chat), closed → "Start a new chat" restart button. `closed` is the
+  // Chat), closed → "Return home" restart button. `closed` is the
   // post-connect drop view added for BUG-005.
   const branch: 'connected' | 'closed' | 'invite' | 'reply' =
     session.state === 'connected' ? 'connected' : session.state === 'closed' ? 'closed' : accepted ? 'reply' : 'invite'
@@ -135,10 +135,11 @@ export function Joiner({ session, offerCode, conversationId, onCancel }: Props) 
         {liveStatus}
         <Heading level={1}>Connection lost</Heading>
         <p className="text-stone-700 dark:text-stone-300">
-          The chat ended. Your friend may have closed the tab, or the network dropped.
+          The chat ended. Your friend may have closed the tab, or the network dropped. Your transcript is saved — you
+          can resume from home.
         </p>
         <Button ref={restartRef} variant="primary" size="lg" onClick={onCancel}>
-          Start a new chat
+          Return home
         </Button>
       </ScreenContainer>
     )

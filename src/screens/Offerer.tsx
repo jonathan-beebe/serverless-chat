@@ -118,7 +118,7 @@ export function Offerer({ session, conversationId, onCancel }: Props) {
   // dropped to <body>. The focus target on each branch is the primary action
   // (not the heading): invite → CopyBox's Copy button (handled internally via
   // `autoFocus`), reply (polite-defer) → reply CopyBox's Copy button (same),
-  // connected → Chat input (handled by Chat), closed → the "Start a new chat"
+  // connected → Chat input (handled by Chat), closed → the "Return home"
   // restart button.
   const branch: 'connected' | 'closed' | 'reply' | 'invite' = isConnected
     ? 'connected'
@@ -222,10 +222,11 @@ export function Offerer({ session, conversationId, onCancel }: Props) {
         {liveStatus}
         <Heading level={1}>Connection lost</Heading>
         <p className="text-stone-700 dark:text-stone-300">
-          The chat ended. Your friend may have closed the tab, or the network dropped.
+          The chat ended. Your friend may have closed the tab, or the network dropped. Your transcript is saved — you
+          can resume from home.
         </p>
         <Button ref={restartRef} variant="primary" size="lg" onClick={onCancel}>
-          Start a new chat
+          Return home
         </Button>
       </ScreenContainer>
     )

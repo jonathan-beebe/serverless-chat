@@ -17,7 +17,7 @@ export const ICE_CONFIG: RTCConfiguration = {
 // `closed` covers post-connect drops (channel was open, then went away — peer
 // closed the tab, transport died mid-session). The screens render different
 // UI for each: "Try a different network" for setup failures, "Connection
-// lost — start a new chat" for runtime drops. See BUG-005.
+// lost — return home" for runtime drops. See BUG-005.
 export type ConnectionState =
   | 'idle'
   | 'gathering'

@@ -140,10 +140,10 @@ describe('Offerer focus-on-mount (A11Y-005 + A11Y-022)', () => {
     })
   })
 
-  it('focuses the "Start a new chat" button on the closed branch', async () => {
+  it('focuses the "Return home" button on the closed branch', async () => {
     const session = makeSession({ state: 'closed', encodedLocal: 'STALE' })
     render(<Offerer session={session} conversationId={TEST_CONV_ID} onCancel={() => {}} />)
-    const restart = screen.getByRole('button', { name: /start a new chat/i })
+    const restart = screen.getByRole('button', { name: /return home/i })
 
     await waitFor(() => {
       expect(document.activeElement).toBe(restart)
@@ -187,13 +187,13 @@ describe('Offerer post-connect drop (BUG-005)', () => {
     expect(screen.queryByText(new RegExp(staleEncoded))).not.toBeInTheDocument()
   })
 
-  it('"Start a new chat" button calls onCancel (which resets the session and routes home)', () => {
+  it('"Return home" button calls onCancel (which resets the session and routes home)', () => {
     const onCancel = vi.fn()
     const session = makeSession({ state: 'closed', encodedLocal: 'STALE' })
 
     render(<Offerer session={session} conversationId={TEST_CONV_ID} onCancel={onCancel} />)
 
-    fireEvent.click(screen.getByRole('button', { name: /start a new chat/i }))
+    fireEvent.click(screen.getByRole('button', { name: /return home/i }))
     expect(onCancel).toHaveBeenCalledTimes(1)
   })
 

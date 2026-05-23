@@ -69,10 +69,10 @@ describe('Joiner focus-on-mount (A11Y-005 + A11Y-022)', () => {
     })
   })
 
-  it('focuses the "Start a new chat" button on the closed branch', async () => {
+  it('focuses the "Return home" button on the closed branch', async () => {
     const session = makeSession({ state: 'closed' })
     render(<Joiner session={session} offerCode="OFFER" conversationId={TEST_CONV_ID} onCancel={() => {}} />)
-    const restart = screen.getByRole('button', { name: /start a new chat/i })
+    const restart = screen.getByRole('button', { name: /return home/i })
 
     await waitFor(() => {
       expect(document.activeElement).toBe(restart)
@@ -186,13 +186,13 @@ describe('Joiner post-connect drop (BUG-005)', () => {
     expect(screen.queryByText(/try a different network/i)).not.toBeInTheDocument()
   })
 
-  it('"Start a new chat" button calls onCancel', () => {
+  it('"Return home" button calls onCancel', () => {
     const onCancel = vi.fn()
     const session = makeSession({ state: 'closed', encodedLocal: 'STALE' })
 
     render(<Joiner session={session} offerCode="ignored" conversationId={TEST_CONV_ID} onCancel={onCancel} />)
 
-    fireEvent.click(screen.getByRole('button', { name: /start a new chat/i }))
+    fireEvent.click(screen.getByRole('button', { name: /return home/i }))
     expect(onCancel).toHaveBeenCalledTimes(1)
   })
 })
