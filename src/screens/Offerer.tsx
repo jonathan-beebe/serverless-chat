@@ -94,7 +94,8 @@ export function Offerer({ session, onCancel }: Props) {
           </p>
           <textarea
             id="answer-input"
-            aria-describedby="answer-help"
+            aria-describedby={session.error ? 'answer-help answer-error' : 'answer-help'}
+            aria-invalid={session.error ? true : undefined}
             value={answerDraft}
             onChange={(e) => setAnswerDraft(e.target.value)}
             rows={5}
@@ -110,7 +111,10 @@ export function Offerer({ session, onCancel }: Props) {
       )}
 
       {session.error && (
-        <p role="alert" className="rounded-md border border-red-700 bg-red-900/40 px-3 py-2 text-sm text-red-200">
+        <p
+          id="answer-error"
+          role="alert"
+          className="rounded-md border border-red-700 bg-red-900/40 px-3 py-2 text-sm text-red-200">
           {session.error}
         </p>
       )}
