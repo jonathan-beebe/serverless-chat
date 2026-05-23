@@ -3,3 +3,4 @@ __local__
 dist
 .DS_Store
 .claude
+.devcontainer/.env

@@ -9,7 +9,8 @@
       "ZSH_IN_DOCKER_VERSION": "1.2.0"
     }
   },
-  "runArgs": ["--cap-add=NET_ADMIN", "--cap-add=NET_RAW"],
+  "runArgs": ["--cap-add=NET_ADMIN", "--cap-add=NET_RAW", "--env-file", ".devcontainer/.env"],
+  "initializeCommand": "touch .devcontainer/.env",
   "customizations": {
     "vscode": {
       "extensions": [
@@ -52,6 +53,6 @@
   "workspaceFolder": "/workspace",
   "forwardPorts": [5173],
   "postCreateCommand": "npm install",
-  "postStartCommand": "sudo /usr/local/bin/init-firewall.sh",
+  "postStartCommand": "sudo /usr/local/bin/init-firewall.sh && { [ -n \"${GIT_USER_NAME:-}\" ] && git config --global user.name \"$GIT_USER_NAME\"; [ -n \"${GIT_USER_EMAIL:-}\" ] && git config --global user.email \"$GIT_USER_EMAIL\"; true; }",
   "waitFor": "postStartCommand"
 }
