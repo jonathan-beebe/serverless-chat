@@ -31,7 +31,16 @@ const defaultSize: Record<Level, Size> = {
   3: 'sm',
 }
 
-const base = 'text-slate-900 focus:outline-none dark:text-slate-100'
+// A11Y-017: the heading is `tabIndex={-1}` and receives programmatic focus
+// from `useFocusOnMount` on every screen/branch swap (A11Y-005). Previously
+// this used `focus:outline-none` with no replacement — sighted keyboard users
+// got no signal that focus had moved (WCAG 2.4.7 / 2.4.11 violation). Now
+// matches the Button/Textarea pattern: suppress the UA outline only on
+// keyboard-origin focus and replace it with the app-wide sky-400 ring. The
+// ring-offset reads from the page surface (slate-50 light / slate-900 dark)
+// so the offset gap blends into the page rather than the heading box.
+const base =
+  'text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:text-slate-100 dark:focus-visible:ring-offset-slate-900'
 
 // Clamp the effective heading level into the 1-6 range that HTML supports.
 // We only ever render h1/h2/h3 in this app — the offset can push level=3 to

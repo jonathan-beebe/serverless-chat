@@ -16,11 +16,21 @@ describe('Heading primitive', () => {
     expect(screen.getByRole('heading', { name: 'Three', level: 3 })).toBeInTheDocument()
   })
 
-  it('carries tabIndex={-1} + focus:outline-none so useFocusOnMount can park on it', () => {
+  it('carries tabIndex={-1} + a focus-visible sky-400 ring so useFocusOnMount lands visibly (A11Y-017)', () => {
     render(<Heading level={1}>Home</Heading>)
     const h = screen.getByRole('heading', { name: 'Home' })
     expect(h).toHaveAttribute('tabIndex', '-1')
-    expect(h.className).toMatch(/focus:outline-none/)
+    // Keyboard-origin focus shows a sky-400 ring with a page-surface offset;
+    // the UA outline is suppressed only on focus-visible (mouse / non-keyboard
+    // origins keep the default, which here means no visible focus indicator
+    // around the heading — matches Button / Textarea precedent).
+    expect(h.className).toMatch(/focus-visible:outline-none/)
+    expect(h.className).toMatch(/focus-visible:ring-2/)
+    expect(h.className).toMatch(/focus-visible:ring-sky-400/)
+    expect(h.className).toMatch(/focus-visible:ring-offset-2/)
+    // The `focus:` (not `focus-visible:`) outline suppression that previously
+    // hid the indicator for every focus origin must not return.
+    expect(h.className).not.toMatch(/(?<!-)focus:outline-none/)
   })
 
   it('carries both light and dark text classes', () => {
