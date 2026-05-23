@@ -18,10 +18,12 @@ export interface ChatSession {
   reset: () => void
 }
 
-let messageCounter = 0
+// IDs are used purely as React `key` props on rendered messages, so we just
+// need uniqueness within a session. `crypto.randomUUID` is available in all
+// evergreen browsers (secure contexts) and Node ≥ 19, and avoids module-level
+// state that would otherwise leak across sessions and tests.
 function nextId(): string {
-  messageCounter += 1
-  return `${Date.now()}-${messageCounter}`
+  return crypto.randomUUID()
 }
 
 export function useChatSession(): ChatSession {
