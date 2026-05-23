@@ -110,30 +110,40 @@ describe('Offerer focus-on-mount (A11Y-005 + A11Y-022)', () => {
     suppressInitialFocus: true,
   }
 
-  it('focuses the <h1> on mount under the default ScreenChrome context (A11Y-005 regression guard)', async () => {
+  it('focuses the CopyBox Copy button on the invite branch (primary action)', async () => {
     const session = makeSession({ state: 'awaiting-answer', encodedLocal: 'OFFER-PAYLOAD' })
     render(<Offerer session={session} onCancel={() => {}} />)
-    const heading = screen.getByRole('heading', { level: 1, name: /invite your friend/i })
+    const copyButton = screen.getByRole('button', { name: /^copy$/i })
 
     await waitFor(() => {
-      expect(document.activeElement).toBe(heading)
+      expect(document.activeElement).toBe(copyButton)
     })
   })
 
-  it('does NOT focus the heading inside a showcase context with suppressInitialFocus: true (A11Y-022)', async () => {
+  it('focuses the "Start a new chat" button on the closed branch', async () => {
+    const session = makeSession({ state: 'closed', encodedLocal: 'STALE' })
+    render(<Offerer session={session} onCancel={() => {}} />)
+    const restart = screen.getByRole('button', { name: /start a new chat/i })
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(restart)
+    })
+  })
+
+  it('does NOT focus any element inside a showcase context with suppressInitialFocus: true (A11Y-022)', async () => {
     const session = makeSession({ state: 'awaiting-answer', encodedLocal: 'OFFER-PAYLOAD' })
     render(
       <ScreenChromeContext.Provider value={SHOWCASE_CHROME}>
         <Offerer session={session} onCancel={() => {}} />
       </ScreenChromeContext.Provider>,
     )
-    const heading = screen.getByRole('heading', { level: 2, name: /invite your friend/i })
+    const copyButton = screen.getByRole('button', { name: /^copy$/i })
 
     await waitFor(() => {
-      expect(heading).toBeInTheDocument()
+      expect(copyButton).toBeInTheDocument()
     })
 
-    expect(document.activeElement).not.toBe(heading)
+    expect(document.activeElement).not.toBe(copyButton)
     expect(document.activeElement?.closest('[role="region"]')).toBeNull()
   })
 })

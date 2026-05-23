@@ -59,20 +59,20 @@ describe('App routing', () => {
     expect(screen.getByRole('heading', { name: /you've been invited to chat/i })).toBeInTheDocument()
   })
 
-  it('moves focus to a meaningful element on each screen on navigation (WCAG 2.4.3)', () => {
-    // Home renders → its primary "Start a chat" button receives programmatic
-    // focus so keyboard users can act immediately; other screens still focus
-    // their h1 (no comparable single primary action above the fold).
+  it("moves focus to each screen's primary action on navigation (WCAG 2.4.3)", () => {
+    // Each screen focuses its primary action button (or primary form field)
+    // on mount so keyboard users can act immediately instead of landing on
+    // <body>. Home's primary action is "Start a chat"; Joiner's invite branch
+    // primary action is "Accept".
     render(<App />)
     expect(screen.getByRole('button', { name: /start a chat/i })).toHaveFocus()
 
-    // Routing into Joiner via the hash should move focus to that screen's h1.
     const payload = encode({ type: 'offer', sdp: 'v=0\r\n' })
     act(() => {
       history.replaceState(null, '', `/#offer=${payload}`)
       window.dispatchEvent(new HashChangeEvent('hashchange'))
     })
-    expect(screen.getByRole('heading', { name: /you've been invited to chat/i })).toHaveFocus()
+    expect(screen.getByRole('button', { name: /^accept$/i })).toHaveFocus()
   })
 
   it('scrubs the URL fragment on a same-tab joiner→joiner hashchange', () => {

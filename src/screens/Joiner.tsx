@@ -58,15 +58,22 @@ export function Joiner({ session, offerCode, onCancel }: Props) {
   }, [accepted, offerCode, session])
 
   // Joiner has four branches (invite → reply-code → connected → closed).
-  // Recompute focus when that branch flips so keyboard / screen-reader users
-  // land on the new heading instead of <body>. `closed` is the post-connect
-  // drop view added for BUG-005.
+  // Each focuses its primary action (not the heading) so keyboard users can
+  // act immediately: invite → Accept button, reply → CopyBox's Copy button
+  // (handled internally via `autoFocus`), connected → Chat input (handled by
+  // Chat), closed → "Start a new chat" restart button. `closed` is the
+  // post-connect drop view added for BUG-005.
   const branch: 'connected' | 'closed' | 'invite' | 'reply' =
     session.state === 'connected' ? 'connected' : session.state === 'closed' ? 'closed' : accepted ? 'reply' : 'invite'
   // In a showcase context the host page owns initial focus; skip the focus
   // call so the previews don't race each other to steal it. See A11Y-022.
   const { suppressInitialFocus } = useScreenChrome()
-  const headingRef = useFocusOnMount<HTMLHeadingElement>([branch], { skip: suppressInitialFocus })
+  const acceptRef = useFocusOnMount<HTMLButtonElement>([branch], {
+    skip: suppressInitialFocus || branch !== 'invite',
+  })
+  const restartRef = useFocusOnMount<HTMLButtonElement>([branch], {
+    skip: suppressInitialFocus || branch !== 'closed',
+  })
 
   const liveStatus = <LiveRegion>{statusMessage(session.state, !!session.encodedLocal)}</LiveRegion>
 
@@ -77,10 +84,8 @@ export function Joiner({ session, offerCode, onCancel }: Props) {
         className="mx-auto flex h-[calc(100vh-3rem)] max-w-xl flex-col gap-3 px-4 py-6">
         {liveStatus}
         <header className="flex items-center justify-between">
-          {/* No `ref={headingRef}` here — Chat owns focus via FEAT-002 (input
-              is the meaningful starting point on the connected screen). A
-              parent useFocusOnMount call would run *after* Chat's child
-              effect and steal the focus back to the h1. */}
+          {/* No focus ref here — Chat owns focus via FEAT-002 (input is the
+              meaningful starting point on the connected screen). */}
           <Heading level={1} size="sm">
             Connected
           </Heading>
@@ -103,13 +108,11 @@ export function Joiner({ session, offerCode, onCancel }: Props) {
         label="Connection lost"
         className="mx-auto flex max-w-xl flex-col items-center gap-6 px-4 py-12 text-center">
         {liveStatus}
-        <Heading level={1} ref={headingRef}>
-          Connection lost
-        </Heading>
+        <Heading level={1}>Connection lost</Heading>
         <p className="text-slate-700 dark:text-slate-300">
           The chat ended. Your friend may have closed the tab, or the network dropped.
         </p>
-        <Button variant="primary" size="lg" onClick={onCancel}>
+        <Button ref={restartRef} variant="primary" size="lg" onClick={onCancel}>
           Start a new chat
         </Button>
       </ScreenContainer>
@@ -121,15 +124,13 @@ export function Joiner({ session, offerCode, onCancel }: Props) {
       <ScreenContainer
         label="You've been invited to chat"
         className="mx-auto flex max-w-xl flex-col items-center gap-6 px-4 py-12 text-center">
-        <Heading level={1} ref={headingRef}>
-          You've been invited to chat
-        </Heading>
+        <Heading level={1}>You've been invited to chat</Heading>
         <p className="text-slate-700 dark:text-slate-300">
           Accepting opens a direct, peer-to-peer connection. You'll receive a short reply code to send back to your
           friend.
         </p>
         <div className="flex gap-3">
-          <Button variant="primary" size="lg" onClick={() => setAccepted(true)}>
+          <Button ref={acceptRef} variant="primary" size="lg" onClick={() => setAccepted(true)}>
             Accept
           </Button>
           <Button variant="secondary" size="lg" onClick={onCancel}>
@@ -144,9 +145,7 @@ export function Joiner({ session, offerCode, onCancel }: Props) {
     <ScreenContainer label="Send this code back" className="mx-auto flex max-w-xl flex-col gap-6 px-4 py-12">
       <header className="flex items-start justify-between">
         <div>
-          <Heading level={1} ref={headingRef}>
-            Send this code back
-          </Heading>
+          <Heading level={1}>Send this code back</Heading>
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
             Once they paste it, the connection opens and the chat starts automatically.
           </p>
@@ -167,6 +166,7 @@ export function Joiner({ session, offerCode, onCancel }: Props) {
           label="Reply code"
           value={session.encodedLocal}
           helpText="Paste this back in the same conversation. Waiting for them to accept…"
+          autoFocus={!suppressInitialFocus}
         />
       )}
 

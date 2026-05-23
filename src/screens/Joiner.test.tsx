@@ -28,30 +28,55 @@ describe('Joiner focus-on-mount (A11Y-005 + A11Y-022)', () => {
     suppressInitialFocus: true,
   }
 
-  it('focuses the <h1> on mount under the default ScreenChrome context (A11Y-005 regression guard)', async () => {
+  it('focuses the Accept button on the invite branch (primary action)', async () => {
     const session = makeSession({ state: 'idle' })
     render(<Joiner session={session} offerCode="OFFER" onCancel={() => {}} />)
-    const heading = screen.getByRole('heading', { level: 1, name: /you've been invited to chat/i })
+    const accept = screen.getByRole('button', { name: /^accept$/i })
 
     await waitFor(() => {
-      expect(document.activeElement).toBe(heading)
+      expect(document.activeElement).toBe(accept)
     })
   })
 
-  it('does NOT focus the heading inside a showcase context with suppressInitialFocus: true (A11Y-022)', async () => {
+  it('focuses the CopyBox Copy button on the reply branch (primary action)', async () => {
+    // `awaiting-answer` + `encodedLocal` mimics the post-accept state where the
+    // session has produced the reply code. Joiner gates the reply view on the
+    // local `accepted` flag, so render directly into the post-accept shape by
+    // clicking Accept first.
+    const session = makeSession({ state: 'awaiting-answer', encodedLocal: 'REPLY-CODE' })
+    render(<Joiner session={session} offerCode="OFFER" onCancel={() => {}} />)
+    fireEvent.click(screen.getByRole('button', { name: /^accept$/i }))
+
+    const copyButton = await screen.findByRole('button', { name: /^copy$/i })
+    await waitFor(() => {
+      expect(document.activeElement).toBe(copyButton)
+    })
+  })
+
+  it('focuses the "Start a new chat" button on the closed branch', async () => {
+    const session = makeSession({ state: 'closed' })
+    render(<Joiner session={session} offerCode="OFFER" onCancel={() => {}} />)
+    const restart = screen.getByRole('button', { name: /start a new chat/i })
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(restart)
+    })
+  })
+
+  it('does NOT focus any element inside a showcase context with suppressInitialFocus: true (A11Y-022)', async () => {
     const session = makeSession({ state: 'idle' })
     render(
       <ScreenChromeContext.Provider value={SHOWCASE_CHROME}>
         <Joiner session={session} offerCode="OFFER" onCancel={() => {}} />
       </ScreenChromeContext.Provider>,
     )
-    const heading = screen.getByRole('heading', { level: 2, name: /you've been invited to chat/i })
+    const accept = screen.getByRole('button', { name: /^accept$/i })
 
     await waitFor(() => {
-      expect(heading).toBeInTheDocument()
+      expect(accept).toBeInTheDocument()
     })
 
-    expect(document.activeElement).not.toBe(heading)
+    expect(document.activeElement).not.toBe(accept)
     expect(document.activeElement?.closest('[role="region"]')).toBeNull()
   })
 })

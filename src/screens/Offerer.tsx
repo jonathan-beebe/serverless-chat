@@ -50,13 +50,18 @@ export function Offerer({ session, onCancel }: Props) {
     isConnected ? 'Connected · P2P Chat' : isClosed ? 'Connection lost · P2P Chat' : 'Invite a friend · P2P Chat',
   )
   // Refocus when the rendered branch swaps (invite ↔ connected ↔ closed) so
-  // the user lands on the new heading instead of being dropped to <body>.
-  // The branch identifier collapses the three possible views into one dep.
+  // the user lands on a meaningful starting point instead of being dropped to
+  // <body>. The focus target on each branch is the primary action (not the
+  // heading): invite → CopyBox's Copy button (handled internally via
+  // `autoFocus`), connected → Chat input (handled by Chat), closed → the
+  // "Start a new chat" restart button.
   const branch: 'connected' | 'closed' | 'invite' = isConnected ? 'connected' : isClosed ? 'closed' : 'invite'
   // In a showcase context the host page owns initial focus; skip the focus
   // call so the previews don't race each other to steal it. See A11Y-022.
   const { suppressInitialFocus } = useScreenChrome()
-  const headingRef = useFocusOnMount<HTMLHeadingElement>([branch], { skip: suppressInitialFocus })
+  const restartRef = useFocusOnMount<HTMLButtonElement>([branch], {
+    skip: suppressInitialFocus || branch !== 'closed',
+  })
 
   // Kick off offer generation on first mount; the hook owns the connection
   // so re-renders won't restart it.
@@ -91,10 +96,9 @@ export function Offerer({ session, onCancel }: Props) {
         className="mx-auto flex h-[calc(100vh-3rem)] max-w-xl flex-col gap-3 px-4 py-6">
         {liveStatus}
         <header className="flex items-center justify-between">
-          {/* No `ref={headingRef}` here — Chat takes focus on the message
-              input via FEAT-002, which is the meaningful starting point on
-              the connected screen. Letting useFocusOnMount race here would
-              override Chat's focus call (parent effects run after children's). */}
+          {/* No focus ref here — Chat takes focus on the message input via
+              FEAT-002, which is the meaningful starting point on the
+              connected screen. */}
           <Heading level={1} size="sm">
             Connected
           </Heading>
@@ -118,13 +122,11 @@ export function Offerer({ session, onCancel }: Props) {
         label="Connection lost"
         className="mx-auto flex max-w-xl flex-col items-center gap-6 px-4 py-12 text-center">
         {liveStatus}
-        <Heading level={1} ref={headingRef}>
-          Connection lost
-        </Heading>
+        <Heading level={1}>Connection lost</Heading>
         <p className="text-slate-700 dark:text-slate-300">
           The chat ended. Your friend may have closed the tab, or the network dropped.
         </p>
-        <Button variant="primary" size="lg" onClick={onCancel}>
+        <Button ref={restartRef} variant="primary" size="lg" onClick={onCancel}>
           Start a new chat
         </Button>
       </ScreenContainer>
@@ -138,9 +140,7 @@ export function Offerer({ session, onCancel }: Props) {
       {liveStatus}
       <header className="flex items-start justify-between">
         <div>
-          <Heading level={1} ref={headingRef}>
-            Invite your friend
-          </Heading>
+          <Heading level={1}>Invite your friend</Heading>
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
             Keep this tab open — your friend's reply lands here.
           </p>
@@ -160,6 +160,7 @@ export function Offerer({ session, onCancel }: Props) {
           value={offerUrl}
           helpText="Send this link to your friend in Teams, SMS, email — any channel works."
           variant="url"
+          autoFocus={!suppressInitialFocus}
         />
       )}
 

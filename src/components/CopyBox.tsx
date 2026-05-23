@@ -3,6 +3,7 @@ import { Button } from './Button'
 import { Callout } from './Callout'
 import { LiveRegion } from './LiveRegion'
 import { Textarea } from './Textarea'
+import { useFocusOnMount } from '../hooks/useFocusOnMount'
 
 interface Props {
   value: string
@@ -12,14 +13,19 @@ interface Props {
   helpText?: string
   /** Compact monospace style for short URLs; default flows multi-line for long codes. */
   variant?: 'url' | 'code'
+  /** When true, focus the Copy button on mount — used by screens where Copy is
+   * the screen's primary action. Off by default so showcase / preview contexts
+   * and any future inline usage don't steal focus. */
+  autoFocus?: boolean
 }
 
-export function CopyBox({ value, label, helpText, variant = 'code' }: Props) {
+export function CopyBox({ value, label, helpText, variant = 'code', autoFocus = false }: Props) {
   const [copied, setCopied] = useState(false)
   const [needsManualCopy, setNeedsManualCopy] = useState(false)
   const textareaId = useId()
   const manualCopyHintId = `${textareaId}-manual-copy`
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const copyButtonRef = useFocusOnMount<HTMLButtonElement>([], { skip: !autoFocus })
 
   // Marks a successful copy. The confirmation persists until the user starts a
   // new copy attempt, the underlying `value` changes, or the component
@@ -100,7 +106,7 @@ export function CopyBox({ value, label, helpText, variant = 'code' }: Props) {
               Copied!
             </Callout>
           )}
-          <Button variant="primary" size="md" onClick={onCopy}>
+          <Button ref={copyButtonRef} variant="primary" size="md" onClick={onCopy}>
             Copy
           </Button>
         </div>
