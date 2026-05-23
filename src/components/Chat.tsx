@@ -1,4 +1,4 @@
-import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from 'react'
+import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
 import type { ChatMessage } from '../core/rtc'
 
 interface Props {
@@ -12,6 +12,25 @@ interface Props {
 // hijacking an intentional scroll-up to read history.
 const NEAR_BOTTOM_THRESHOLD_PX = 32
 
+// Items that flow through the transcript list. Date items are visual chrome
+// rendered above the first message and at every local-day rollover.
+type TranscriptItem = { kind: 'date'; key: string; date: Date } | { kind: 'message'; message: ChatMessage }
+
+function buildItems(messages: ChatMessage[]): TranscriptItem[] {
+  const out: TranscriptItem[] = []
+  let lastDay: string | null = null
+  for (const m of messages) {
+    const date = new Date(m.at)
+    const day = date.toDateString()
+    if (day !== lastDay) {
+      out.push({ kind: 'date', key: `date-${day}`, date })
+      lastDay = day
+    }
+    out.push({ kind: 'message', message: m })
+  }
+  return out
+}
+
 export function Chat({ messages, onSend, disabled }: Props) {
   const [draft, setDraft] = useState('')
   const transcriptRef = useRef<HTMLOListElement | null>(null)
@@ -22,6 +41,14 @@ export function Chat({ messages, onSend, disabled }: Props) {
   // making an in-effect measurement unreliable). Defaults to true so the
   // initial render still scrolls to the latest message.
   const wasNearBottomRef = useRef(true)
+
+  // One formatter per instance instead of per message — `Intl.DateTimeFormat`
+  // construction is cheap but not free, and the chat re-renders on every
+  // incoming message.
+  const dateFmt = useMemo(() => new Intl.DateTimeFormat(undefined, { dateStyle: 'full' }), [])
+  const timeFmt = useMemo(() => new Intl.DateTimeFormat(undefined, { timeStyle: 'short' }), [])
+
+  const items = useMemo(() => buildItems(messages), [messages])
 
   // Keep the latest message in view as new ones stream in — but only if the
   // user hasn't scrolled up to read history. Yanking them back to the bottom
@@ -91,24 +118,48 @@ export function Chat({ messages, onSend, disabled }: Props) {
         {messages.length === 0 && (
           <li className="text-sm text-slate-600 dark:text-slate-400">No messages yet. Say hello.</li>
         )}
-        {messages.map((m) => (
-          <li key={m.id} className={`flex flex-col ${m.from === 'me' ? 'items-end' : 'items-start'}`}>
-            {/* Visible caption so sighted users who can't distinguish color/alignment still see authorship. */}
-            <span aria-hidden="true" className="px-1 text-xs text-slate-600 dark:text-slate-400">
-              {m.from === 'me' ? 'You' : 'Them'}
-            </span>
-            {/* Visually-hidden prefix so the aria-live announcement includes the speaker. */}
-            <span className="sr-only">{m.from === 'me' ? 'You said: ' : 'They said: '}</span>
-            <span
-              className={`max-w-[80%] whitespace-pre-wrap break-words rounded-lg px-3 py-1.5 text-sm ${
-                m.from === 'me'
-                  ? 'bg-sky-600 text-white'
-                  : 'bg-slate-200 text-slate-900 dark:bg-slate-700 dark:text-slate-100'
-              }`}>
-              {m.text}
-            </span>
-          </li>
-        ))}
+        {items.map((item) => {
+          if (item.kind === 'date') {
+            // Chrome, not content. `aria-hidden` keeps the polite live region
+            // from announcing day rollovers as if they were messages.
+            return (
+              <li
+                key={item.key}
+                aria-hidden="true"
+                data-testid="date-header"
+                className="flex items-center gap-3 py-1 text-xs text-slate-600 dark:text-slate-400">
+                <span aria-hidden="true" className="flex-1 border-t border-slate-300 dark:border-slate-700" />
+                <time dateTime={item.date.toISOString().slice(0, 10)}>{dateFmt.format(item.date)}</time>
+                <span aria-hidden="true" className="flex-1 border-t border-slate-300 dark:border-slate-700" />
+              </li>
+            )
+          }
+          const m = item.message
+          const isMe = m.from === 'me'
+          return (
+            <li key={m.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+              {/* Visually-hidden prefix so the aria-live announcement includes the speaker (A11Y-004). */}
+              <span className="sr-only">{isMe ? 'You said: ' : 'They said: '}</span>
+              <div
+                data-testid="message-bubble"
+                className={`flex max-w-[80%] flex-col gap-0.5 rounded-lg px-3 py-1 text-sm ${
+                  isMe ? 'bg-sky-600 text-white' : 'bg-slate-200 text-slate-900 dark:bg-slate-700 dark:text-slate-100'
+                }`}>
+                <span data-testid={`message-text-${m.id}`} className="whitespace-pre-wrap break-words">
+                  {m.text}
+                </span>
+                <time
+                  aria-hidden="true"
+                  dateTime={new Date(m.at).toISOString()}
+                  className={`self-end text-[10px] ${
+                    isMe ? 'text-sky-100/80' : 'text-slate-500 dark:text-slate-300/70'
+                  }`}>
+                  {timeFmt.format(new Date(m.at))}
+                </time>
+              </div>
+            </li>
+          )
+        })}
       </ol>
 
       <form onSubmit={onSubmit} className="flex items-end gap-2">

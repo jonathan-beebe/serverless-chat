@@ -13,8 +13,15 @@ function stubScroll(el: Element, { scrollHeight, clientHeight }: { scrollHeight:
   Object.defineProperty(el, 'clientHeight', { configurable: true, value: clientHeight })
 }
 
-function msg(id: string, text: string, from: ChatMessage['from'] = 'them'): ChatMessage {
-  return { id, from, text, at: 0 }
+// Deterministic fixed timestamp so FEAT-006 assertions on rendered
+// time/date strings are stable. Using UTC anchor avoids
+// host-clock drift; tests that care about day-rollover use local-time
+// constructors instead, which guarantee `toDateString()` differs across
+// the boundary regardless of host timezone.
+const DEFAULT_AT = Date.UTC(2026, 4, 22, 17, 23) // 2026-05-22T17:23:00Z
+
+function msg(id: string, text: string, from: ChatMessage['from'] = 'them', at: number = DEFAULT_AT): ChatMessage {
+  return { id, from, text, at }
 }
 
 function getTranscript() {
@@ -223,12 +230,13 @@ describe('Chat composer Enter / Shift+Enter (FEAT-004)', () => {
     const messages: ChatMessage[] = [msg('a', 'line one\nline two', 'me')]
     render(<Chat messages={messages} onSend={() => {}} />)
 
-    const transcript = getTranscript()
-    // The bubble is the last <span> child of each <li>; assert it carries
-    // the whitespace-pre-wrap class so `\n` renders as a real line break.
-    const bubble = transcript.querySelector('li > span:last-child') as HTMLElement
-    expect(bubble.className).toMatch(/whitespace-pre-wrap/)
-    expect(bubble.textContent).toBe('line one\nline two')
+    // The text span (FEAT-006 wraps the message text in its own element so
+    // the bubble can also hold the per-message <time>). Assert it carries
+    // the whitespace-pre-wrap class so embedded `\n` renders as a real
+    // line break.
+    const textSpan = screen.getByTestId('message-text-a')
+    expect(textSpan.className).toMatch(/whitespace-pre-wrap/)
+    expect(textSpan.textContent).toBe('line one\nline two')
   })
 })
 
@@ -243,15 +251,82 @@ describe('Chat speaker attribution (A11Y-004)', () => {
     expect(transcript.textContent).toContain('They said: hi there')
     expect(transcript.textContent).toContain('You said: hello back')
   })
+})
 
-  it('renders a visible speaker caption so authorship is not conveyed by color/alignment alone', () => {
-    const messages: ChatMessage[] = [msg('a', 'hi', 'them'), msg('b', 'yo', 'me')]
+describe('Chat date headers + per-message timestamps (FEAT-006)', () => {
+  function getDateHeaders(): HTMLElement[] {
+    return Array.from(document.querySelectorAll('[data-testid="date-header"]')) as HTMLElement[]
+  }
+
+  it('removes the visible You / Them captions and renders an opening date header instead', () => {
+    const at = Date.UTC(2026, 4, 22, 17, 23)
+    const messages: ChatMessage[] = [msg('a', 'hi', 'them', at), msg('b', 'yo', 'me', at)]
     render(<Chat messages={messages} onSend={() => {}} />)
 
-    // Captions are aria-hidden (the sr-only prefix carries the semantics),
-    // so query by text directly within the transcript list.
+    // The visible standalone "You" / "Them" captions must be gone. They used
+    // to live as their own aria-hidden span inside each <li>. Anything that
+    // looks like that span (a span whose textContent is exactly "You" or
+    // "Them") is a regression.
     const transcript = getTranscript()
-    expect(transcript.textContent).toContain('Them')
-    expect(transcript.textContent).toContain('You')
+    const visibleAuthorSpans = Array.from(transcript.querySelectorAll('span')).filter(
+      (s) => !s.classList.contains('sr-only') && (s.textContent === 'You' || s.textContent === 'Them'),
+    )
+    expect(visibleAuthorSpans).toEqual([])
+
+    // The opening date header (locale-formatted full date) is present.
+    const expectedHeader = new Intl.DateTimeFormat(undefined, { dateStyle: 'full' }).format(new Date(at))
+    expect(transcript.textContent).toContain(expectedHeader)
+  })
+
+  it('renders a <time> element per message bubble with locale-short time, for both me and them', () => {
+    const atA = Date.UTC(2026, 4, 22, 17, 23)
+    const atB = atA + 60_000
+    const messages: ChatMessage[] = [msg('a', 'hi', 'them', atA), msg('b', 'yo', 'me', atB)]
+    render(<Chat messages={messages} onSend={() => {}} />)
+
+    const timeFmt = new Intl.DateTimeFormat(undefined, { timeStyle: 'short' })
+    const expectedA = timeFmt.format(new Date(atA))
+    const expectedB = timeFmt.format(new Date(atB))
+
+    const bubbleTimes = Array.from(getTranscript().querySelectorAll('li time')).map((t) => t.textContent)
+    expect(bubbleTimes).toContain(expectedA)
+    expect(bubbleTimes).toContain(expectedB)
+  })
+
+  it('two messages on the same local day render exactly ONE date header (opener only)', () => {
+    const at = Date.UTC(2026, 4, 22, 17, 23)
+    const messages: ChatMessage[] = [msg('a', 'hi', 'them', at), msg('b', 'yo', 'me', at + 60_000)]
+    render(<Chat messages={messages} onSend={() => {}} />)
+    expect(getDateHeaders()).toHaveLength(1)
+  })
+
+  it('two messages straddling local midnight render TWO date headers with the right labels', () => {
+    // Local-time constructors guarantee `toDateString()` differs across the
+    // boundary regardless of the host timezone.
+    const day1At = new Date(2026, 4, 22, 23, 30).getTime() // May 22 23:30 local
+    const day2At = new Date(2026, 4, 23, 0, 30).getTime() // May 23 00:30 local
+    const messages: ChatMessage[] = [msg('a', 'late', 'them', day1At), msg('b', 'morning', 'me', day2At)]
+    render(<Chat messages={messages} onSend={() => {}} />)
+
+    const headers = getDateHeaders()
+    expect(headers).toHaveLength(2)
+
+    const dateFmt = new Intl.DateTimeFormat(undefined, { dateStyle: 'full' })
+    expect(headers[0].textContent).toContain(dateFmt.format(new Date(day1At)))
+    expect(headers[1].textContent).toContain(dateFmt.format(new Date(day2At)))
+  })
+
+  it('marks date headers and per-bubble <time>s as aria-hidden so live-region updates stay quiet', () => {
+    const messages: ChatMessage[] = [msg('a', 'hi', 'them')]
+    render(<Chat messages={messages} onSend={() => {}} />)
+
+    const header = getDateHeaders()[0]
+    expect(header).toBeTruthy()
+    expect(header.getAttribute('aria-hidden')).toBe('true')
+
+    // Scope to the bubble — the date header also contains a <time> but its
+    // hidden-ness comes from the parent <li>, not an attribute on the <time>.
+    const time = getTranscript().querySelector('[data-testid="message-bubble"] time') as HTMLElement
+    expect(time.getAttribute('aria-hidden')).toBe('true')
   })
 })
