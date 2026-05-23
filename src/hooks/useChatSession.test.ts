@@ -1,11 +1,11 @@
 import { act, renderHook } from '@testing-library/react'
-import { beforeAll, describe, expect, it } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { useChatSession } from './useChatSession'
 
-// Minimal stubs for the slice of WebRTC the hook touches via `createOffer`.
-// We don't exercise real ICE here — these tests are strictly about the
-// message-id contract: every message gets a unique, non-empty string id,
-// even across hook instances and across `reset()`.
+// Minimal stubs for the slice of WebRTC the hook touches. We don't exercise
+// real ICE here — these tests pin down the controller's state machine,
+// message flow, and teardown contract using a fake PeerConnection + data
+// channel.
 //
 // `createOffer` (in core/rtc) calls: new RTCPeerConnection, createDataChannel,
 // createOffer, setLocalDescription, addEventListener('icegatheringstatechange'),
@@ -18,11 +18,15 @@ class FakeDataChannel {
   onclose: (() => void) | null = null
   onmessage: ((event: { data: unknown }) => void) | null = null
   sent: string[] = []
+  closeCalls = 0
   send(data: string) {
     this.sent.push(data)
   }
   close() {
+    this.closeCalls += 1
+    const wasOpen = this.readyState === 'open'
     this.readyState = 'closed'
+    if (wasOpen) this.onclose?.()
   }
   /** Test helper: simulate the underlying transport opening. */
   open() {
@@ -31,14 +35,23 @@ class FakeDataChannel {
   }
 }
 
-// Capture the most recent data channel so tests can flip it to 'open' after
-// the hook constructs the peer connection inside `createOffer`.
+// Capture the most recent pc + channel so tests can drive transport events
+// (open, message, connectionstatechange, close) after the hook constructs
+// the peer connection inside `createOffer`.
 let lastChannel: FakeDataChannel | null = null
+let lastPc: FakePeerConnection | null = null
+
+// Toggle to make `createOffer` (via setLocalDescription) reject, exercising
+// the hook's offerer-failure branch.
+let failNextSetLocalDescription = false
 
 class FakePeerConnection {
   iceGatheringState: RTCIceGatheringState = 'complete'
   localDescription = { type: 'offer' as const, sdp: 'v=0\r\n' }
+  connectionState: RTCPeerConnectionState = 'new'
   onconnectionstatechange: (() => void) | null = null
+  setRemoteDescriptionCalls: RTCSessionDescriptionInit[] = []
+  closeCalls = 0
   createDataChannel() {
     lastChannel = new FakeDataChannel()
     return lastChannel
@@ -47,16 +60,46 @@ class FakePeerConnection {
     return Promise.resolve({ type: 'offer' as const, sdp: 'v=0\r\n' })
   }
   setLocalDescription() {
+    if (failNextSetLocalDescription) {
+      failNextSetLocalDescription = false
+      return Promise.reject(new Error('boom'))
+    }
+    return Promise.resolve()
+  }
+  setRemoteDescription(desc: RTCSessionDescriptionInit) {
+    this.setRemoteDescriptionCalls.push(desc)
     return Promise.resolve()
   }
   addEventListener() {}
   removeEventListener() {}
-  close() {}
+  close() {
+    this.closeCalls += 1
+  }
+  /** Test helper: simulate the underlying ICE transport entering `failed`. */
+  failConnection() {
+    this.connectionState = 'failed'
+    this.onconnectionstatechange?.()
+  }
 }
 
 beforeAll(() => {
+  // Wrap the constructor so each `new RTCPeerConnection()` exposes its
+  // instance via `lastPc`. (Plain `lastPc = this` in the class constructor
+  // trips the no-this-alias lint rule.)
+  function Ctor() {
+    const instance = new FakePeerConnection()
+    lastPc = instance
+    return instance
+  }
+  Ctor.prototype = FakePeerConnection.prototype
   // @ts-expect-error stubbing minimal subset for jsdom
-  globalThis.RTCPeerConnection = FakePeerConnection
+  globalThis.RTCPeerConnection = Ctor
+})
+
+beforeEach(() => {
+  lastChannel = null
+  lastPc = null
+  failNextSetLocalDescription = false
 })
 
 describe('useChatSession message ids', () => {
@@ -119,5 +162,201 @@ describe('useChatSession message ids', () => {
     expect(after).not.toBe(before)
     expect(typeof after).toBe('string')
     expect(after.length).toBeGreaterThan(0)
+  })
+})
+
+describe('useChatSession lifecycle', () => {
+  it('starts in idle with no error, no encodedLocal, no messages', () => {
+    const { result } = renderHook(() => useChatSession())
+    expect(result.current.state).toBe('idle')
+    expect(result.current.error).toBeNull()
+    expect(result.current.encodedLocal).toBeNull()
+    expect(result.current.messages).toEqual([])
+  })
+
+  it('startAsOfferer transitions to awaiting-answer and populates encodedLocal', async () => {
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsOfferer()
+    })
+    expect(result.current.state).toBe('awaiting-answer')
+    expect(result.current.encodedLocal).toBeTypeOf('string')
+    expect(result.current.encodedLocal!.length).toBeGreaterThan(0)
+    expect(result.current.error).toBeNull()
+  })
+
+  it('startAsOfferer surfaces a failure as state="failed" and sets error', async () => {
+    failNextSetLocalDescription = true
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsOfferer()
+    })
+    expect(result.current.state).toBe('failed')
+    expect(result.current.error).toBe('boom')
+    expect(result.current.encodedLocal).toBeNull()
+  })
+
+  it('channel onopen transitions state to "connected"', async () => {
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsOfferer()
+    })
+    expect(result.current.state).toBe('awaiting-answer')
+
+    act(() => lastChannel!.open())
+    expect(result.current.state).toBe('connected')
+  })
+
+  it('pc.onconnectionstatechange with "failed" transitions state to "failed"', async () => {
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsOfferer()
+    })
+
+    act(() => lastPc!.failConnection())
+    expect(result.current.state).toBe('failed')
+  })
+})
+
+describe('useChatSession submitAnswer', () => {
+  it('without an active connection sets error and stays in idle', async () => {
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.submitAnswer('whatever')
+    })
+    expect(result.current.error).toBe('No active connection — start a chat first.')
+    expect(result.current.state).toBe('idle')
+  })
+
+  it('with an active connection calls setRemoteDescription and transitions to "connecting"', async () => {
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsOfferer()
+    })
+    // Encode a real session description so the decoder inside acceptAnswer
+    // doesn't reject. We import lazily here to avoid a top-level dep.
+    const { encode } = await import('../core/encoding')
+    const answerCode = encode({ type: 'answer', sdp: 'v=0\r\n' })
+
+    await act(async () => {
+      await result.current.submitAnswer(answerCode)
+    })
+
+    expect(result.current.state).toBe('connecting')
+    expect(lastPc!.setRemoteDescriptionCalls).toHaveLength(1)
+    expect(lastPc!.setRemoteDescriptionCalls[0].type).toBe('answer')
+    expect(result.current.error).toBeNull()
+  })
+})
+
+describe('useChatSession messages', () => {
+  it('appends an incoming string message with from: "them"', async () => {
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsOfferer()
+    })
+    act(() => lastChannel!.open())
+
+    act(() => lastChannel!.onmessage?.({ data: 'hi there' }))
+
+    expect(result.current.messages).toHaveLength(1)
+    const [msg] = result.current.messages
+    expect(msg.from).toBe('them')
+    expect(msg.text).toBe('hi there')
+  })
+
+  it('renders a non-string payload as "[binary message]"', async () => {
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsOfferer()
+    })
+    act(() => lastChannel!.open())
+
+    act(() => lastChannel!.onmessage?.({ data: new ArrayBuffer(8) }))
+
+    expect(result.current.messages).toHaveLength(1)
+    expect(result.current.messages[0].text).toBe('[binary message]')
+    expect(result.current.messages[0].from).toBe('them')
+  })
+
+  it('send() drops empty / whitespace-only input as a no-op', async () => {
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsOfferer()
+    })
+    act(() => lastChannel!.open())
+
+    act(() => result.current.send(''))
+    act(() => result.current.send('   '))
+
+    expect(result.current.messages).toHaveLength(0)
+    expect(lastChannel!.sent).toHaveLength(0)
+  })
+
+  it('send() is a no-op when the channel is not open', async () => {
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsOfferer()
+    })
+    // Deliberately do NOT call lastChannel.open(); readyState stays 'connecting'.
+    expect(lastChannel!.readyState).toBe('connecting')
+
+    act(() => result.current.send('queued?'))
+
+    expect(result.current.messages).toHaveLength(0)
+    expect(lastChannel!.sent).toHaveLength(0)
+  })
+
+  it('send() with an open channel calls channel.send and appends from: "me"', async () => {
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsOfferer()
+    })
+    act(() => lastChannel!.open())
+
+    act(() => result.current.send('hello'))
+
+    expect(lastChannel!.sent).toEqual(['hello'])
+    expect(result.current.messages).toHaveLength(1)
+    expect(result.current.messages[0]).toMatchObject({ from: 'me', text: 'hello' })
+  })
+})
+
+describe('useChatSession teardown', () => {
+  it('reset() clears state and closes both pc and channel', async () => {
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsOfferer()
+    })
+    act(() => lastChannel!.open())
+    act(() => result.current.send('hello'))
+
+    const pc = lastPc!
+    const channel = lastChannel!
+    expect(result.current.messages).toHaveLength(1)
+    expect(result.current.encodedLocal).not.toBeNull()
+
+    act(() => result.current.reset())
+
+    expect(result.current.state).toBe('idle')
+    expect(result.current.messages).toEqual([])
+    expect(result.current.encodedLocal).toBeNull()
+    expect(result.current.error).toBeNull()
+    expect(channel.closeCalls).toBeGreaterThanOrEqual(1)
+    expect(pc.closeCalls).toBeGreaterThanOrEqual(1)
+  })
+
+  it('unmount closes both pc and channel', async () => {
+    const { result, unmount } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsOfferer()
+    })
+    const pc = lastPc!
+    const channel = lastChannel!
+
+    unmount()
+
+    expect(channel.closeCalls).toBeGreaterThanOrEqual(1)
+    expect(pc.closeCalls).toBeGreaterThanOrEqual(1)
   })
 })
