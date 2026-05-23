@@ -12,18 +12,47 @@ interface Props {
 
 export function CopyBox({ value, label, helpText, variant = 'code' }: Props) {
   const [copied, setCopied] = useState(false)
+  const [needsManualCopy, setNeedsManualCopy] = useState(false)
   const textareaId = useId()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
+  const flashCopied = () => {
+    setCopied(true)
+    setNeedsManualCopy(false)
+    setTimeout(() => setCopied(false), 1500)
+  }
+
   const onCopy = async () => {
+    // Primary path: the modern async clipboard API.
     try {
       await navigator.clipboard.writeText(value)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
+      flashCopied()
+      return
     } catch {
-      // Clipboard can fail on http: or in restrictive iframes; fall back to selecting.
-      textareaRef.current?.select()
+      // Falls through to the legacy path (writeText can be blocked on http:,
+      // in sandboxed iframes like Teams Web, or when permissions are denied).
     }
+
+    // Fallback path: select the text and try `document.execCommand('copy')`.
+    // Deprecated but still implemented across evergreen browsers and works in
+    // many of the contexts where `writeText` is blocked.
+    const el = textareaRef.current
+    if (el) {
+      el.select()
+      try {
+        if (document.execCommand('copy')) {
+          flashCopied()
+          return
+        }
+      } catch {
+        // Some environments throw rather than returning false.
+      }
+    }
+
+    // Last resort: tell the user they need to press Cmd/Ctrl+C themselves.
+    // The textarea is already selected (above), so a single keystroke works.
+    setCopied(false)
+    setNeedsManualCopy(true)
   }
 
   return (
@@ -56,9 +85,21 @@ export function CopyBox({ value, label, helpText, variant = 'code' }: Props) {
           </button>
         </div>
       </div>
+      {/* Manual-copy hint surfaces when both clipboard paths fail (e.g. http:,
+          sandboxed iframes, permission-denied). The textarea is already
+          selected at that point, so a single keystroke completes the copy. */}
+      {needsManualCopy && (
+        <p className="text-xs font-medium text-amber-300" aria-hidden="true">
+          Press Ctrl+C / Cmd+C to copy
+        </p>
+      )}
       {/* Status message announced to AT without disturbing the button's name or focus. */}
       <span role="status" aria-live="polite" className="sr-only">
-        {copied ? `${label} copied to clipboard` : ''}
+        {copied
+          ? `${label} copied to clipboard`
+          : needsManualCopy
+            ? `${label} selected. Press Control C or Command C to copy.`
+            : ''}
       </span>
     </div>
   )
