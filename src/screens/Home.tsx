@@ -1,3 +1,5 @@
+import { Button } from '../components/Button'
+import { Heading } from '../components/Heading'
 import { useFocusOnMount } from '../hooks/useFocusOnMount'
 import { usePageTitle } from '../hooks/usePageTitle'
 
@@ -10,22 +12,16 @@ export function Home({ onStart }: Props) {
   const headingRef = useFocusOnMount<HTMLHeadingElement>()
   return (
     <main className="mx-auto flex max-w-xl flex-col items-center gap-6 px-4 py-12 text-center">
-      <h1
-        ref={headingRef}
-        tabIndex={-1}
-        className="text-3xl font-semibold tracking-tight text-slate-900 focus:outline-none dark:text-slate-100">
+      <Heading level={1} ref={headingRef}>
         Serverless P2P Chat
-      </h1>
+      </Heading>
       <p className="text-slate-700 dark:text-slate-300">
         Two people, one shared link. Real-time chat directly between your browsers — no chat server, no accounts, no
         history.
       </p>
-      <button
-        type="button"
-        onClick={onStart}
-        className="rounded-md bg-sky-600 px-5 py-2.5 text-base font-medium text-white hover:bg-sky-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400">
+      <Button variant="primary" size="lg" onClick={onStart}>
         Start a chat
-      </button>
+      </Button>
       <details className="w-full rounded-md border border-slate-300 bg-white/50 p-3 text-left text-sm text-slate-700 open:bg-white dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-300 dark:open:bg-slate-900">
         <summary className="cursor-pointer text-slate-800 dark:text-slate-200">How does this work?</summary>
         <p className="mt-2">

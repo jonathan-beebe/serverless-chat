@@ -95,6 +95,49 @@ describe('App routing', () => {
     expect(location.hash).toBe('')
   })
 
+  it('renders the design system page when the hash is #design-system on mount', () => {
+    history.replaceState(null, '', '/#design-system')
+    render(<App />)
+    expect(screen.getByRole('heading', { level: 1, name: /design system/i })).toBeInTheDocument()
+  })
+
+  it('routes into the design system when the hash changes to #design-system after mount', () => {
+    render(<App />)
+    expect(screen.getByRole('heading', { name: /serverless p2p chat/i })).toBeInTheDocument()
+
+    act(() => {
+      history.replaceState(null, '', '/#design-system')
+      window.dispatchEvent(new HashChangeEvent('hashchange'))
+    })
+
+    expect(screen.getByRole('heading', { level: 1, name: /design system/i })).toBeInTheDocument()
+  })
+
+  it('does NOT scrub the hash when entering #design-system (user wants to bookmark / refresh there)', () => {
+    history.replaceState(null, '', '/#design-system')
+    render(<App />)
+    expect(location.hash).toBe('#design-system')
+  })
+
+  it('returns to Home when the hash is cleared after a #design-system visit', () => {
+    history.replaceState(null, '', '/#design-system')
+    render(<App />)
+    expect(screen.getByRole('heading', { level: 1, name: /design system/i })).toBeInTheDocument()
+
+    act(() => {
+      history.replaceState(null, '', '/')
+      window.dispatchEvent(new HashChangeEvent('hashchange'))
+    })
+
+    expect(screen.getByRole('heading', { name: /serverless p2p chat/i })).toBeInTheDocument()
+  })
+
+  it('sets document.title for the design system page', () => {
+    history.replaceState(null, '', '/#design-system')
+    render(<App />)
+    expect(document.title).toBe('Design system · P2P Chat')
+  })
+
   it('updates document.title to reflect the current screen (WCAG 2.4.2)', () => {
     // Home keeps the base title.
     render(<App />)

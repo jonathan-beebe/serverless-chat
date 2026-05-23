@@ -1,4 +1,8 @@
 import { useId, useRef, useState } from 'react'
+import { Button } from './Button'
+import { Callout } from './Callout'
+import { LiveRegion } from './LiveRegion'
+import { Textarea } from './Textarea'
 
 interface Props {
   value: string
@@ -60,47 +64,44 @@ export function CopyBox({ value, label, helpText, variant = 'code' }: Props) {
       <label htmlFor={textareaId} className="text-sm font-medium text-slate-800 dark:text-slate-200">
         {label}
       </label>
-      <textarea
+      <Textarea
         id={textareaId}
         ref={textareaRef}
         readOnly
         value={value}
         rows={variant === 'url' ? 2 : 6}
-        className="w-full resize-none rounded-md border border-slate-300 bg-white px-3 py-2 font-mono text-xs text-slate-900 focus-visible:border-sky-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+        className="resize-none font-mono text-xs"
         onFocus={(e) => e.currentTarget.select()}
       />
       <div className="flex items-center justify-between gap-3">
         {helpText && <p className="text-xs text-slate-600 dark:text-slate-400">{helpText}</p>}
         <div className="ml-auto flex items-center gap-2">
           {copied && (
-            <span aria-hidden="true" className="text-xs font-medium text-emerald-700 dark:text-emerald-400">
+            <Callout variant="success" aria-hidden="true">
               Copied!
-            </span>
+            </Callout>
           )}
-          <button
-            type="button"
-            onClick={onCopy}
-            className="rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400">
+          <Button variant="primary" size="md" onClick={onCopy}>
             Copy
-          </button>
+          </Button>
         </div>
       </div>
       {/* Manual-copy hint surfaces when both clipboard paths fail (e.g. http:,
           sandboxed iframes, permission-denied). The textarea is already
           selected at that point, so a single keystroke completes the copy. */}
       {needsManualCopy && (
-        <p className="text-xs font-medium text-amber-700 dark:text-amber-300" aria-hidden="true">
+        <Callout variant="warning" aria-hidden="true" className="text-xs font-medium">
           Press Ctrl+C / Cmd+C to copy
-        </p>
+        </Callout>
       )}
       {/* Status message announced to AT without disturbing the button's name or focus. */}
-      <span role="status" aria-live="polite" className="sr-only">
+      <LiveRegion>
         {copied
           ? `${label} copied to clipboard`
           : needsManualCopy
             ? `${label} selected. Press Control C or Command C to copy.`
             : ''}
-      </span>
+      </LiveRegion>
     </div>
   )
 }

@@ -1,4 +1,7 @@
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { Button } from './Button'
+import { Divider } from './Divider'
+import { Textarea } from './Textarea'
 import type { ChatMessage } from '../core/rtc'
 
 interface Props {
@@ -123,14 +126,10 @@ export function Chat({ messages, onSend, disabled }: Props) {
             // Chrome, not content. `aria-hidden` keeps the polite live region
             // from announcing day rollovers as if they were messages.
             return (
-              <li
-                key={item.key}
-                aria-hidden="true"
-                data-testid="date-header"
-                className="flex items-center gap-3 py-1 text-xs text-slate-600 dark:text-slate-400">
-                <span aria-hidden="true" className="flex-1 border-t border-slate-300 dark:border-slate-700" />
-                <time dateTime={item.date.toISOString().slice(0, 10)}>{dateFmt.format(item.date)}</time>
-                <span aria-hidden="true" className="flex-1 border-t border-slate-300 dark:border-slate-700" />
+              <li key={item.key} aria-hidden="true" data-testid="date-header" className="py-1">
+                <Divider>
+                  <time dateTime={item.date.toISOString().slice(0, 10)}>{dateFmt.format(item.date)}</time>
+                </Divider>
               </li>
             )
           }
@@ -166,7 +165,7 @@ export function Chat({ messages, onSend, disabled }: Props) {
         <label htmlFor="chat-input" className="sr-only">
           Message
         </label>
-        <textarea
+        <Textarea
           id="chat-input"
           ref={composerRef}
           rows={1}
@@ -180,14 +179,11 @@ export function Chat({ messages, onSend, disabled }: Props) {
           // on Chrome 123+ / Safari 18+. Older browsers ignore it and render
           // at the explicit `rows={1}` height with internal scroll — still
           // functional, just not auto-growing.
-          className="flex-1 resize-none rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-500 [field-sizing:content] max-h-40 focus-visible:border-sky-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder-slate-400"
+          className="flex-1 resize-none placeholder-slate-500 [field-sizing:content] max-h-40 disabled:opacity-50 dark:placeholder-slate-400"
         />
-        <button
-          type="submit"
-          disabled={disabled || !draft.trim()}
-          className="rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400">
+        <Button type="submit" variant="primary" size="md" disabled={disabled || !draft.trim()}>
           Send
-        </button>
+        </Button>
       </form>
     </div>
   )

@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react'
-import { CopyBox } from '../components/CopyBox'
+import { Button } from '../components/Button'
+import { Callout } from '../components/Callout'
 import { Chat } from '../components/Chat'
+import { CopyBox } from '../components/CopyBox'
+import { Heading } from '../components/Heading'
+import { LiveRegion } from '../components/LiveRegion'
 import type { ChatSession } from '../hooks/useChatSession'
 import { useFocusOnMount } from '../hooks/useFocusOnMount'
 import { usePageTitle } from '../hooks/usePageTitle'
@@ -60,11 +64,7 @@ export function Joiner({ session, offerCode, onCancel }: Props) {
     session.state === 'connected' ? 'connected' : session.state === 'closed' ? 'closed' : accepted ? 'reply' : 'invite'
   const headingRef = useFocusOnMount<HTMLHeadingElement>([branch])
 
-  const liveStatus = (
-    <p role="status" aria-live="polite" className="sr-only">
-      {statusMessage(session.state, !!session.encodedLocal)}
-    </p>
-  )
+  const liveStatus = <LiveRegion>{statusMessage(session.state, !!session.encodedLocal)}</LiveRegion>
 
   if (branch === 'connected') {
     return (
@@ -75,15 +75,12 @@ export function Joiner({ session, offerCode, onCancel }: Props) {
               is the meaningful starting point on the connected screen). A
               parent useFocusOnMount call would run *after* Chat's child
               effect and steal the focus back to the h1. */}
-          <h1 tabIndex={-1} className="text-lg font-semibold text-slate-900 focus:outline-none dark:text-slate-100">
+          <Heading level={1} size="sm">
             Connected
-          </h1>
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-md border border-slate-300 px-3 py-1 text-sm text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
+          </Heading>
+          <Button variant="secondary" size="sm" onClick={onCancel}>
             End chat
-          </button>
+          </Button>
         </header>
         <Chat messages={session.messages} onSend={session.send} />
       </main>
@@ -98,21 +95,15 @@ export function Joiner({ session, offerCode, onCancel }: Props) {
     return (
       <main className="mx-auto flex max-w-xl flex-col items-center gap-6 px-4 py-12 text-center">
         {liveStatus}
-        <h1
-          ref={headingRef}
-          tabIndex={-1}
-          className="text-2xl font-semibold text-slate-900 focus:outline-none dark:text-slate-100">
+        <Heading level={1} ref={headingRef}>
           Connection lost
-        </h1>
+        </Heading>
         <p className="text-slate-700 dark:text-slate-300">
           The chat ended. Your friend may have closed the tab, or the network dropped.
         </p>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="rounded-md bg-sky-600 px-5 py-2.5 text-base font-medium text-white hover:bg-sky-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400">
+        <Button variant="primary" size="lg" onClick={onCancel}>
           Start a new chat
-        </button>
+        </Button>
       </main>
     )
   }
@@ -120,29 +111,20 @@ export function Joiner({ session, offerCode, onCancel }: Props) {
   if (branch === 'invite') {
     return (
       <main className="mx-auto flex max-w-xl flex-col items-center gap-6 px-4 py-12 text-center">
-        <h1
-          ref={headingRef}
-          tabIndex={-1}
-          className="text-2xl font-semibold text-slate-900 focus:outline-none dark:text-slate-100">
+        <Heading level={1} ref={headingRef}>
           You've been invited to chat
-        </h1>
+        </Heading>
         <p className="text-slate-700 dark:text-slate-300">
           Accepting opens a direct, peer-to-peer connection. You'll receive a short reply code to send back to your
           friend.
         </p>
         <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={() => setAccepted(true)}
-            className="rounded-md bg-sky-600 px-5 py-2.5 text-base font-medium text-white hover:bg-sky-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400">
+          <Button variant="primary" size="lg" onClick={() => setAccepted(true)}>
             Accept
-          </button>
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-md border border-slate-300 px-5 py-2.5 text-base font-medium text-slate-800 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">
+          </Button>
+          <Button variant="secondary" size="lg" onClick={onCancel}>
             Decline
-          </button>
+          </Button>
         </div>
       </main>
     )
@@ -152,28 +134,22 @@ export function Joiner({ session, offerCode, onCancel }: Props) {
     <main className="mx-auto flex max-w-xl flex-col gap-6 px-4 py-12">
       <header className="flex items-start justify-between">
         <div>
-          <h1
-            ref={headingRef}
-            tabIndex={-1}
-            className="text-2xl font-semibold text-slate-900 focus:outline-none dark:text-slate-100">
+          <Heading level={1} ref={headingRef}>
             Send this code back
-          </h1>
+          </Heading>
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
             Once they paste it, the connection opens and the chat starts automatically.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="rounded-md border border-slate-300 px-3 py-1 text-sm text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
+        <Button variant="secondary" size="sm" onClick={onCancel}>
           Cancel
-        </button>
+        </Button>
       </header>
 
       {liveStatus}
 
       {session.state === 'gathering' && (
-        <p className="text-sm text-slate-600 dark:text-slate-400">Preparing reply (gathering network candidates)…</p>
+        <Callout variant="info">Preparing reply (gathering network candidates)…</Callout>
       )}
 
       {session.encodedLocal && (
@@ -185,17 +161,15 @@ export function Joiner({ session, offerCode, onCancel }: Props) {
       )}
 
       {session.error && (
-        <p
-          role="alert"
-          className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-700 dark:bg-red-900/40 dark:text-red-200">
+        <Callout variant="error" role="alert">
           {session.error}
-        </p>
+        </Callout>
       )}
 
       {session.state === 'failed' && !session.error && (
-        <p role="alert" className="text-sm text-amber-700 dark:text-amber-300">
+        <Callout variant="warning" role="alert" className="text-sm">
           Couldn't establish a direct connection. Try a different network.
-        </p>
+        </Callout>
       )}
     </main>
   )
