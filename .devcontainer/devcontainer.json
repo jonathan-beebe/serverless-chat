@@ -1,5 +1,5 @@
 {
-  "name": "PWA Collab Sandbox",
+  "name": "Serverless Chat Sandbox",
   "build": {
     "dockerfile": "Dockerfile",
     "args": {
