@@ -48,6 +48,7 @@ function stubSession(overrides: Partial<ChatSession> = {}): ChatSession {
     startAsOfferer: async () => {},
     startAsAnswerer: async () => {},
     submitAnswer: async () => {},
+    politelyAcceptOffer: async () => {},
     send: () => {},
     reset: () => {},
     ...overrides,

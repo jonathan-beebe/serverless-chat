@@ -14,6 +14,13 @@ export interface ChatSession {
   startAsOfferer: () => Promise<void>
   startAsAnswerer: (offerCode: string) => Promise<void>
   submitAnswer: (answerCode: string) => Promise<void>
+  /**
+   * Polite-peer recovery (FEAT-008): the user pasted another *offer* into
+   * the reply box instead of an answer. Tear down our own pending offer and
+   * become the answerer of the pasted offer so the other peer's existing
+   * flow can finish the handshake. Only valid while `state === 'awaiting-answer'`.
+   */
+  politelyAcceptOffer: (offerCode: string) => Promise<void>
   send: (text: string) => void
   reset: () => void
 }
@@ -34,6 +41,10 @@ export function useChatSession(): ChatSession {
 
   const pcRef = useRef<RTCPeerConnection | null>(null)
   const channelRef = useRef<RTCDataChannel | null>(null)
+  // FEAT-008: marks a deliberate teardown (polite-defer swap) so the channel's
+  // async `onclose` doesn't reclassify the in-progress role swap as `'failed'`.
+  // Cleared once the new answerer-side wiring is in place.
+  const deliberateTeardownRef = useRef(false)
 
   const teardown = useCallback(() => {
     channelRef.current?.close()
@@ -72,6 +83,11 @@ export function useChatSession(): ChatSession {
     channel.onclose = () =>
       setState((prev) => {
         if (prev === 'idle' || prev === 'failed' || prev === 'closed') return prev
+        // FEAT-008: a deliberate polite-defer teardown happens while we're in
+        // `awaiting-answer`; the new answerer wiring has already moved the
+        // hook forward, so the late-arriving onclose for the abandoned
+        // offerer channel must not regress to `'failed'`.
+        if (deliberateTeardownRef.current) return prev
         return prev === 'connected' ? 'closed' : 'failed'
       })
     channel.onmessage = (event) => {
@@ -159,6 +175,46 @@ export function useChatSession(): ChatSession {
     [state],
   )
 
+  // FEAT-008: polite-peer recovery for the "we both clicked Start" mistake.
+  // The user pasted another offer into the reply box. Abandon our own
+  // pending offer and answer the pasted offer so the other peer's
+  // unchanged Offerer flow can finish the handshake. Only valid while
+  // we're holding an unanswered offer (`awaiting-answer`); other states
+  // no-op so a stray call from a stale event handler can't tear down a
+  // live chat or restart an in-flight gather.
+  const politelyAcceptOffer = useCallback(
+    async (offerCode: string) => {
+      if (state !== 'awaiting-answer') return
+      // Mark the teardown as deliberate BEFORE closing the channel so the
+      // async `onclose` fired by `channel.close()` short-circuits in the
+      // state setter and doesn't surface a spurious `'failed'` screen.
+      deliberateTeardownRef.current = true
+      teardown()
+      setError(null)
+      setEncodedLocal(null)
+      setState('gathering')
+      try {
+        const session = await acceptOffer(offerCode, wireChannel)
+        pcRef.current = session.pc
+        wirePc(session.pc)
+        setEncodedLocal(session.encodedLocal)
+        // Mirror startAsAnswerer's terminal-state semantics: we don't enter
+        // 'connected' here — the channel's `onopen` does that once the
+        // other peer sets our answer as their remote description.
+        setState('connecting')
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err))
+        setState('failed')
+      } finally {
+        // Clear the flag whether we succeeded or failed; any further
+        // channel-close events refer to the new answerer-side channel and
+        // should be classified normally.
+        deliberateTeardownRef.current = false
+      }
+    },
+    [state, teardown, wireChannel, wirePc],
+  )
+
   const send = useCallback((text: string) => {
     const trimmed = text.trim()
     if (!trimmed) return
@@ -176,5 +232,16 @@ export function useChatSession(): ChatSession {
     setState('idle')
   }, [teardown])
 
-  return { state, error, encodedLocal, messages, startAsOfferer, startAsAnswerer, submitAnswer, send, reset }
+  return {
+    state,
+    error,
+    encodedLocal,
+    messages,
+    startAsOfferer,
+    startAsAnswerer,
+    submitAnswer,
+    politelyAcceptOffer,
+    send,
+    reset,
+  }
 }

@@ -7,7 +7,8 @@ import { Heading } from '../components/Heading'
 import { LiveRegion } from '../components/LiveRegion'
 import { ScreenContainer, useScreenChrome } from '../components/ScreenChrome'
 import { Textarea } from '../components/Textarea'
-import { currentOfferUrl } from '../core/url'
+import { decode } from '../core/encoding'
+import { currentOfferUrl, readHashParam } from '../core/url'
 import type { ChatSession } from '../hooks/useChatSession'
 import { useFocusOnMount } from '../hooks/useFocusOnMount'
 import { usePageTitle } from '../hooks/usePageTitle'
@@ -16,6 +17,54 @@ import type { ConnectionState } from '../core/rtc'
 interface Props {
   session: ChatSession
   onCancel: () => void
+}
+
+// FEAT-008: the polite-defer reply view shows a one-sentence info Callout
+// and live-region status explaining why the form they just submitted has
+// been replaced by a CopyBox. Wording is factual and non-blaming per the
+// ticket's "Notes for the implementer" — no "error" / "wrong" framing.
+const POLITE_DEFER_MESSAGE =
+  "That's an invite, not a reply. Sending a reply back to your friend instead — copy the code below."
+
+// Pull the offer code out of a paste that may be either the bare encoded
+// payload or a full invite URL (`https://…/#offer=<code>`). Whitespace is
+// trimmed either way. Returns the encoded code unchanged if no `offer=`
+// param is present — the decoder downstream will surface a malformed-input
+// error if it really is garbage.
+function extractOfferCode(raw: string): string {
+  const trimmed = raw.trim()
+  // `URL` parsing tolerates the full invite shape; fall through to bare-code
+  // handling for anything else (including the bare encoded string).
+  try {
+    const url = new URL(trimmed)
+    const fromHash = readHashParam(url.hash, 'offer')
+    if (fromHash) return fromHash
+  } catch {
+    // Not a URL — fall through. The user pasted the bare code (or junk).
+  }
+  // Also accept a free-floating `offer=…` fragment without a scheme.
+  if (trimmed.includes('offer=')) {
+    const fromBare = readHashParam(trimmed, 'offer')
+    if (fromBare) return fromBare
+  }
+  return trimmed
+}
+
+// Inspect the pasted reply code and figure out whether it's the expected
+// answer SDP or — per FEAT-008's polite-peer recovery — the other peer's
+// offer SDP. Returns `'answer'` / `'offer'` / `null` (decode failed or the
+// payload isn't an SDP at all; existing submit-answer error path takes
+// over).
+function classifyPastedCode(code: string): 'answer' | 'offer' | null {
+  try {
+    const decoded = decode<{ type?: unknown }>(code)
+    if (decoded && (decoded.type === 'offer' || decoded.type === 'answer')) {
+      return decoded.type
+    }
+  } catch {
+    // Malformed input — defer to the existing error path.
+  }
+  return null
 }
 
 // Maps the current session state to a screen-reader-friendly status string.
@@ -44,18 +93,37 @@ function statusMessage(state: ConnectionState, hasLocal: boolean): string {
 
 export function Offerer({ session, onCancel }: Props) {
   const [answerDraft, setAnswerDraft] = useState('')
+  // FEAT-008: tracks whether the user pasted another peer's offer into the
+  // reply box. Once true, the screen swaps from the invite view to the
+  // Joiner-style "Send this code back" reply view and stays there until the
+  // session reaches `connected`/`closed` or the user cancels (which
+  // unmounts the screen entirely).
+  const [politelyDeferred, setPolitelyDeferred] = useState(false)
   const isConnected = session.state === 'connected'
   const isClosed = session.state === 'closed'
   usePageTitle(
-    isConnected ? 'Connected · P2P Chat' : isClosed ? 'Connection lost · P2P Chat' : 'Invite a friend · P2P Chat',
+    isConnected
+      ? 'Connected · P2P Chat'
+      : isClosed
+        ? 'Connection lost · P2P Chat'
+        : politelyDeferred
+          ? 'Send your reply code · P2P Chat'
+          : 'Invite a friend · P2P Chat',
   )
-  // Refocus when the rendered branch swaps (invite ↔ connected ↔ closed) so
-  // the user lands on a meaningful starting point instead of being dropped to
-  // <body>. The focus target on each branch is the primary action (not the
-  // heading): invite → CopyBox's Copy button (handled internally via
-  // `autoFocus`), connected → Chat input (handled by Chat), closed → the
-  // "Start a new chat" restart button.
-  const branch: 'connected' | 'closed' | 'invite' = isConnected ? 'connected' : isClosed ? 'closed' : 'invite'
+  // Refocus when the rendered branch swaps (invite ↔ reply ↔ connected ↔
+  // closed) so the user lands on a meaningful starting point instead of being
+  // dropped to <body>. The focus target on each branch is the primary action
+  // (not the heading): invite → CopyBox's Copy button (handled internally via
+  // `autoFocus`), reply (polite-defer) → reply CopyBox's Copy button (same),
+  // connected → Chat input (handled by Chat), closed → the "Start a new chat"
+  // restart button.
+  const branch: 'connected' | 'closed' | 'reply' | 'invite' = isConnected
+    ? 'connected'
+    : isClosed
+      ? 'closed'
+      : politelyDeferred
+        ? 'reply'
+        : 'invite'
   // In a showcase context the host page owns initial focus; skip the focus
   // call so the previews don't race each other to steal it. See A11Y-022.
   const { suppressInitialFocus } = useScreenChrome()
@@ -69,10 +137,28 @@ export function Offerer({ session, onCancel }: Props) {
     if (session.state === 'idle') void session.startAsOfferer()
   }, [session])
 
+  // Shared dispatch — both the form submit and the Enter key path route
+  // through here so there's no way to bypass the polite-peer detection by
+  // picking one input affordance over the other (FEAT-003 coordination).
+  const dispatchReply = (raw: string) => {
+    const trimmed = raw.trim()
+    if (!trimmed) return
+    const code = extractOfferCode(trimmed)
+    const kind = classifyPastedCode(code)
+    if (kind === 'offer') {
+      setPolitelyDeferred(true)
+      void session.politelyAcceptOffer(code)
+      return
+    }
+    // Answer SDPs and undecodable payloads both flow through submitAnswer:
+    // the hook's existing error path surfaces decode failures as a
+    // user-facing `session.error`, identical to today's behaviour.
+    void session.submitAnswer(code)
+  }
+
   const onSubmit = (e: FormEvent) => {
     e.preventDefault()
-    if (!answerDraft.trim()) return
-    void session.submitAnswer(answerDraft)
+    dispatchReply(answerDraft)
   }
 
   // Enter submits the reply code (Slack / Discord / GitHub convention).
@@ -84,10 +170,18 @@ export function Offerer({ session, onCancel }: Props) {
     if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return
     if (!answerDraft.trim() || session.state === 'connecting') return
     e.preventDefault()
-    void session.submitAnswer(answerDraft)
+    dispatchReply(answerDraft)
   }
 
-  const liveStatus = <LiveRegion>{statusMessage(session.state, !!session.encodedLocal)}</LiveRegion>
+  // FEAT-008: while we're in the polite-defer branch, the live-region
+  // surfaces the transition explanation instead of the normal connection
+  // status string. The wrapper element stays mounted across branches so
+  // assistive tech actually announces the content change (LiveRegion docs).
+  const liveStatusMessage =
+    politelyDeferred && !isConnected && !isClosed
+      ? POLITE_DEFER_MESSAGE
+      : statusMessage(session.state, !!session.encodedLocal)
+  const liveStatus = <LiveRegion>{liveStatusMessage}</LiveRegion>
 
   if (isConnected) {
     return (
@@ -129,6 +223,57 @@ export function Offerer({ session, onCancel }: Props) {
         <Button ref={restartRef} variant="primary" size="lg" onClick={onCancel}>
           Start a new chat
         </Button>
+      </ScreenContainer>
+    )
+  }
+
+  if (politelyDeferred) {
+    // FEAT-008: polite-peer reply view. Visually mirrors the Joiner's reply
+    // branch (`Heading` + info Callout + `CopyBox` + Cancel) so we reuse the
+    // same affordances rather than open-coding parallel styling.
+    return (
+      <ScreenContainer label="Send this code back" className="mx-auto flex max-w-xl flex-col gap-6 px-4 py-12">
+        {liveStatus}
+        <header className="flex items-start justify-between">
+          <div>
+            <Heading level={1}>Send this code back</Heading>
+            <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+              Once they paste it, the connection opens and the chat starts automatically.
+            </p>
+          </div>
+          <Button variant="secondary" size="sm" onClick={onCancel}>
+            Cancel
+          </Button>
+        </header>
+
+        {/* Sighted users get the same explanation the live region announces
+            to AT, so the screen change doesn't look like a mystery jump. */}
+        <Callout variant="info">{POLITE_DEFER_MESSAGE}</Callout>
+
+        {session.state === 'gathering' && (
+          <Callout variant="info">Preparing reply (gathering network candidates)…</Callout>
+        )}
+
+        {session.encodedLocal && (
+          <CopyBox
+            label="Reply code"
+            value={session.encodedLocal}
+            helpText="Paste this back in the same conversation. Waiting for them to accept…"
+            autoFocus={!suppressInitialFocus}
+          />
+        )}
+
+        {session.error && (
+          <Callout variant="error" role="alert">
+            {session.error}
+          </Callout>
+        )}
+
+        {session.state === 'failed' && !session.error && (
+          <Callout variant="warning" role="alert" className="text-sm">
+            Couldn't establish a direct connection. Try a different network.
+          </Callout>
+        )}
       </ScreenContainer>
     )
   }

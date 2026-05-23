@@ -555,3 +555,128 @@ describe('useChatSession state-machine guards', () => {
     expect(result.current.state).toBe('awaiting-answer')
   })
 })
+
+describe('useChatSession politelyAcceptOffer (FEAT-008)', () => {
+  // The polite-defer path: the user is on the Offerer screen in
+  // `awaiting-answer`, but pastes another *offer* into the reply box. The hook
+  // must tear down its own offer-side PC, start a fresh answerer flow against
+  // the pasted offer, and surface a new `encodedLocal` (the answer code) — all
+  // without misclassifying the deliberate teardown as a `'failed'` state.
+
+  it('tears down the offerer PC and starts an answerer flow against the pasted offer', async () => {
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsOfferer()
+    })
+    expect(result.current.state).toBe('awaiting-answer')
+    const offererPc = lastPc!
+    const offererChannel = lastChannel!
+    expect(pcStats.constructorCount).toBe(1)
+
+    const { encode } = await import('../core/encoding')
+    const offerCode = encode({ type: 'offer', sdp: 'v=0\r\nremote\r\n' })
+
+    await act(async () => {
+      await result.current.politelyAcceptOffer(offerCode)
+    })
+
+    // Old PC + channel closed; a fresh PC allocated for the answerer flow.
+    expect(offererPc.closeCalls).toBeGreaterThanOrEqual(1)
+    expect(offererChannel.closeCalls).toBeGreaterThanOrEqual(1)
+    expect(pcStats.constructorCount).toBe(2)
+    expect(lastPc).not.toBe(offererPc)
+    // Fresh PC saw the offer set as its remote description.
+    expect(lastPc!.setRemoteDescriptionCalls).toHaveLength(1)
+    expect(lastPc!.setRemoteDescriptionCalls[0].type).toBe('offer')
+    // We're now answering — state moves to 'connecting' (waiting for channel.open).
+    expect(result.current.state).toBe('connecting')
+    // encodedLocal is the freshly produced answer code, not the abandoned offer.
+    expect(result.current.encodedLocal).toBeTypeOf('string')
+    expect(result.current.error).toBeNull()
+  })
+
+  it('does NOT transition to "failed" during the deliberate teardown', async () => {
+    // BUG-002/BUG-005 guard: the channel.onclose handler would otherwise
+    // reclassify the offerer's awaiting-answer → close as 'failed'. The new
+    // method must short-circuit that path.
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsOfferer()
+    })
+    expect(result.current.state).toBe('awaiting-answer')
+
+    const { encode } = await import('../core/encoding')
+    const offerCode = encode({ type: 'offer', sdp: 'v=0\r\n' })
+
+    await act(async () => {
+      await result.current.politelyAcceptOffer(offerCode)
+    })
+
+    expect(result.current.state).toBe('connecting')
+    expect(result.current.error).toBeNull()
+    // Even if the now-closed channel's onclose fires asynchronously, the
+    // hook must not regress the fresh answerer flow into 'failed'.
+    expect(result.current.state).not.toBe('failed')
+  })
+
+  it('is a no-op when called outside "awaiting-answer"', async () => {
+    // The polite-defer path is only meaningful while we're holding an
+    // outstanding offer. From idle, gathering, connecting, connected, failed,
+    // or closed it must no-op — no rogue teardown, no new PC.
+    const { result } = renderHook(() => useChatSession())
+
+    const { encode } = await import('../core/encoding')
+    const offerCode = encode({ type: 'offer', sdp: 'v=0\r\n' })
+
+    await act(async () => {
+      await result.current.politelyAcceptOffer(offerCode)
+    })
+
+    expect(pcStats.constructorCount).toBe(0)
+    expect(result.current.state).toBe('idle')
+    expect(result.current.error).toBeNull()
+  })
+
+  it('exposes a fresh encodedLocal after the swap (re-encoded from the new PC)', async () => {
+    // The previously-rendered offer URL must not stay on screen during the
+    // transition — once we polite-defer, the offer SDP is abandoned and the
+    // new answerer-side PC produces its own `encodedLocal`. The fake PC
+    // reuses the same `localDescription` fixture so we assert via the PC
+    // identity rather than encoded-payload byte-equality.
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsOfferer()
+    })
+    const offererPc = lastPc!
+    expect(result.current.encodedLocal).toBeTypeOf('string')
+
+    const { encode } = await import('../core/encoding')
+    const offerCode = encode({ type: 'offer', sdp: 'v=0\r\n' })
+
+    await act(async () => {
+      await result.current.politelyAcceptOffer(offerCode)
+    })
+
+    // The PC the hook now holds is the freshly-allocated one (different
+    // instance from the abandoned offerer PC). Its encodedLocal must be
+    // populated; that's the answer code the user copies back.
+    expect(lastPc).not.toBe(offererPc)
+    expect(result.current.encodedLocal).toBeTypeOf('string')
+    expect(result.current.encodedLocal!.length).toBeGreaterThan(0)
+  })
+
+  it('surfaces an error and lands in "failed" when the pasted code cannot be decoded', async () => {
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsOfferer()
+    })
+
+    await act(async () => {
+      await result.current.politelyAcceptOffer('not-a-valid-encoded-payload')
+    })
+
+    expect(result.current.state).toBe('failed')
+    expect(result.current.error).toBeTypeOf('string')
+    expect(result.current.error).not.toBe('')
+  })
+})

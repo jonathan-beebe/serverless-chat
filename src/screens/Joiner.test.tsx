@@ -15,6 +15,7 @@ function makeSession(overrides: Partial<ChatSession> = {}): ChatSession {
     startAsOfferer: vi.fn().mockResolvedValue(undefined),
     startAsAnswerer: vi.fn().mockResolvedValue(undefined),
     submitAnswer: vi.fn().mockResolvedValue(undefined),
+    politelyAcceptOffer: vi.fn().mockResolvedValue(undefined),
     send: vi.fn(),
     reset: vi.fn(),
     ...overrides,
