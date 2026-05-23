@@ -59,3 +59,17 @@ body {
     color: #f5f5f4; /* stone-100 */
   }
 }
+
+/* FEAT-013: iOS Safari auto-zooms when a focused form field renders below
+   16px. The Textarea primitive uses `text-sm` (14px), which trips the
+   zoom on every tap of the chat composer / reply-code box on iPhone.
+   Scoping the bump to touch-primary devices keeps the desktop's denser
+   visual rhythm untouched — auto-zoom is a touch-only behaviour, so the
+   media query targets the exact context that triggers it. */
+@media (hover: none) and (pointer: coarse) {
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
