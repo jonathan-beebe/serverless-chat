@@ -98,7 +98,7 @@ export function Offerer({ session, onCancel }: Props) {
             value={answerDraft}
             onChange={(e) => setAnswerDraft(e.target.value)}
             rows={5}
-            className="w-full resize-none rounded-md border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-xs text-slate-100 focus:border-sky-500 focus:outline-none"
+            className="w-full resize-none rounded-md border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-xs text-slate-100 focus-visible:border-sky-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
           />
           <button
             type="submit"

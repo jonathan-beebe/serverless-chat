@@ -37,7 +37,7 @@ export function CopyBox({ value, label, helpText, variant = 'code' }: Props) {
         readOnly
         value={value}
         rows={variant === 'url' ? 2 : 6}
-        className="w-full resize-none rounded-md border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-xs text-slate-100 focus:border-sky-500 focus:outline-none"
+        className="w-full resize-none rounded-md border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-xs text-slate-100 focus-visible:border-sky-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
         onFocus={(e) => e.currentTarget.select()}
       />
       <div className="flex items-center justify-between gap-3">
