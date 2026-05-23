@@ -21,9 +21,21 @@ export interface ScreenChromeValue {
   // The visual size still tracks the authored `level` (or explicit `size`)
   // so the showcase still looks like the real screen.
   headingLevelOffset: 0 | 1 | 2
+  // When true, the screen is rendering inside a showcase / preview context
+  // and must NOT call programmatic focus on its <h1> on mount — the host
+  // page owns initial focus. Production routes leave this unset (falsy) so
+  // A11Y-005's screen-transition focus behavior continues to fire. Marked
+  // optional so existing providers that pre-date A11Y-022 keep compiling
+  // without forcing the explicit `false`.
+  // See A11Y-022.
+  suppressInitialFocus?: boolean
 }
 
-const DEFAULT: ScreenChromeValue = { landmark: 'main', headingLevelOffset: 0 }
+const DEFAULT: ScreenChromeValue = {
+  landmark: 'main',
+  headingLevelOffset: 0,
+  suppressInitialFocus: false,
+}
 
 export const ScreenChromeContext = createContext<ScreenChromeValue>(DEFAULT)
 

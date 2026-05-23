@@ -1,6 +1,7 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { Joiner } from './Joiner'
+import { ScreenChromeContext, type ScreenChromeValue } from '../components/ScreenChrome'
 import type { ChatSession } from '../hooks/useChatSession'
 import type { ConnectionState } from '../core/rtc'
 
@@ -19,6 +20,41 @@ function makeSession(overrides: Partial<ChatSession> = {}): ChatSession {
     ...overrides,
   }
 }
+
+describe('Joiner focus-on-mount (A11Y-005 + A11Y-022)', () => {
+  const SHOWCASE_CHROME: ScreenChromeValue = {
+    landmark: 'region',
+    headingLevelOffset: 1,
+    suppressInitialFocus: true,
+  }
+
+  it('focuses the <h1> on mount under the default ScreenChrome context (A11Y-005 regression guard)', async () => {
+    const session = makeSession({ state: 'idle' })
+    render(<Joiner session={session} offerCode="OFFER" onCancel={() => {}} />)
+    const heading = screen.getByRole('heading', { level: 1, name: /you've been invited to chat/i })
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(heading)
+    })
+  })
+
+  it('does NOT focus the heading inside a showcase context with suppressInitialFocus: true (A11Y-022)', async () => {
+    const session = makeSession({ state: 'idle' })
+    render(
+      <ScreenChromeContext.Provider value={SHOWCASE_CHROME}>
+        <Joiner session={session} offerCode="OFFER" onCancel={() => {}} />
+      </ScreenChromeContext.Provider>,
+    )
+    const heading = screen.getByRole('heading', { level: 2, name: /you've been invited to chat/i })
+
+    await waitFor(() => {
+      expect(heading).toBeInTheDocument()
+    })
+
+    expect(document.activeElement).not.toBe(heading)
+    expect(document.activeElement?.closest('[role="region"]')).toBeNull()
+  })
+})
 
 describe('Joiner post-connect drop (BUG-005)', () => {
   it('renders a "Connection lost" view when state === "closed"', () => {

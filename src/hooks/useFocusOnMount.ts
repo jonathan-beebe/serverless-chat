@@ -16,9 +16,21 @@ import { useEffect, useRef, type DependencyList } from 'react'
 //
 // `preventScroll: true` keeps the viewport stable; React already commits the
 // new tree at the top, and we don't want the focus call to fight that.
-export function useFocusOnMount<T extends HTMLElement>(deps: DependencyList = []) {
+//
+// `options.skip` lets a caller opt out of the focus call without changing the
+// returned ref. Used by screens rendering inside a showcase / preview context
+// so they don't steal focus from the host page. The hook still reads `skip`
+// fresh on every effect run, so a screen that flips its branch (Offerer
+// invite → connected) while inside a showcase stays skipped. See A11Y-022.
+interface Options {
+  skip?: boolean
+}
+
+export function useFocusOnMount<T extends HTMLElement>(deps: DependencyList = [], options: Options = {}) {
   const ref = useRef<T | null>(null)
+  const { skip } = options
   useEffect(() => {
+    if (skip) return
     ref.current?.focus({ preventScroll: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps)

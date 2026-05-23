@@ -5,7 +5,7 @@ import { Chat } from '../components/Chat'
 import { CopyBox } from '../components/CopyBox'
 import { Heading } from '../components/Heading'
 import { LiveRegion } from '../components/LiveRegion'
-import { ScreenContainer } from '../components/ScreenChrome'
+import { ScreenContainer, useScreenChrome } from '../components/ScreenChrome'
 import { Textarea } from '../components/Textarea'
 import { currentOfferUrl } from '../core/url'
 import type { ChatSession } from '../hooks/useChatSession'
@@ -53,7 +53,10 @@ export function Offerer({ session, onCancel }: Props) {
   // the user lands on the new heading instead of being dropped to <body>.
   // The branch identifier collapses the three possible views into one dep.
   const branch: 'connected' | 'closed' | 'invite' = isConnected ? 'connected' : isClosed ? 'closed' : 'invite'
-  const headingRef = useFocusOnMount<HTMLHeadingElement>([branch])
+  // In a showcase context the host page owns initial focus; skip the focus
+  // call so the previews don't race each other to steal it. See A11Y-022.
+  const { suppressInitialFocus } = useScreenChrome()
+  const headingRef = useFocusOnMount<HTMLHeadingElement>([branch], { skip: suppressInitialFocus })
 
   // Kick off offer generation on first mount; the hook owns the connection
   // so re-renders won't restart it.

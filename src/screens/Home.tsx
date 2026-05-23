@@ -1,6 +1,6 @@
 import { Button } from '../components/Button'
 import { Heading } from '../components/Heading'
-import { ScreenContainer } from '../components/ScreenChrome'
+import { ScreenContainer, useScreenChrome } from '../components/ScreenChrome'
 import { useFocusOnMount } from '../hooks/useFocusOnMount'
 import { usePageTitle } from '../hooks/usePageTitle'
 
@@ -10,7 +10,11 @@ interface Props {
 
 export function Home({ onStart }: Props) {
   usePageTitle('P2P Chat')
-  const headingRef = useFocusOnMount<HTMLHeadingElement>()
+  // In a showcase context the host page owns initial focus; the screen
+  // would otherwise race siblings to programmatically focus its heading and
+  // teleport AT users mid-page. See A11Y-022.
+  const { suppressInitialFocus } = useScreenChrome()
+  const headingRef = useFocusOnMount<HTMLHeadingElement>([], { skip: suppressInitialFocus })
   return (
     <ScreenContainer label="Home" className="mx-auto flex max-w-xl flex-col items-center gap-6 px-4 py-12 text-center">
       <Heading level={1} ref={headingRef}>

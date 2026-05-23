@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { DesignSystem } from './DesignSystem'
 
@@ -128,6 +128,38 @@ describe('DesignSystem showcase', () => {
     // `JoinerReplyPreview` component and not a `ScreenContainer`-wrapped
     // region. The h2 still renders.
     expect(screen.getByRole('heading', { level: 2, name: /send this code back/i })).toBeInTheDocument()
+  })
+
+  it('does not let any previewed screen steal initial focus into a region (A11Y-022)', async () => {
+    // Six top-level screens mount under the showcase. Each one normally
+    // calls `useFocusOnMount` on its <h1>; without the showcase opt-out the
+    // last preview to commit its effect wins the focus race and teleports
+    // keyboard / AT users deep inside a preview region, past the page <h1>.
+    // The `suppressInitialFocus` flag on `SHOWCASE_CHROME` must keep every
+    // preview out of the race.
+    render(<DesignSystem />)
+
+    // Wait for all preview mount effects to settle.
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { level: 1, name: /design system/i })).toBeInTheDocument()
+    })
+
+    const active = document.activeElement as HTMLElement | null
+    // The active element must not be nested inside any preview region.
+    expect(active?.closest('[role="region"]')).toBeNull()
+  })
+
+  it("focuses the page's own <h1> on mount (A11Y-022)", async () => {
+    // The page <h1> sits outside the showcase ScreenChromeContext provider,
+    // so it sees the default context (suppressInitialFocus: false) and its
+    // own `useFocusOnMount` call fires normally. Consistent with every
+    // other route in the app per A11Y-005.
+    render(<DesignSystem />)
+    const pageH1 = screen.getByRole('heading', { level: 1, name: /design system/i })
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(pageH1)
+    })
   })
 
   it('renders an interactive Chat organism that appends to local state on send (no peer needed)', () => {

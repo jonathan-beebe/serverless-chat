@@ -1,6 +1,7 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { Offerer } from './Offerer'
+import { ScreenChromeContext, type ScreenChromeValue } from '../components/ScreenChrome'
 import type { ChatSession } from '../hooks/useChatSession'
 import type { ConnectionState } from '../core/rtc'
 
@@ -99,6 +100,41 @@ describe('Offerer reply-code Enter-submit (FEAT-003)', () => {
     fireEvent.click(screen.getByRole('button', { name: /^connect$/i }))
 
     expect(session.submitAnswer).toHaveBeenCalledWith('reply-code')
+  })
+})
+
+describe('Offerer focus-on-mount (A11Y-005 + A11Y-022)', () => {
+  const SHOWCASE_CHROME: ScreenChromeValue = {
+    landmark: 'region',
+    headingLevelOffset: 1,
+    suppressInitialFocus: true,
+  }
+
+  it('focuses the <h1> on mount under the default ScreenChrome context (A11Y-005 regression guard)', async () => {
+    const session = makeSession({ state: 'awaiting-answer', encodedLocal: 'OFFER-PAYLOAD' })
+    render(<Offerer session={session} onCancel={() => {}} />)
+    const heading = screen.getByRole('heading', { level: 1, name: /invite your friend/i })
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(heading)
+    })
+  })
+
+  it('does NOT focus the heading inside a showcase context with suppressInitialFocus: true (A11Y-022)', async () => {
+    const session = makeSession({ state: 'awaiting-answer', encodedLocal: 'OFFER-PAYLOAD' })
+    render(
+      <ScreenChromeContext.Provider value={SHOWCASE_CHROME}>
+        <Offerer session={session} onCancel={() => {}} />
+      </ScreenChromeContext.Provider>,
+    )
+    const heading = screen.getByRole('heading', { level: 2, name: /invite your friend/i })
+
+    await waitFor(() => {
+      expect(heading).toBeInTheDocument()
+    })
+
+    expect(document.activeElement).not.toBe(heading)
+    expect(document.activeElement?.closest('[role="region"]')).toBeNull()
   })
 })
 

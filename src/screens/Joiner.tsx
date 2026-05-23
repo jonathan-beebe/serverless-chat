@@ -5,7 +5,7 @@ import { Chat } from '../components/Chat'
 import { CopyBox } from '../components/CopyBox'
 import { Heading } from '../components/Heading'
 import { LiveRegion } from '../components/LiveRegion'
-import { ScreenContainer } from '../components/ScreenChrome'
+import { ScreenContainer, useScreenChrome } from '../components/ScreenChrome'
 import type { ChatSession } from '../hooks/useChatSession'
 import { useFocusOnMount } from '../hooks/useFocusOnMount'
 import { usePageTitle } from '../hooks/usePageTitle'
@@ -63,7 +63,10 @@ export function Joiner({ session, offerCode, onCancel }: Props) {
   // drop view added for BUG-005.
   const branch: 'connected' | 'closed' | 'invite' | 'reply' =
     session.state === 'connected' ? 'connected' : session.state === 'closed' ? 'closed' : accepted ? 'reply' : 'invite'
-  const headingRef = useFocusOnMount<HTMLHeadingElement>([branch])
+  // In a showcase context the host page owns initial focus; skip the focus
+  // call so the previews don't race each other to steal it. See A11Y-022.
+  const { suppressInitialFocus } = useScreenChrome()
+  const headingRef = useFocusOnMount<HTMLHeadingElement>([branch], { skip: suppressInitialFocus })
 
   const liveStatus = <LiveRegion>{statusMessage(session.state, !!session.encodedLocal)}</LiveRegion>
 

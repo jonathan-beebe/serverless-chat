@@ -9,6 +9,7 @@ import { LiveRegion } from '../components/LiveRegion'
 import { ScreenChromeContext, type ScreenChromeValue } from '../components/ScreenChrome'
 import { Textarea } from '../components/Textarea'
 import type { ChatMessage } from '../core/rtc'
+import { useFocusOnMount } from '../hooks/useFocusOnMount'
 import type { ChatSession } from '../hooks/useChatSession'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { Home } from '../screens/Home'
@@ -78,6 +79,13 @@ function Swatch({ className, label, name }: { className: string; label: string; 
 
 export function DesignSystem() {
   usePageTitle('Design system · P2P Chat')
+  // Land focus on the page's own <h1> so keyboard / AT users start at a
+  // meaningful heading instead of <body>. The page <h1> is outside the
+  // ScreenChromeContext.Provider that wraps the previews, so it sees the
+  // default context (suppressInitialFocus: false) and focuses normally. The
+  // previews themselves read suppressInitialFocus: true from the showcase
+  // chrome and stay out of the focus race. See A11Y-022.
+  const headingRef = useFocusOnMount<HTMLHeadingElement>()
   const [mode, setMode] = useState<ThemeMode>('system')
 
   // Local-state Chat organism so reviewers can interact with the composer
@@ -98,7 +106,9 @@ export function DesignSystem() {
     <div className={themeClass}>
       <main className="mx-auto flex max-w-4xl flex-col gap-8 bg-slate-50 px-4 py-12 text-slate-900 dark:bg-slate-900 dark:text-slate-100">
         <header className="flex flex-col gap-4">
-          <Heading level={1}>Design system</Heading>
+          <Heading level={1} ref={headingRef}>
+            Design system
+          </Heading>
           <p className="text-slate-700 dark:text-slate-300">
             Live preview of every primitive and screen this app ships. Importing the same files the features consume, so
             a tweak here is a tweak everywhere.
@@ -349,7 +359,16 @@ export function DesignSystem() {
 // `<h1>`). The visual styling is unchanged — heading sizes still track the
 // authored level — so the showcase still looks like the real screen. See
 // A11Y-013.
-const SHOWCASE_CHROME: ScreenChromeValue = { landmark: 'region', headingLevelOffset: 1 }
+//
+// `suppressInitialFocus: true` also tells each previewed screen to skip its
+// `useFocusOnMount` call — six screens mounting at once would otherwise race
+// to programmatically focus their <h1>, teleporting AT users mid-page. See
+// A11Y-022.
+const SHOWCASE_CHROME: ScreenChromeValue = {
+  landmark: 'region',
+  headingLevelOffset: 1,
+  suppressInitialFocus: true,
+}
 
 function ScreenPreview({ label, children }: { label: string; children: React.ReactNode }) {
   return (
