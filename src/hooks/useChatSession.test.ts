@@ -50,6 +50,7 @@ class FakePeerConnection {
   localDescription = { type: 'offer' as const, sdp: 'v=0\r\n' }
   connectionState: RTCPeerConnectionState = 'new'
   onconnectionstatechange: (() => void) | null = null
+  ondatachannel: ((event: { channel: FakeDataChannel }) => void) | null = null
   setRemoteDescriptionCalls: RTCSessionDescriptionInit[] = []
   closeCalls = 0
   createDataChannel() {
@@ -58,6 +59,9 @@ class FakePeerConnection {
   }
   createOffer() {
     return Promise.resolve({ type: 'offer' as const, sdp: 'v=0\r\n' })
+  }
+  createAnswer() {
+    return Promise.resolve({ type: 'answer' as const, sdp: 'v=0\r\n' })
   }
   setLocalDescription() {
     if (failNextSetLocalDescription) {
@@ -79,6 +83,11 @@ class FakePeerConnection {
   failConnection() {
     this.connectionState = 'failed'
     this.onconnectionstatechange?.()
+  }
+  /** Test helper: simulate the browser dispatching `ondatachannel` to the answerer. */
+  emitDataChannel(channel: FakeDataChannel) {
+    lastChannel = channel
+    this.ondatachannel?.({ channel })
   }
 }
 
@@ -215,6 +224,30 @@ describe('useChatSession lifecycle', () => {
 
     act(() => lastPc!.failConnection())
     expect(result.current.state).toBe('failed')
+  })
+
+  it('transitions to "connected" when ondatachannel fires with an already-open channel', async () => {
+    // Repros BUG-003: on the answerer the channel arrives via `ondatachannel`,
+    // which the browser may dispatch *after* the underlying transport has
+    // already transitioned to 'open' (slow device, GC pause, paused breakpoint).
+    // If wireChannel only attaches `onopen` without checking `readyState`, the
+    // event has already fired and state stays stuck on 'connecting' forever.
+    // Wiring should short-circuit to 'connected' when readyState is already 'open'.
+    const { encode } = await import('../core/encoding')
+    const offerCode = encode({ type: 'offer', sdp: 'v=0\r\n' })
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsAnswerer(offerCode)
+    })
+    expect(result.current.state).toBe('connecting')
+
+    // Browser delivers `ondatachannel` late — by the time the event runs, the
+    // channel has already opened, so the late-attached `onopen` would never fire.
+    const channel = new FakeDataChannel()
+    channel.readyState = 'open'
+    act(() => lastPc!.emitDataChannel(channel))
+
+    expect(result.current.state).toBe('connected')
   })
 
   it('channel onclose before onopen transitions state to "failed"', async () => {

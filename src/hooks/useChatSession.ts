@@ -48,7 +48,17 @@ export function useChatSession(): ChatSession {
 
   const wireChannel = useCallback((channel: RTCDataChannel) => {
     channelRef.current = channel
-    channel.onopen = () => setState('connected')
+    // For the offerer the channel is freshly created and guaranteed to be in
+    // `'connecting'`, but the answerer receives it via `pc.ondatachannel`,
+    // which the browser may dispatch *after* the transport has already
+    // transitioned to `'open'` (slow device, GC pause, paused devtools
+    // breakpoint). Short-circuit when readyState is already 'open' so the
+    // handoff doesn't strand the session on the spinner.
+    if (channel.readyState === 'open') {
+      setState('connected')
+    } else {
+      channel.onopen = () => setState('connected')
+    }
     // A close from any pre-terminal state means the connection never recovered;
     // escalate to 'failed' so the UI can offer a fresh invite exchange. Skip
     // states that are already terminal ('idle' after teardown, 'failed' already)

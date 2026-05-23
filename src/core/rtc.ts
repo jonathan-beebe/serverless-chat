@@ -81,9 +81,12 @@ export async function acceptAnswer(pc: RTCPeerConnection, answerCode: string): P
 
 /**
  * Bob's side — accept Alice's offer URL payload and produce an answer code.
- * The data channel arrives asynchronously via `ondatachannel`; caller wires
- * up listeners via `onChannel` *before* the SDP exchange completes so the
- * `open` event isn't missed.
+ * The data channel arrives asynchronously via `ondatachannel`. We register
+ * `pc.ondatachannel` before the SDP exchange to minimise the race window,
+ * but the browser may still deliver the event *after* the channel has
+ * already transitioned to `'open'` on a starved JS queue. Callers must
+ * therefore check `channel.readyState` inside `onChannel` rather than relying
+ * solely on the `open` event firing.
  */
 export async function acceptOffer(
   offerCode: string,
