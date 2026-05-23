@@ -115,7 +115,15 @@ export function Chat({ messages, onSend, disabled }: Props) {
   }, [disabled])
 
   return (
-    <div className="flex h-full flex-col gap-3">
+    // CR-007: outer wrapper must be a flex-1 + min-h-0 child of its bounded
+    // flex-column parent (Offerer/Joiner connected `<ScreenContainer>`). The
+    // previous `h-full` shape didn't participate in the parent's flex
+    // distribution, so intrinsic transcript content could push the wrapper
+    // past its allotted slot and the document — not just the transcript —
+    // gained a scrollbar. `min-h-0` overrides the flex default of
+    // `min-height: auto`, the same pattern the transcript already uses
+    // internally via `flex-1 overflow-y-auto`.
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
       {/*
         A11Y-018: the transcript is exposed as a log surface, not a plain list.
         `role="log"` implies `aria-live="polite"`, `aria-relevant="additions"`,

@@ -445,3 +445,26 @@ describe('Chat transcript keyboard focusability (A11Y-021)', () => {
     expect(screen.getByLabelText(/message/i)).toHaveFocus()
   })
 })
+
+describe('Chat outer wrapper layout contract (CR-007)', () => {
+  // JSDOM doesn't lay out scrollable elements, so a "document didn't scroll"
+  // assertion isn't reliably testable here. Instead we pin the *class
+  // contract* that callers (Offerer/Joiner connected screens) depend on:
+  // <Chat>'s outer wrapper must be a flex-1 + min-h-0 child of its
+  // bounded flex-column parent so the transcript — not the document — is
+  // the scroll surface. A regression to `h-full` (the previous shape) lets
+  // intrinsic content push the wrapper past its slot and the document
+  // gains a viewport-level scrollbar.
+  it('outer wrapper participates in the parent flex column via flex-1 + min-h-0 (not h-full)', () => {
+    render(<Chat messages={[msg('a', 'hi', 'them')]} onSend={() => {}} />)
+    // Walk up from the transcript (role="log") to its parent — that's the
+    // outer wrapper this contract describes.
+    const transcript = screen.getByRole('log', { name: /chat transcript/i })
+    const wrapper = transcript.parentElement as HTMLElement
+    expect(wrapper).toBeTruthy()
+    expect(wrapper.className).toContain('flex-1')
+    expect(wrapper.className).toContain('min-h-0')
+    // Explicit regression guard against the previous (broken) shape.
+    expect(wrapper.className).not.toMatch(/(^|\s)h-full(\s|$)/)
+  })
+})
