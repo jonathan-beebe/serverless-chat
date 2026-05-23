@@ -74,6 +74,27 @@ describe('App routing', () => {
     expect(screen.getByRole('heading', { name: /you've been invited to chat/i })).toHaveFocus()
   })
 
+  it('scrubs the URL fragment on a same-tab joiner→joiner hashchange', () => {
+    // Start with a joiner offer already in the URL — the initial render will
+    // route into Joiner and (correctly) scrub the fragment.
+    const firstPayload = encode({ type: 'offer', sdp: 'v=0\r\nfirst\r\n' })
+    history.replaceState(null, '', `/#offer=${firstPayload}`)
+    render(<App />)
+    expect(location.hash).toBe('')
+
+    // Now the OS opens a fresh invite URL into this same tab — only the hash
+    // changes, and `route.kind` stays `'joiner'`. The fragment must still be
+    // scrubbed so that a refresh doesn't re-enter the joiner flow with a
+    // now-stale offer.
+    const secondPayload = encode({ type: 'offer', sdp: 'v=0\r\nsecond\r\n' })
+    act(() => {
+      history.replaceState(null, '', `/#offer=${secondPayload}`)
+      window.dispatchEvent(new HashChangeEvent('hashchange'))
+    })
+
+    expect(location.hash).toBe('')
+  })
+
   it('updates document.title to reflect the current screen (WCAG 2.4.2)', () => {
     // Home keeps the base title.
     render(<App />)

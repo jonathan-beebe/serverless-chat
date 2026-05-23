@@ -30,9 +30,12 @@ export function App() {
 
   // Scrub the fragment once we've captured the offer in component state, so a
   // refresh doesn't try to re-enter the joiner flow with a now-stale offer.
+  // Depend on `route` (not just `route.kind`) so a same-tab joiner→joiner
+  // hashchange — which keeps `kind` constant but swaps `offerCode` — still
+  // re-runs the scrub.
   useEffect(() => {
     if (route.kind === 'joiner') clearHash()
-  }, [route.kind])
+  }, [route])
 
   const goHome = () => {
     session.reset()
