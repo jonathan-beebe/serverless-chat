@@ -54,7 +54,7 @@ export function Chat({ messages, onSend, disabled }: Props) {
         aria-label="Chat transcript"
         aria-live="polite"
         className="flex-1 space-y-2 overflow-y-auto rounded-md border border-slate-700 bg-slate-900/50 p-3">
-        {messages.length === 0 && <li className="text-sm text-slate-500">No messages yet. Say hello.</li>}
+        {messages.length === 0 && <li className="text-sm text-slate-400">No messages yet. Say hello.</li>}
         {messages.map((m) => (
           <li key={m.id} className={`flex flex-col ${m.from === 'me' ? 'items-end' : 'items-start'}`}>
             {/* Visible caption so sighted users who can't distinguish color/alignment still see authorship. */}
