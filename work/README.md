@@ -25,8 +25,20 @@ ids carry the type prefix (e.g. `BUG-003`, `FEAT-012`).
 
 ## Skills
 
-- `/work-define <type> <description>` — allocate an id, scan for duplicates and
-  prior work, then write the ticket to `1-inbox/`.
-- `/work-start [<TICKET-###>|all]` — work one ticket, or drain the inbox in
-  order; routes by id prefix to the matching `types/<type>.md` steps.
+Defining a ticket is a two-step flow — scoping (collaborative, subjective) and
+writing (deterministic). Split intentionally so the writer can't paper over
+missing scope, and the scoper isn't tempted to skip ahead to file mechanics.
+
+- `/work-scope <type> <rough description>` — dialogue with the human to produce
+  a scope packet (problem, outcome, why-it-matters, related work). Surveys prior
+  work, checks for duplicates, reads affected code. On approval, hands off to
+  `/work-write`.
+- `/work-write <type> <scope packet>` — formatter. Validates the packet,
+  allocates an id, writes the ticket to `1-inbox/`, logs to `journal.md`.
+  Rejects vague or solutioned packets and bounces them back to `/work-scope`.
+  Call directly only when the scope is already crisp (e.g. captured in a meeting
+  note).
+- `/work-start [<TICKET-###>|<type>|all]` — work one ticket, drain by type, or
+  drain the whole inbox; routes by id prefix to the matching `types/<type>.md`
+  steps.
 - `/work-log <TICKET-###> <entry text>` — append a single line to `journal.md`.

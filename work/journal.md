@@ -12,14 +12,73 @@ id.
 - DSGN: 1
 - ARCH: 1
 - FEAT: 14
-- IMPRV: 16
+- IMPRV: 17
 - MAINT: 1
-- A11Y: 25
+- A11Y: 37
 - RFCTR: 1
-- BUG: 8
+- BUG: 9
 
 ## Log
 
+- 2026-05-24:15:55:00 — A11Y-035 — ABANDONED: superseded by A11Y-036 (same
+  problem, re-scoped under the new `/work-scope` + `/work-write` flow to drop
+  the pre-committed implementation path); moved to `3-done/`
+- 2026-05-24:15:48:00 — A11Y-036 — defined: Network header Back affordance is a
+  button, not a link
+- 2026-05-24:15:19:47 — A11Y-035 — defined: Network header "Back" is a
+  `<Button>` that mutates `window.location.hash`
+  (`src/network/Network.tsx:269–278`); loses open-in-new-tab / middle-click /
+  copy-link-address; replace with `<a href="#">` (bundle with A11Y-031 as a
+  shared `<HomeLink>`)
+- 2026-05-24:15:18:46 — A11Y-034 — defined: Chat Copy button is `disabled` when
+  `messages.length === 0` (`src/components/Chat.tsx:273`) with no programmatic
+  explanation; SR users hear "Copy, button, dimmed" only; recommend not
+  rendering the toolbar until first message (option b)
+- 2026-05-24:15:17:52 — A11Y-033 — defined: Conversation delete confirmation
+  uses native `window.confirm()` (`src/screens/Home.tsx:248–255`); inconsistent
+  SR announcement and focus lost on dismiss; build a `role="alertdialog"` Dialog
+  primitive (likely shared with A11Y-025) and replace the call
+- 2026-05-24:15:14:51 — A11Y-032 — defined: Home past-chats `<section>` carries
+  `aria-label="Past conversations"` while its nested `<h2>` reads "Past chats" —
+  conflicting names; recommend dropping `aria-label` (heading already serves
+  navigation), or pointing `aria-labelledby` at the `<h2>` id
+- 2026-05-24:15:13:56 — A11Y-031 — defined: Network EmptyState "Back to home" is
+  `<a href="#">` for an in-app action; document the link-vs-button choice,
+  ensure honesty with sibling main-view affordance (ticket #11 / A11Y-035),
+  optionally extract a shared `<HomeLink>` helper
+- 2026-05-24:15:12:47 — A11Y-030 — defined: Resume / More-actions buttons in the
+  past-chats list share identical accessible names across every row; extend with
+  `aria-label={\`Resume
+  ${label}\`}`/`aria-label={\`More actions for
+  ${label}\`}` so AT in
+  out-of-context modes can disambiguate
+- 2026-05-24:15:11:34 — A11Y-029 — defined: Chat "Include timestamps" checkbox
+  has no visible focus indicator (preflight resets outline; only
+  `accent-sky-700` colors the check); add the canonical focus-visible ring +
+  offset tokens
+- 2026-05-24:15:11:26 — BUG-008 — defined: navigating from a live chat to
+  #network and clearing the hash back to home strands the user on the Home list;
+  root cause is hashchange listener setting route=home unconditionally, never
+  restoring the offerer/joiner screen that hosts the Chat UI
+- 2026-05-24:15:10:45 — A11Y-028 — defined: Network per-message timeline's
+  horizontal scroll container isn't keyboard-scrollable on Firefox/Safari
+  (Chromium-only auto-promotion masks the bug); add tabIndex=0 + role=region +
+  aria-label + focus-visible ring (mirrors A11Y-021)
+- 2026-05-24:15:09:41 — A11Y-027 — defined: Network per-message timeline
+  `<table>` has no accessible name and `<th>` cells lack `scope="col"`; add
+  `aria-labelledby="net-timeline-heading"` and `scope="col"` to the five header
+  cells
+- 2026-05-24:15:08:36 — A11Y-026 — defined: rename input in ConversationRow uses
+  border-stone-300/dark:border-stone-600 (≈1.48 / ≈2.4:1), missed by A11Y-016's
+  form-control contrast bump; bump to stone-400/stone-500 to clear WCAG 1.4.11
+  3:1
+- 2026-05-24:15:07:13 — A11Y-025 — defined: ConversationRow row menu claims
+  role=menu but doesn't implement APG keyboard pattern (arrow keys, type-ahead,
+  focusable aria-disabled items); recommend dropping menu role or implementing
+  the full contract
+- 2026-05-24:15:05:40 — IMPRV-016 — defined: animated spinner alongside
+  "(gathering network candidates)…" callout — inline SVG + Tailwind animate-spin
+  (no Hero Icons dep), shared across Offerer/Joiner gathering states
 - 2026-05-24:10:09:00 — BUG-006 — RESOLVED: saved transcript loses author and
   timestamp after a live session (src/hooks/useChatSession.ts,
   src/hooks/useChatSession.test.ts) — wrote the four suggested distinguishing

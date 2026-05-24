@@ -3,9 +3,10 @@ name: work-start
 description:
   Work a ticket of any type. With no argument (or `all`), drains every ticket in
   `work/1-inbox/` in filename order. With a `TICKET-###` argument, works that
-  single ticket. The canonical workflow lives here and the type-specific working
-  steps are loaded from `types/<type>.md`.
-argument-hint: '[TICKET-### | all]'
+  single ticket. With a type name (e.g. `bug`, `feat`, `a11y`), drains only
+  tickets of that type. The canonical workflow lives here and the type-specific
+  working steps are loaded from `types/<type>.md`.
+argument-hint: '[TICKET-### | <type> | all]'
 ---
 
 Start a work session:
@@ -20,6 +21,10 @@ Zero or one argument:
   at a time, until empty.
 - `TICKET-###` — work that single ticket (look it up in `1-inbox/` first, then
   `2-doing/`).
+- `<type>` — drain only tickets of the given type from `work/1-inbox/` in
+  alphabetical order. Accepts either the type name (`bug`, `feature`, `a11y`, …)
+  or the prefix (`BUG`, `FEAT`, `A11Y`, …), case-insensitive. See the type
+  registry below for the full list.
 
 ## Type registry
 
@@ -37,8 +42,14 @@ Zero or one argument:
 
 ## Workflow (canonical for all types)
 
-1. **Resolve target ticket(s).** Single id, or list every file in
-   `work/1-inbox/` for drain mode.
+1. **Resolve target ticket(s).** Pick based on the argument:
+   - `TICKET-###` — that single ticket.
+   - _(empty)_ or `all` — every file in `work/1-inbox/`, alphabetical order.
+   - `<type>` — only files in `work/1-inbox/` whose id starts with the matching
+     prefix from the type registry, alphabetical order. Resolve the argument to
+     a prefix case-insensitively against both the `type` and `prefix` columns.
+     If it matches neither, stop and surface the unknown type rather than
+     falling back to draining everything.
 2. For each ticket, in order:
    1. **Identify the type** by extracting the prefix from the id.
    2. **Read** `types/<type>.md` (this directory). That file owns the
