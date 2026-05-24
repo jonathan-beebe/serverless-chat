@@ -42,3 +42,35 @@ beforeEach(() => {
 afterEach(() => {
   console.error = originalConsoleError
 })
+
+// Buffer non-error console output per-test and only flush to the real
+// console when the test fails. Production logs like `[telemetry] receipt
+// for unknown message id ...` and `[storage] culled empty conversation
+// ...` are useful when debugging a failure but pure noise on a green run.
+// `console.error` is intentionally excluded — it's already a test failure
+// above, and we want its message on stderr immediately.
+const QUIET_METHODS = ['log', 'info', 'warn', 'debug'] as const
+type QuietMethod = (typeof QUIET_METHODS)[number]
+const originalQuiet = {} as Record<QuietMethod, (...args: unknown[]) => void>
+let consoleBuffer: Array<{ method: QuietMethod; args: unknown[] }> = []
+
+beforeEach(() => {
+  consoleBuffer = []
+  for (const method of QUIET_METHODS) {
+    originalQuiet[method] = console[method]
+    console[method] = (...args: unknown[]) => {
+      consoleBuffer.push({ method, args })
+    }
+  }
+})
+afterEach((ctx) => {
+  for (const method of QUIET_METHODS) {
+    console[method] = originalQuiet[method]
+  }
+  if (ctx.task.result?.state === 'fail') {
+    for (const { method, args } of consoleBuffer) {
+      originalQuiet[method](...args)
+    }
+  }
+  consoleBuffer = []
+})
