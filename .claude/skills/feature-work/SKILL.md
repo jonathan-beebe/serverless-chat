@@ -26,4 +26,4 @@ $ARGUMENTS
 - Then make a commit with the changes.
 - Update the mardown, marking the ticket as resolved.
 - Move the issue to `__local__/work/features/resolved`
-- Write a single line entry to `__local__/work/features/log.md`
+- Write a single log entry to `__local__/work/features/log.md`

@@ -18,5 +18,5 @@ $ARGUMENTS
 - Work with the user to refine the idea until you understand.
 - Write the feature description into `./inbox` as a new work item with a status
   of "Open".
-- Write a single line entry to `./log.md`
+- Write a single log entry to `./log.md`
 - Increment the next ticket number in log.

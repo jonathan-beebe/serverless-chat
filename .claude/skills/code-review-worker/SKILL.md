@@ -33,4 +33,4 @@ are:
 - Then make a commit with the changes.
 - Update the mardown, marking the issue as resolved.
 - Move the issue to `__local__/work/improvements/resolved`
-- Write a single line entry to `__local__/work/improvements/log.md`
+- Use `/work-logger` to add a single entry.

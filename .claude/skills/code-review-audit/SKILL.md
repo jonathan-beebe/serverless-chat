@@ -27,5 +27,5 @@ are:
 - Ensure you understand the goal of the code & feature and its intended outcome.
 - Research the issue until you understand the root cause and suggest a fix.
 - Write the ticket into `./inbox` as a new work item with a status of "Open".
-- Write a single line entry to `./log.md`
+- Write a single line entry using `/work-logger`.
 - Increment the next ticket number in log.
