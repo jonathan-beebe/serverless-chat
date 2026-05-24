@@ -1,3 +1,6 @@
+// @vitest-environment jsdom
+// CR-013: `src/core/**` runs under `node` by default; this file uses
+// `document` / `navigator.clipboard`, so opt back into jsdom explicitly.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { copyTextToClipboard } from './clipboard'
 

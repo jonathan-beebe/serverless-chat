@@ -1,3 +1,7 @@
+// @vitest-environment jsdom
+// CR-013: `src/core/**` runs under `node` by default; the `currentOfferUrl`
+// suite below exercises the thin wrapper that reads global `location.origin`,
+// so this file opts back into jsdom explicitly.
 import { describe, expect, it, vi } from 'vitest'
 import { buildOfferUrl, currentOfferUrl, readHashParam } from './url'
 
