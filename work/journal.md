@@ -20,6 +20,9 @@ id.
 
 ## Log
 
+- 2026-05-24:18:58:12 — A11Y-036 — skipped: still blocked by ARCH-001 (the Back
+  affordance's destination depends on the routing model ARCH-001 settles);
+  leaving in `1-inbox/` to revisit after ARCH-001 lands
 - 2026-05-24:18:57:01 — A11Y-034 — started
 - 2026-05-24:18:50:07 — A11Y-033 — started
 - 2026-05-24:18:39:30 — A11Y-032 — started
