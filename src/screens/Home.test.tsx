@@ -184,6 +184,23 @@ describe('Home conversation list (FEAT-012 AC#18 / #20 / #21 / #26)', () => {
       expect(within(row).getByText('New name')).toBeInTheDocument()
     })
   })
+
+  // A11Y-026: A11Y-016 (commit 7008835) bumped form-control border tokens
+  // from stone-300/600 to stone-400/500 so non-text UI contrast clears WCAG
+  // 1.4.11's 3:1 floor. The rename input was missed because it's a raw
+  // <input> inline in ConversationRow rather than the Textarea primitive.
+  it('Rename input border uses the A11Y-016 stone-400/500 tokens (A11Y-026)', async () => {
+    await seed('aaa', { label: 'Old name' })
+    render(<Home onStart={() => {}} />)
+
+    const row = await screen.findByTestId('conversation-row-aaa')
+    fireEvent.click(within(row).getByRole('button', { name: /more actions/i }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /^rename$/i }))
+
+    const input = await within(row).findByLabelText(/rename chat/i)
+    expect(input.className).toMatch(/border-stone-400/)
+    expect(input.className).toMatch(/dark:border-stone-500/)
+  })
 })
 
 describe('Home row menu dismissal (CR-008)', () => {

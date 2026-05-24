@@ -366,7 +366,7 @@ function ConversationRow({
                   cancelRename()
                 }
               }}
-              className="flex-1 rounded border border-stone-300 bg-white px-2 py-1 text-sm dark:border-stone-600 dark:bg-stone-800"
+              className="flex-1 rounded border border-stone-400 bg-white px-2 py-1 text-sm dark:border-stone-500 dark:bg-stone-800"
             />
             <Button variant="primary" size="sm" onClick={saveRename}>
               Save

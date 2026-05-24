@@ -1,7 +1,7 @@
 ---
 id: A11Y-026
 type: a11y
-status: open
+status: in-progress
 created: 2026-05-24
 ---
 
@@ -104,3 +104,11 @@ should capture it if the gap matters.
   that the future `Input` primitive should also adopt.
 - **A11Y-017** (resolved) — Heading focus-visible token discipline; same pattern
   argues for a shared `Input` primitive over inline classNames.
+
+## Working
+
+**2026-05-24** — Minimal token bump. `src/screens/Home.tsx` rename input
+className changed `border-stone-300 → border-stone-400` and
+`dark:border-stone-600 → dark:border-stone-500`. Added a Home test asserting the
+new tokens (mirrors the Textarea / Button A11Y-016 assertions). `npm test` →
+374/374 pass. Lint + typecheck clean.
