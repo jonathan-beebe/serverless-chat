@@ -1,7 +1,7 @@
 ---
 id: A11Y-027
 type: a11y
-status: open
+status: in-progress
 created: 2026-05-24
 ---
 
@@ -133,3 +133,12 @@ the only `<table>` in the file (and in the app).
   "make the structural relationship programmatically determinable".
 - **A11Y-013** (resolved) — design-system duplicate main/h1; landmark and
   labeling discipline, adjacent thinking.
+
+## Working
+
+**2026-05-24** — Minimal fix applied per the suggested diff:
+`src/network/Network.tsx` `<table>` now reuses
+`aria-labelledby="net-timeline-heading"` (the same id the surrounding
+`<section>` already points at) and each of the five `<th>` cells carries
+`scope="col"`. Test added in `src/network/Network.test.tsx` asserts both.
+`npm test` → 375/375. Lint + typecheck clean.

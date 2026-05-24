@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { Network } from './Network'
 import type { ChatSession, NetworkTelemetry, TelemetrySample } from '../hooks/useChatSession'
@@ -127,6 +127,22 @@ describe('Network with active telemetry', () => {
     render(<Network session={stubSession(activeTelemetry())} />)
     // Offset is 105 ms; the readable label is "Peer's clock is +105 ms ahead of yours".
     expect(screen.getByText(/peer's clock is \+105 ms ahead of yours/i)).toBeInTheDocument()
+  })
+
+  // A11Y-027: SR table-navigation mode skips the surrounding prose, so the
+  // <table> needs its own programmatic name (aria-labelledby reuses the
+  // existing <h2 id>). And explicit scope="col" on each <th> is the canonical
+  // signal that column headers govern body cells — without it, AT must guess.
+  it('per-message timeline table carries aria-labelledby and column-scoped headers (A11Y-027)', () => {
+    render(<Network session={stubSession(activeTelemetry())} />)
+    const table = screen.getByRole('table')
+    expect(table).toHaveAttribute('aria-labelledby', 'net-timeline-heading')
+
+    const headers = within(table).getAllByRole('columnheader')
+    expect(headers).toHaveLength(5)
+    headers.forEach((th) => {
+      expect(th).toHaveAttribute('scope', 'col')
+    })
   })
 })
 

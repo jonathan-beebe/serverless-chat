@@ -168,14 +168,24 @@ function MessageTimeline({ telemetry }: { telemetry: NetworkTelemetry }) {
         Per-message timeline (last {Math.min(rows.length, TIMELINE_ROWS)})
       </Heading>
       <div className="overflow-x-auto rounded-md border border-stone-300 bg-white/50 dark:border-stone-700 dark:bg-stone-900/50">
-        <table className="w-full min-w-[36rem] text-left text-sm">
+        <table aria-labelledby="net-timeline-heading" className="w-full min-w-[36rem] text-left text-sm">
           <thead className="text-xs font-medium text-stone-600 dark:text-stone-400">
             <tr className="border-b border-stone-300 dark:border-stone-700">
-              <th className="px-3 py-2">ID</th>
-              <th className="px-3 py-2">Direction</th>
-              <th className="px-3 py-2">When</th>
-              <th className="px-3 py-2">Timing</th>
-              <th className="px-3 py-2">Δ from median</th>
+              <th scope="col" className="px-3 py-2">
+                ID
+              </th>
+              <th scope="col" className="px-3 py-2">
+                Direction
+              </th>
+              <th scope="col" className="px-3 py-2">
+                When
+              </th>
+              <th scope="col" className="px-3 py-2">
+                Timing
+              </th>
+              <th scope="col" className="px-3 py-2">
+                Δ from median
+              </th>
             </tr>
           </thead>
           <tbody className="font-mono text-xs text-stone-800 dark:text-stone-200">
