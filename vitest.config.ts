@@ -24,6 +24,20 @@ export default defineConfig({
     // `// @vitest-environment jsdom` pragma at the top of the file.
     globals: true,
     setupFiles: ['./src/test-setup.ts'],
+    // CR-014: don't tear down the JS env between test files in the same
+    // worker. jsdom + setupFiles + module graph are re-built ~26 times by
+    // default; with `isolate: false` a worker pays that cost once and reuses
+    // it across the files it owns. Safe here because the leak-sensitive bits
+    // are already scrubbed per-test:
+    //   - `storage.test.ts` / `useConversations.test.ts` replace
+    //     `globalThis.indexedDB` and call `__resetForTests()` in `beforeEach`.
+    //   - tests that flip `vi.useFakeTimers()` restore real timers in
+    //     `afterEach` (or `finally`).
+    //   - `vi.restoreAllMocks()` runs in `afterEach` where spies are used.
+    //   - Testing Library auto-cleans DOM between tests.
+    //   - `useConversations` listeners are unsubscribed in React effect
+    //     cleanup, which Testing Library's auto-unmount triggers.
+    isolate: false,
     projects: [
       {
         extends: true,
