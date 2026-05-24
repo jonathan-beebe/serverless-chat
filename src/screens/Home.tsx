@@ -200,7 +200,23 @@ function ConversationRow({
     if (!hasMessages) return
     const msgs = await listMessages(record.id)
     if (msgs.length === 0) return
-    const markdown = formatTranscript(msgs, { includeTimestamps: true })
+    // BUG-006: resolve attribution against the conversation's absolute
+    // identity (`record.selfPeerId`) when both that and the record's
+    // `senderId` are present; fall back to the record's legacy
+    // perspective-relative `from` for rows written before the senderId
+    // rollout. The formatter operates on ChatMessage shape, so map first.
+    const formatted = msgs.map((m) => ({
+      id: m.id,
+      from:
+        record.selfPeerId && m.senderId
+          ? m.senderId === record.selfPeerId
+            ? ('me' as const)
+            : ('them' as const)
+          : m.from,
+      text: m.text,
+      at: m.at,
+    }))
+    const markdown = formatTranscript(formatted, { includeTimestamps: true })
     const result = await copyTextToClipboard(markdown, fallbackTextareaRef.current)
     setCopyState(result)
     if (result === 'copied') {

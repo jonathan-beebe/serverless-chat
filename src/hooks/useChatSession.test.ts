@@ -1653,4 +1653,209 @@ describe('useChatSession FEAT-012 resume', () => {
 
     expect(result.current.messages.find((m) => m.text === 'live send during bind')).toBeDefined()
   })
+
+  // BUG-006 reopened: the perspective-flip scheme was the root fragility.
+  // The fix moves attribution to an absolute `senderId` on every record
+  // and `sender` on every chat envelope, derived from a per-conversation
+  // `selfPeerId` minted by the hook at bind time. These tests pin the
+  // new contract so it can't silently regress.
+
+  it('BUG-006: bindConversation mints a selfPeerId on a fresh conversation', async () => {
+    const storage = await import('../core/storage')
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.bindConversation('bug6-self-fresh')
+    })
+    const conv = await storage.getConversation('bug6-self-fresh')
+    expect(conv?.selfPeerId).toBeTypeOf('string')
+    expect(conv!.selfPeerId!.length).toBeGreaterThan(0)
+  })
+
+  it('BUG-006: bindConversation reuses an existing conv selfPeerId across re-binds', async () => {
+    const storage = await import('../core/storage')
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.bindConversation('bug6-self-resume')
+    })
+    const first = (await storage.getConversation('bug6-self-resume'))!.selfPeerId
+    act(() => result.current.reset())
+    await act(async () => {
+      await result.current.bindConversation('bug6-self-resume')
+    })
+    const second = (await storage.getConversation('bug6-self-resume'))!.selfPeerId
+    expect(second).toBe(first)
+  })
+
+  it('BUG-006: send stamps `sender` on the wire envelope and `senderId` on the stored record', async () => {
+    const storage = await import('../core/storage')
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.bindConversation('bug6-send-sender')
+      await result.current.startAsOfferer('bug6-send-sender')
+    })
+    act(() => lastChannel!.open())
+    act(() => result.current.send('hello'))
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+
+    // Find the chat envelope on the wire.
+    const chatEnv = lastChannel!.sent
+      .map((s) => {
+        try {
+          return JSON.parse(s)
+        } catch {
+          return null
+        }
+      })
+      .find((p) => p && p.t === 'chat')
+    const conv = await storage.getConversation('bug6-send-sender')
+    expect(chatEnv).toBeTruthy()
+    expect(chatEnv.sender).toBe(conv?.selfPeerId)
+
+    const stored = await storage.listMessages('bug6-send-sender')
+    const sent = stored.find((m) => m.text === 'hello')
+    expect(sent?.senderId).toBe(conv?.selfPeerId)
+    expect(sent?.from).toBe('me')
+  })
+
+  it('BUG-006: incoming chat persists env.sender as senderId on the stored record', async () => {
+    const storage = await import('../core/storage')
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.bindConversation('bug6-recv-sender')
+      await result.current.startAsOfferer('bug6-recv-sender')
+    })
+    act(() => lastChannel!.open())
+
+    const peerId = 'peer-uuid-deadbeef'
+    act(() =>
+      lastChannel!.onmessage?.({
+        data: JSON.stringify({
+          v: 1,
+          t: 'chat',
+          id: 'inc-with-sender',
+          sentAt: 1_700_000_000_000,
+          text: 'hi from peer',
+          sender: peerId,
+        }),
+      }),
+    )
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+
+    const stored = await storage.listMessages('bug6-recv-sender')
+    const received = stored.find((m) => m.id === 'inc-with-sender')
+    expect(received?.senderId).toBe(peerId)
+    expect(received?.from).toBe('them')
+  })
+
+  it('BUG-006: history merge with `sender` field inserts records verbatim — no flip needed', async () => {
+    // The repro that the perspective flip used to need: peer ships
+    // history that includes our own send (from peer's perspective:
+    // `from: 'them'`). With senderId the merge must NOT flip — it should
+    // insert with the absolute senderId, and the resolved `from` should
+    // match our own `selfPeerId` test (i.e. 'me' for our send).
+    const storage = await import('../core/storage')
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.bindConversation('bug6-merge-sender')
+      await result.current.startAsOfferer('bug6-merge-sender')
+    })
+    act(() => lastChannel!.open())
+
+    // Send one local so we have a known senderId on the wire.
+    act(() => result.current.send('local-1'))
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+    const local = result.current.messages.find((m) => m.text === 'local-1')!
+    const localId = local.id
+    const myPeerId = (await storage.getConversation('bug6-merge-sender'))!.selfPeerId!
+
+    // Peer ships history that echoes our send (with the absolute senderId
+    // = our `selfPeerId`) plus one new message of their own.
+    const peerPeerId = 'peer-uuid-xyz'
+    const incoming = [
+      {
+        id: localId,
+        from: 'them' as const,
+        sender: myPeerId, // absolute — original sender was us
+        text: 'local-1',
+        at: 1_700_000_000_000,
+      },
+      {
+        id: 'peer-msg',
+        from: 'me' as const,
+        sender: peerPeerId, // absolute — original sender was peer
+        text: 'theirs',
+        at: 1_700_000_060_000,
+      },
+    ]
+    await act(async () => {
+      lastChannel!.onmessage?.({
+        data: JSON.stringify({
+          v: 1,
+          t: 'history',
+          id: 'h-merge-sender',
+          sentAt: 1_700_000_100_000,
+          conversationId: 'bug6-merge-sender',
+          messages: incoming,
+        }),
+      })
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+
+    const stored = await storage.listMessages('bug6-merge-sender')
+    // Our send is unchanged (deduped).
+    const ours = stored.find((m) => m.id === localId)
+    expect(ours?.senderId).toBe(myPeerId)
+    expect(ours?.from).toBe('me')
+    // Peer's new message inserted with peer's senderId, resolved `from`
+    // = 'them' because peerPeerId !== our selfPeerId.
+    const theirs = stored.find((m) => m.id === 'peer-msg')
+    expect(theirs?.senderId).toBe(peerPeerId)
+    expect(theirs?.from).toBe('them')
+  })
+
+  it('BUG-006: history merge falls back to perspective flip for records with no `sender` (legacy peer)', async () => {
+    // Pre-fix peers ship history with `from` only. The receiver must still
+    // produce a sensible record so a mixed-version exchange isn't a hard
+    // break; the legacy flip path stays as a fallback.
+    const storage = await import('../core/storage')
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.bindConversation('bug6-merge-legacy')
+      await result.current.startAsOfferer('bug6-merge-legacy')
+    })
+    act(() => lastChannel!.open())
+
+    await act(async () => {
+      lastChannel!.onmessage?.({
+        data: JSON.stringify({
+          v: 1,
+          t: 'history',
+          id: 'h-legacy',
+          sentAt: 1_700_000_100_000,
+          conversationId: 'bug6-merge-legacy',
+          // No `sender` field on these — pre-fix peer.
+          messages: [
+            { id: 'leg-1', from: 'me', text: 'theirs-1', at: 1_700_000_000_000 },
+            { id: 'leg-2', from: 'them', text: 'mine-1', at: 1_700_000_060_000 },
+          ],
+        }),
+      })
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+
+    const stored = await storage.listMessages('bug6-merge-legacy')
+    // peer's 'me' → ours 'them', peer's 'them' → ours 'me'. No senderId
+    // (the peer didn't ship one), so the record reads through the legacy
+    // `from` fallback.
+    expect(stored.find((m) => m.id === 'leg-1')?.from).toBe('them')
+    expect(stored.find((m) => m.id === 'leg-1')?.senderId).toBeUndefined()
+    expect(stored.find((m) => m.id === 'leg-2')?.from).toBe('me')
+    expect(stored.find((m) => m.id === 'leg-2')?.senderId).toBeUndefined()
+  })
 })

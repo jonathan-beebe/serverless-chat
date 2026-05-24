@@ -98,6 +98,24 @@ function nextId(): string {
   return crypto.randomUUID()
 }
 
+/**
+ * BUG-006: resolve a stored record's display attribution. Prefers the
+ * absolute `senderId` against the local `selfPeerId`; falls back to the
+ * legacy perspective-relative `from` when either is missing (records
+ * written before the senderId rollout, or chat envelopes received from a
+ * pre-fix peer). The two paths converge on the same `'me' | 'them'`
+ * answer for in-session display, but only the senderId path is safe
+ * across history-merge rounds.
+ */
+function resolveFrom(
+  senderId: string | undefined,
+  legacyFrom: 'me' | 'them',
+  selfPeerId: string | null,
+): 'me' | 'them' {
+  if (senderId && selfPeerId) return senderId === selfPeerId ? 'me' : 'them'
+  return legacyFrom
+}
+
 function emptyTelemetry(): NetworkTelemetry {
   return {
     connectedAt: null,
@@ -145,6 +163,15 @@ export function useChatSession(): ChatSession {
   // callbacks (wireChannel.onmessage etc.) without re-binding the callback
   // identity on every state change.
   const conversationIdRef = useRef<string | null>(null)
+  // BUG-006: per-conversation absolute identity for this device. Stamped
+  // on every outgoing chat envelope as `sender` and on every stored
+  // record's `senderId`, so the receiver stores the *same* senderId we do.
+  // Display layer derives `from = m.senderId === selfPeerId ? 'me' : 'them'`,
+  // making the history merge a pure dedupe-and-insert with no perspective
+  // flip (the previous source of the BUG-006 "everyone shows as You"
+  // corruption). Loaded from the conversation row at bind time; minted
+  // fresh and persisted if the row has no `selfPeerId` yet.
+  const selfPeerIdRef = useRef<string | null>(null)
   // FEAT-012: tracks the in-flight bindConversation read so a history payload
   // arriving before the local seed completes waits for the seed before
   // merging. Otherwise the merge can race against setMessages(loaded).
@@ -286,12 +313,22 @@ export function useChatSession(): ChatSession {
           setMessages((prev) => [...prev, { id: env.id, from: 'them', text: env.text, at: receivedAt }])
           // FEAT-012: best-effort persistence. Failure logs and keeps the
           // UI moving so a quota-full or transient IDB error doesn't strand
-          // the chat.
+          // the chat. BUG-006: also persist the peer's absolute identity
+          // (`senderId = env.sender`) so resumes resolve attribution
+          // without flipping perspective. A pre-fix peer omits `sender`;
+          // we still write the legacy `from: 'them'` so display stays
+          // correct in-session.
           const convId = conversationIdRef.current
           if (convId) {
             knownIdsRef.current.add(env.id)
             storage
-              .appendMessage(convId, { id: env.id, from: 'them', text: env.text, at: receivedAt })
+              .appendMessage(convId, {
+                id: env.id,
+                from: 'them',
+                senderId: env.sender,
+                text: env.text,
+                at: receivedAt,
+              })
               .catch((err) => console.warn('[storage] appendMessage (recv) failed', err))
           }
           pushSample({ kind: 'received', at: receivedAt, messageId: env.id, sentAt: env.sentAt, transitMs })
@@ -395,10 +432,18 @@ export function useChatSession(): ChatSession {
           // bindConversation read so the merge runs against the seeded local
           // set, not an empty list. Then:
           //   1. Verify conv ID matches the session's (drop on mismatch).
-          //   2. Flip perspective (sender's `from: 'me'` ↔ receiver's `from: 'them'`).
-          //   3. Skip ids already locally known (the dedupe rule).
-          //   4. Insert remainder into messages + storage in time order.
-          //   5. Latch hasResumed so Chat draws the "Resumed here" divider.
+          //   2. Skip ids already locally known (the dedupe rule).
+          //   3. Insert remainder into messages + storage in time order.
+          //   4. Latch hasResumed so Chat draws the "Resumed here" divider.
+          //
+          // BUG-006: the merge no longer flips perspective when the
+          // record carries `sender` (absolute identity from the original
+          // sender's `selfPeerId`). Both peers store the same senderId for
+          // the same message, so insertion is verbatim. The legacy
+          // perspective flip is retained as a fallback for records shipped
+          // by pre-fix peers (no `sender` field) — but those records still
+          // came through the chat envelope earlier and so are usually
+          // already in `knownIdsRef`, skipping the merge entirely.
           const expected = conversationIdRef.current
           if (!expected) {
             console.warn('[storage] history payload received but no conversationId is bound; dropping')
@@ -420,20 +465,30 @@ export function useChatSession(): ChatSession {
               }
             }
             const known = knownIdsRef.current
-            const toMerge: HistoryMessage[] = []
+            const selfPeerId = selfPeerIdRef.current
+            interface MergeRecord {
+              id: string
+              senderId: string | undefined
+              from: 'me' | 'them'
+              text: string
+              at: number
+            }
+            const toMerge: MergeRecord[] = []
             for (const m of env.messages) {
               if (known.has(m.id)) continue
-              // Trust-local conflict rule: if the id is somehow already
-              // present, we keep the local copy. Skip-on-known above already
-              // implements that; the explicit warn lives in storage where a
-              // body mismatch could be detected on bulk-insert.
-              const flipped: HistoryMessage = {
-                id: m.id,
-                from: m.from === 'me' ? 'them' : 'me',
-                text: m.text,
-                at: m.at,
+              // BUG-006: when `m.sender` is present we DON'T flip — the
+              // senderId is absolute and we trust it verbatim. Display
+              // attribution is then `m.sender === selfPeerId ? 'me' :
+              // 'them'`. Legacy histories (no `sender`) fall back to the
+              // previous perspective flip so cross-version peers still
+              // produce sensible bubbles in-session.
+              let resolvedFrom: 'me' | 'them'
+              if (m.sender) {
+                resolvedFrom = selfPeerId && m.sender === selfPeerId ? 'me' : 'them'
+              } else {
+                resolvedFrom = m.from === 'me' ? 'them' : 'me'
               }
-              toMerge.push(flipped)
+              toMerge.push({ id: m.id, senderId: m.sender, from: resolvedFrom, text: m.text, at: m.at })
               known.add(m.id)
             }
             if (toMerge.length > 0) {
@@ -448,7 +503,13 @@ export function useChatSession(): ChatSession {
               try {
                 await storage.bulkInsertMessages(
                   expected,
-                  toMerge.map((m) => ({ id: m.id, from: m.from, text: m.text, at: m.at })),
+                  toMerge.map((m) => ({
+                    id: m.id,
+                    from: m.from,
+                    senderId: m.senderId,
+                    text: m.text,
+                    at: m.at,
+                  })),
                 )
               } catch (err) {
                 console.warn('[storage] bulkInsertMessages failed', err)
@@ -625,17 +686,43 @@ export function useChatSession(): ChatSession {
     const load = (async () => {
       try {
         // Upsert a stub if missing so the conversation appears on Home even
-        // if the user closes the tab before sending anything.
+        // if the user closes the tab before sending anything. BUG-006:
+        // mint a `selfPeerId` on first bind and persist it on the conv
+        // row, so this device's identity for this conversation is stable
+        // across resumes and visible to the display layer (Home reads it
+        // to translate stored `senderId`s into "You" vs "Them" labels).
         const existing = await storage.getConversation(id)
+        const now = Date.now()
         if (!existing) {
-          await storage.upsertConversation({ id, createdAt: Date.now(), lastActivityAt: Date.now() })
+          const selfPeerId = nextId()
+          selfPeerIdRef.current = selfPeerId
+          await storage.upsertConversation({ id, createdAt: now, lastActivityAt: now, selfPeerId })
+        } else if (!existing.selfPeerId) {
+          // Legacy conversation written before BUG-006 — adopt a fresh
+          // selfPeerId so any new writes carry an absolute identity. Old
+          // records keep their legacy `from` field and resolve through the
+          // fallback path; new records get the new path.
+          const selfPeerId = nextId()
+          selfPeerIdRef.current = selfPeerId
+          await storage.upsertConversation({ ...existing, selfPeerId })
+        } else {
+          selfPeerIdRef.current = existing.selfPeerId
         }
         const records = await storage.listMessages(id)
         // Snapshot for the outgoing `history` envelope reflects the persisted
         // store at bind time — live entries that arrived mid-bind are already
         // on the wire via the live `chat` path and would be double-sent if
-        // we included them here. So the snapshot stays from storage only.
-        historySnapshotRef.current = records.map((r) => ({ id: r.id, from: r.from, text: r.text, at: r.at }))
+        // we included them here. BUG-006: ship `sender` (the absolute
+        // identity) alongside the legacy `from`. Records that pre-date the
+        // fix have no `senderId`; they ship with `sender` undefined and the
+        // peer's merge path falls back to the legacy `from`-and-flip route.
+        historySnapshotRef.current = records.map((r) => ({
+          id: r.id,
+          from: r.from,
+          sender: r.senderId,
+          text: r.text,
+          at: r.at,
+        }))
         // Union the persisted records into knownIdsRef rather than replace.
         // A live send/chat-receive that landed during the bind already added
         // its id to the current set; we must not drop it.
@@ -649,7 +736,12 @@ export function useChatSession(): ChatSession {
           const liveIds = new Set(prev.map((m) => m.id))
           const additions = records
             .filter((r) => !liveIds.has(r.id))
-            .map<ChatMessage>((r) => ({ id: r.id, from: r.from, text: r.text, at: r.at }))
+            .map<ChatMessage>((r) => ({
+              id: r.id,
+              from: resolveFrom(r.senderId, r.from, selfPeerIdRef.current),
+              text: r.text,
+              at: r.at,
+            }))
           if (additions.length === 0) return prev
           const next = [...prev, ...additions]
           next.sort((a, b) => a.at - b.at)
@@ -798,7 +890,11 @@ export function useChatSession(): ChatSession {
       if (!channel || channel.readyState !== 'open') return
       const id = nextId()
       const sentAt = Date.now()
-      const env: WireEnvelope = { v: 1, t: 'chat', id, sentAt, text: trimmed }
+      // BUG-006: stamp our absolute identity onto the envelope so the peer
+      // stores `senderId = selfPeerId` against this message id. History
+      // merge on either side then doesn't need a perspective flip.
+      const sender = selfPeerIdRef.current ?? undefined
+      const env: WireEnvelope = { v: 1, t: 'chat', id, sentAt, text: trimmed, sender }
       channel.send(encode(env))
       setMessages((prev) => [...prev, { id, from: 'me', text: trimmed, at: sentAt, delivery: 'pending' }])
       // FEAT-012: persist as soon as the bubble shows up; failure is logged
@@ -807,7 +903,7 @@ export function useChatSession(): ChatSession {
       if (convId) {
         knownIdsRef.current.add(id)
         storage
-          .appendMessage(convId, { id, from: 'me', text: trimmed, at: sentAt })
+          .appendMessage(convId, { id, from: 'me', senderId: sender, text: trimmed, at: sentAt })
           .catch((err) => console.warn('[storage] appendMessage (send) failed', err))
       }
       pushSample({ kind: 'sent', at: sentAt, messageId: id, sentAt })
@@ -830,6 +926,7 @@ export function useChatSession(): ChatSession {
     // reset (AC#17). Delete is its own explicit action from the Home list.
     setConversationId(null)
     conversationIdRef.current = null
+    selfPeerIdRef.current = null
     knownIdsRef.current = new Set()
     historySnapshotRef.current = []
     bindPromiseRef.current = null

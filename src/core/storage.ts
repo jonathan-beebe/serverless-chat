@@ -28,11 +28,34 @@ export interface ConversationRecord {
   lastActivityAt: number
   /** Optional user-chosen label. Empty/undefined means "use auto-label." */
   label?: string
+  /**
+   * BUG-006: per-conversation absolute identity for the local peer. Stable
+   * across the conv's lifetime (set on first bind / first time we see this
+   * conv) so the display layer can resolve `senderId === selfPeerId ?
+   * 'me' : 'them'` without any perspective flipping. Absent on pre-fix
+   * records — readers fall back to the legacy `from` field on each message.
+   */
+  selfPeerId?: string
 }
 
 export interface MessageRecord {
   conversationId: string
   id: string
+  /**
+   * BUG-006: absolute author identity (the sender's `selfPeerId` at send
+   * time). Both peers store the SAME senderId for the same message, so
+   * history merge is pure dedupe-and-insert — no perspective flip needed.
+   * Optional only for backward compatibility with records written before
+   * the senderId rollout; new writes always include it.
+   */
+  senderId?: string
+  /**
+   * Legacy perspective-relative author. Kept on writes so a record written
+   * by post-fix code still renders correctly if read by pre-fix display
+   * paths (and so pre-fix records keep working through this same field).
+   * Resolve order on read: prefer `senderId` against the conv's
+   * `selfPeerId`; fall back to `from` if either is missing.
+   */
   from: 'me' | 'them'
   text: string
   at: number
@@ -91,6 +114,7 @@ function isConversationRecord(value: unknown): value is ConversationRecord {
   if (typeof v.createdAt !== 'number') return false
   if (typeof v.lastActivityAt !== 'number') return false
   if (v.label !== undefined && typeof v.label !== 'string') return false
+  if (v.selfPeerId !== undefined && typeof v.selfPeerId !== 'string') return false
   return true
 }
 
@@ -100,6 +124,7 @@ function isMessageRecord(value: unknown): value is MessageRecord {
   if (typeof v.conversationId !== 'string') return false
   if (typeof v.id !== 'string') return false
   if (v.from !== 'me' && v.from !== 'them') return false
+  if (v.senderId !== undefined && typeof v.senderId !== 'string') return false
   if (typeof v.text !== 'string') return false
   if (typeof v.at !== 'number') return false
   return true

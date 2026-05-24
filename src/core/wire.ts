@@ -33,6 +33,16 @@ export interface ChatEnvelope extends BaseEnvelope {
   t: 'chat'
   /** Trimmed chat text. */
   text: string
+  /**
+   * BUG-006: sender's per-conversation `selfPeerId`. Both peers store this
+   * verbatim against the message id, so history merge needs no perspective
+   * flip — the senderId is absolute. Optional on the wire for backward
+   * compatibility with pre-fix peers; absent → the receiver attributes the
+   * message via the legacy `from: 'them'` path and stays correct for its
+   * own display, but cross-side history merge for that record can't be
+   * proven safe (we treat it as receive-only).
+   */
+  sender?: string
 }
 
 export interface SyncProbeEnvelope extends BaseEnvelope {
@@ -87,10 +97,17 @@ export interface HistoryEnvelope extends BaseEnvelope {
  * Wire shape for a single message inside a `history` envelope. Mirrors
  * `ChatMessage` but ships across the wire (no `delivery` field — receipts
  * are an in-session signal, not part of persisted history).
+ *
+ * BUG-006: `sender` is the absolute author identity (the original sender's
+ * `selfPeerId`). When present, the receiver dedupes by `id` and inserts the
+ * record verbatim — no perspective flip. `from` is retained as a legacy
+ * fallback for histories shipped by pre-fix peers (or shipped from
+ * pre-fix storage records).
  */
 export interface HistoryMessage {
   id: string
   from: 'me' | 'them'
+  sender?: string
   text: string
   at: number
 }
@@ -128,12 +145,17 @@ export function decode(raw: string): WireEnvelope | null {
     return null
   }
   switch (obj.t) {
-    case 'chat':
+    case 'chat': {
       if (typeof obj.text !== 'string') {
         console.warn('[wire] dropping chat envelope missing text')
         return null
       }
-      return { v: 1, t: 'chat', id: obj.id, sentAt: obj.sentAt, text: obj.text }
+      // BUG-006: `sender` is optional for backward compat with pre-fix
+      // peers. Drop the field rather than rejecting the envelope when it's
+      // missing — the receiver's chat case has a legacy path for that case.
+      const sender = typeof obj.sender === 'string' ? obj.sender : undefined
+      return { v: 1, t: 'chat', id: obj.id, sentAt: obj.sentAt, text: obj.text, sender }
+    }
     case 'sync-probe':
       return { v: 1, t: 'sync-probe', id: obj.id, sentAt: obj.sentAt }
     case 'sync-ack':
@@ -202,7 +224,8 @@ export function decode(raw: string): WireEnvelope | null {
           // Single malformed entry shouldn't kill the rest of the payload.
           continue
         }
-        cleaned.push({ id: m.id, from: m.from, text: m.text, at: m.at })
+        const sender = typeof m.sender === 'string' ? m.sender : undefined
+        cleaned.push({ id: m.id, from: m.from, sender, text: m.text, at: m.at })
       }
       return {
         v: 1,
