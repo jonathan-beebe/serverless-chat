@@ -158,15 +158,17 @@ describe('Home conversation list (FEAT-012 AC#18 / #20 / #21 / #26)', () => {
 
   it('Delete with confirm removes the row and the underlying record (AC#20)', async () => {
     await seed('aaa', { label: 'Goodbye' })
-    // window.confirm is the pragmatic v1 confirm primitive per the ticket.
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
     render(<Home onStart={() => {}} />)
 
     const row = await screen.findByTestId('conversation-row-aaa')
     fireEvent.click(within(row).getByRole('button', { name: /more actions/i }))
     fireEvent.click(screen.getByRole('menuitem', { name: /delete chat/i }))
 
-    expect(confirm).toHaveBeenCalled()
+    // A11Y-033: the menuitem now opens a ConfirmDialog; clicking its
+    // destructive "Delete" button is what commits the removal.
+    const dialog = await screen.findByRole('alertdialog', { name: /delete chat\?/i })
+    fireEvent.click(within(dialog).getByRole('button', { name: /^delete$/i }))
+
     await waitFor(() => {
       expect(screen.queryByTestId('conversation-row-aaa')).not.toBeInTheDocument()
     })
@@ -174,12 +176,16 @@ describe('Home conversation list (FEAT-012 AC#18 / #20 / #21 / #26)', () => {
 
   it('Delete cancel leaves the row in place (AC#20)', async () => {
     await seed('aaa', { label: 'Stays' })
-    vi.spyOn(window, 'confirm').mockReturnValue(false)
     render(<Home onStart={() => {}} />)
 
     const row = await screen.findByTestId('conversation-row-aaa')
     fireEvent.click(within(row).getByRole('button', { name: /more actions/i }))
     fireEvent.click(screen.getByRole('menuitem', { name: /delete chat/i }))
+
+    // A11Y-033: the menuitem opens a ConfirmDialog; clicking Cancel is what
+    // signals "no deletion" — there is no window.confirm to mock anymore.
+    const dialog = await screen.findByRole('alertdialog', { name: /delete chat\?/i })
+    fireEvent.click(within(dialog).getByRole('button', { name: /^cancel$/i }))
 
     // No re-fetch should ever fire, but wait a tick so any erroneous
     // remove() call has time to commit. Wrapped in `act` so the row's own
@@ -189,6 +195,32 @@ describe('Home conversation list (FEAT-012 AC#18 / #20 / #21 / #26)', () => {
       await new Promise((r) => setTimeout(r, 10))
     })
     expect(screen.getByTestId('conversation-row-aaa')).toBeInTheDocument()
+  })
+
+  // A11Y-033: the row's Delete affordance previously called window.confirm,
+  // which has inconsistent SR support and loses focus on dismiss. Now it
+  // opens an accessible ConfirmDialog whose Cancel button returns focus to
+  // the ⋯ trigger on the row that opened it.
+  it('Delete menuitem opens an alertdialog and Cancel returns focus to the ⋯ trigger (A11Y-033)', async () => {
+    await seed('aaa', { label: 'Stays' })
+    render(<Home onStart={() => {}} />)
+
+    const row = await screen.findByTestId('conversation-row-aaa')
+    const trigger = within(row).getByRole('button', { name: /more actions/i })
+    fireEvent.click(trigger)
+    fireEvent.click(screen.getByRole('menuitem', { name: /delete chat/i }))
+
+    const dialog = await screen.findByRole('alertdialog', { name: /delete chat\?/i })
+    expect(dialog).toBeInTheDocument()
+    // Body text carries the original AC#20 wording.
+    expect(dialog).toHaveTextContent(/this won't notify the other person/i)
+
+    fireEvent.click(within(dialog).getByRole('button', { name: /^cancel$/i }))
+
+    await waitFor(() => {
+      expect(screen.queryByRole('alertdialog', { name: /delete chat\?/i })).not.toBeInTheDocument()
+    })
+    expect(document.activeElement).toBe(trigger)
   })
 
   it('Rename inline edits the row`s label (AC#21)', async () => {

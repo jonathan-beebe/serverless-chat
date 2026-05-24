@@ -1,7 +1,7 @@
 ---
 id: A11Y-033
 type: a11y
-status: open
+status: in-progress
 created: 2026-05-24
 ---
 
@@ -175,3 +175,43 @@ longer a shared substrate with that ticket.
   navigation. Originally flagged as a possible bundle with this ticket's Dialog
   primitive; A11Y-025 was subsequently scoped to the APG menu pattern (not a
   dialog), so the two are now independent.
+
+## Working
+
+**2026-05-24** — Built `src/components/ConfirmDialog.tsx` per the suggested
+shape: native `<dialog>` with `role="alertdialog"`, `aria-labelledby` /
+`aria-describedby` wired to a visible title and body, focus on Cancel on open,
+ESC routed through `onCancel`, a small Tab / Shift+Tab focus trap across the two
+action buttons, and focus restoration to a caller-supplied `returnFocusTo` ref
+on real open→close transitions. The destructive confirm uses the same red tokens
+already in use on the Delete chat menu item (so it doesn't force a new `danger`
+Button variant into the design system in this ticket — that can land
+separately).
+
+Primitive tests live in `src/components/ConfirmDialog.test.tsx` and assert the
+alertdialog role + name/description wiring, initial focus on Cancel, Cancel /
+Confirm callbacks, the routed cancel event, the focus trap, the returnFocusTo
+restoration, and the destructive-class application.
+
+Integrated into `src/screens/Home.tsx`: `ConversationRow.doDelete` now closes
+the menu and opens the dialog via a new `confirmDeleteOpen` state. The dialog
+body keeps the AC#20 wording verbatim. `returnFocusTo` is the row's More-actions
+trigger so Cancel returns focus there. Confirmed delete unmounts the row, so
+focus falls naturally — a follow-up can implement the full focus-return cascade
+(next row → previous row → Start a chat) if the user encounters the loss in
+practice.
+
+One subtle bug uncovered while landing this: ConfirmDialog initially ran its
+close-side cleanup on every render where `open` was false — including the first
+mount — which stole focus from the page's auto-focus targets (Start a chat).
+Added a `wasOpenRef` so the close cleanup only runs on a real open→close
+transition. Without this, the existing A11Y-025 keyboard navigation tests broke
+(focus snapped back to the ⋯ trigger after every ArrowUp/Down).
+
+Existing FEAT-012 AC#20 tests "Delete with confirm" / "Delete cancel" rewritten
+to drive the new ConfirmDialog (click Delete in the dialog vs. click Cancel) —
+`vi.spyOn(window, 'confirm')` removed entirely. New A11Y-033 test asserts:
+clicking the row's Delete menuitem opens the alertdialog with AC#20 wording, and
+Cancel returns focus to the ⋯ trigger.
+
+Verification: `npm test` → 389/389. Lint + typecheck clean.

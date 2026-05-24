@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { Button } from '../components/Button'
 import { Callout } from '../components/Callout'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 import { Heading } from '../components/Heading'
 import { LiveRegion } from '../components/LiveRegion'
 import { ScreenContainer, useScreenChrome } from '../components/ScreenChrome'
@@ -126,6 +127,9 @@ function ConversationRow({
   const [activeIndex, setActiveIndex] = useState(0)
   const typeaheadBufferRef = useRef('')
   const typeaheadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // A11Y-033: replaced window.confirm with an `alertdialog`-shaped primitive.
+  // `confirmDeleteOpen` drives the dialog; cancel and confirm both close it.
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
 
   // A11Y-025: on open, move focus to the first non-disabled menuitem and
   // reset roving-tabindex state; on close, reset the type-ahead buffer/timer
@@ -335,12 +339,11 @@ function ConversationRow({
   }
 
   const doDelete = () => {
+    // A11Y-033: open the accessible ConfirmDialog instead of calling
+    // window.confirm. The menu closes immediately; the dialog drives the
+    // remaining confirmation flow.
     onCloseMenu()
-    // window.confirm is the pragmatic v1 choice — the design system doesn't
-    // yet have a real confirm dialog primitive. AC#20 names exact wording.
-    const ok = window.confirm("Delete this chat from your device? This won't notify the other person.")
-    if (!ok) return
-    onDelete()
+    setConfirmDeleteOpen(true)
   }
 
   const label = record.label && record.label.length > 0 ? record.label : autoLabel(record)
@@ -471,6 +474,25 @@ function ConversationRow({
         readOnly
         defaultValue=""
         className="absolute left-[-9999px] h-px w-px opacity-0"
+      />
+      {/* A11Y-033: accessible replacement for window.confirm. AC#20 fixes the
+          wording. `returnFocusTo={triggerRef}` puts focus back on the ⋯
+          button on cancel; on confirmed delete the row unmounts so focus
+          falls naturally (best-effort — a future polish ticket can move
+          focus to a stable sibling). */}
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        title="Delete chat?"
+        body="Delete this chat from your device? This won't notify the other person."
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        destructive
+        onCancel={() => setConfirmDeleteOpen(false)}
+        onConfirm={() => {
+          setConfirmDeleteOpen(false)
+          onDelete()
+        }}
+        returnFocusTo={triggerRef}
       />
     </li>
   )
