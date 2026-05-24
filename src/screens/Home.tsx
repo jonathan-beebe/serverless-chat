@@ -155,6 +155,7 @@ function ConversationRow({
           setHasMessages(true)
         }
       } catch {
+        if (cancelled) return
         setPreview(null)
         setHasMessages(false)
       }

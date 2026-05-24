@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { IDBFactory } from 'fake-indexeddb'
 import { Home } from './Home'
@@ -158,9 +158,13 @@ describe('Home conversation list (FEAT-012 AC#18 / #20 / #21 / #26)', () => {
     fireEvent.click(within(row).getByRole('button', { name: /more actions/i }))
     fireEvent.click(screen.getByRole('menuitem', { name: /delete chat/i }))
 
-    // No re-fetch should ever fire, but waitFor a tick so any erroneous
-    // remove() call has time to commit.
-    await new Promise((r) => setTimeout(r, 10))
+    // No re-fetch should ever fire, but wait a tick so any erroneous
+    // remove() call has time to commit. Wrapped in `act` so the row's own
+    // async peek effect (listMessages → setPreview) can flush under act
+    // instead of racing the assertion with an "update not wrapped" warning.
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10))
+    })
     expect(screen.getByTestId('conversation-row-aaa')).toBeInTheDocument()
   })
 
