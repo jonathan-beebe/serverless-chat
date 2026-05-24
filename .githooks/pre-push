@@ -1,0 +1,4 @@
+#!/bin/sh
+# Pre-push hook: verify the production bundle compiles before pushing.
+
+npm run build
