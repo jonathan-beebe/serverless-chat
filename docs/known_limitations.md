@@ -3,19 +3,30 @@
 Things the spike does not handle yet, with notes on how we'd close each gap if
 this graduated from "two-tab demo" to something real.
 
-## No TURN relay — strict-NAT peers can't connect
+## Optional TURN relay — strict-NAT peers can connect when configured
 
-The browser is configured with STUN only (`ICE_CONFIG` in `src/core/rtc.ts`).
-STUN tells each peer its public IP as seen from the internet, which is enough
-for most home networks. It is **not** enough when both peers sit behind
-**symmetric NATs** — common on corporate guest Wi-Fi, some carrier-grade NAT,
-and strict firewalls — because the public IP/port each side discovers via STUN
-won't accept inbound traffic from the other peer.
+The browser is configured with STUN by default (`ICE_CONFIG` in
+`src/core/rtc.ts`). STUN tells each peer its public IP as seen from the
+internet, which is enough for most home networks. It is **not** enough when both
+peers sit behind **symmetric NATs** — common on corporate guest Wi-Fi, VPN
+exits, some carrier-grade NAT, and strict firewalls — because the public IP/port
+each side discovers via STUN won't accept inbound traffic from the other peer.
 
-When this happens today: ICE gathering finishes, the SDPs exchange fine, and
-then `pc.connectionState` transitions to `failed` after connectivity checks time
-out. The user sees the generic "Try a different network" UI (see `BUG-005`) with
-no signal that the issue is structural rather than transient.
+A TURN entry is now **optionally** appended to `ICE_CONFIG` when the
+`VITE_TURN_URLS` / `VITE_TURN_USERNAME` / `VITE_TURN_CREDENTIAL` env vars are
+set (see `.env.example`). When unset, behavior is STUN-only and unchanged. Wired
+in commit `ce6e25a`.
+
+When the env vars are **unset and** both peers are behind symmetric NATs: ICE
+gathering finishes, the SDPs exchange fine, and then `pc.connectionState`
+transitions to `failed` after connectivity checks time out. The user sees the
+generic "Try a different network" UI (see `BUG-005`).
+
+In dev, the cause is no longer opaque — `src/core/rtcDiagnostics.ts` logs every
+ICE candidate as it's gathered (with type: `host` / `srflx` / `relay`), emits
+`icecandidateerror` events with the STUN/TURN response code, and on `connected`
+dumps the selected candidate pair so you can tell whether the chat is going
+direct or via a relay. Production builds stay quiet.
 
 ### What TURN would fix
 
@@ -25,31 +36,38 @@ bytes between them. The chat stays end-to-end private — TURN sees the DTLS
 ciphertext, not message content — but the IP-layer path is no longer
 peer-to-peer.
 
-Mechanically the change is one line in `ICE_CONFIG`:
+Mechanically, `buildIceServers()` in `src/core/rtc.ts` appends a TURN entry to
+the base STUN-only list when the three env vars are set:
 
 ```ts
-iceServers: [
-  { urls: 'stun:stun.cloudflare.com:3478' },
-  { urls: 'turn:turn.example.com:3478', username: '…', credential: '…' },
-],
+return [...BASE_ICE_SERVERS, { urls, username, credential }]
 ```
 
-### Why we haven't done it
+A provider that hands you several URL variants for the same server (e.g.
+Metered's `:80`, `:80?transport=tcp`, `:443`, `turns:…:443?transport=tcp`) goes
+in as a comma-separated `VITE_TURN_URLS` — all four variants share one
+username/credential pair, and ICE races them.
 
-TURN bandwidth costs money, so static credentials shipped in client JS get
-scraped and abused. The standard pattern is short-lived HMAC-signed credentials
-minted by a backend (the "TURN REST API" spec). That conflicts with the spike's
-thesis that _no server sees the chat_.
+### Caveats of step 2 (where we are)
+
+TURN bandwidth costs money, so credentials shipped in client JS get scraped and
+abused. We're paying that cost knowingly for the spike: `VITE_TURN_*` vars are
+bundled into the client by Vite, so any public deployment of the built bundle
+leaks the credentials to anyone viewing source. For `npm run dev` on localhost —
+the only context this is currently used in — the creds never leave the dev
+machine. The standard production fix is short-lived HMAC-signed credentials
+minted by a backend (the "TURN REST API" spec), which is step 3 below.
 
 ### Maturity path
 
 Ordered from cheapest to most production-shaped:
 
 1. **Accept and document.** Tell users "if it won't connect, try a phone
-   hotspot." Honest, zero infra. Where we are today.
+   hotspot." Honest, zero infra. Default behavior when no TURN env vars are set.
 2. **Hosted TURN with static credentials** (Metered, Xirsys, Twilio free tiers).
    No backend; credentials live in the bundle. Fine for a spike, abuse-prone for
-   anything public.
+   anything public. **Where we are today** (commit `ce6e25a`, Metered free tier,
+   env-var-driven so contributors without creds fall back to step 1).
 3. **Cloudflare Worker that mints short-lived TURN tokens** (~20 lines).
    Introduces a server, but one that only hands out 10-minute relay credentials
    — it never sees chat content, so the privacy story stays intact. Cloudflare
@@ -58,8 +76,9 @@ Ordered from cheapest to most production-shaped:
 4. **Self-hosted coturn on a small VPS** plus the credential-minting Worker.
    Full control, fixed monthly cost, ops burden.
 
-The intended path is 1 → 3. Step 2 is a useful waypoint if we want to prove the
-connection works on a strict-NAT network before standing up the Worker.
+The intended path is 1 → 2 → 3. We jumped to step 2 once a real VPN'd test on
+public Wi-Fi confirmed the symmetric-NAT diagnosis the diagnostics module had
+predicted; step 3 is the right move before any public deploy.
 
 ### When to revisit
 
@@ -72,8 +91,11 @@ connection works on a strict-NAT network before standing up the Worker.
 ## Related rough edges (not addressed here)
 
 - `waitForIceComplete` swallows the timeout-vs-complete distinction
-  (`src/core/rtc.ts:50-69`), so the offerer can't warn the user _before_ sending
-  the invite that STUN didn't respond and the link may only work on the same
-  LAN.
+  (`src/core/rtc.ts`), so the offerer can't warn the user _before_ sending the
+  invite that STUN didn't respond and the link may only work on the same LAN.
+  Diagnostics now log "ICE gathering complete in Xms" vs the "no srflx/relay
+  candidates" warning in DevTools (commit `ce6e25a`), but that's a developer
+  signal — the function itself still returns `void` either way and the user flow
+  is unchanged.
 - No retry on transient STUN failure during gathering.
 - `ICE_GATHERING_TIMEOUT_MS` is hardcoded at 5s and not tunable per network.
