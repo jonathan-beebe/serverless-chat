@@ -29,31 +29,47 @@ Bob's answer is just an encoded string (the offerer's tab is already open, so
 paste is enough). Both SDPs are LZ-string compressed and base64url-encoded so
 they fit in a URL fragment. Fragments never leave the browser, so the static
 host serving the bundle never sees the SDP — and once the data channel opens,
-the chat traffic flows directly peer-to-peer.
+the chat traffic flows directly peer-to-peer (or via an optional TURN relay on
+networks where direct ICE can't punch through; the relay sees DTLS ciphertext,
+never message content — see `docs/known_limitations.md`).
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant A as Alice (offerer)
     participant S as STUN<br/>(Cloudflare / Google)
+    participant T as TURN<br/>(optional — VITE_TURN_*)
     participant H as Out-of-band channel<br/>(Teams / SMS / email)
     participant B as Bob (joiner)
 
     A->>A: createOffer() — new RTCPeerConnection + DataChannel("chat")
     A->>S: gather ICE candidates (non-trickle)
     S-->>A: server-reflexive candidates
+    opt TURN configured
+        A->>T: allocate relay
+        T-->>A: relay candidate
+    end
     A->>A: encode SDP → invite URL (#offer=…)
     A->>H: send invite URL
     H->>B: open invite URL
     B->>B: acceptOffer() — setRemote(offer), createAnswer()
     B->>S: gather ICE candidates
     S-->>B: server-reflexive candidates
+    opt TURN configured
+        B->>T: allocate relay
+        T-->>B: relay candidate
+    end
     B->>B: encode SDP → reply code
     B->>H: send reply code
     H->>A: paste reply code
     A->>A: acceptAnswer() — setRemoteDescription(answer)
-    A-->>B: ICE connectivity checks (direct path)
-    Note over A,B: RTCDataChannel "chat" opens — messages flow peer-to-peer,<br/>no server in the path.
+    alt direct path works (most home networks)
+        A-->>B: ICE connectivity checks — peer-to-peer
+    else symmetric NAT, TURN configured
+        A-->>T: chat bytes (DTLS-encrypted)
+        T-->>B: forwarded
+    end
+    Note over A,B: RTCDataChannel "chat" opens — direct when ICE can punch through,<br/>via TURN otherwise. TURN sees DTLS ciphertext, never message content.
 ```
 
 Source map:
