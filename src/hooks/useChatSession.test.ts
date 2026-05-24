@@ -1354,4 +1354,303 @@ describe('useChatSession FEAT-012 resume', () => {
 
     expect(result.current.hasResumed).toBe(false)
   })
+
+  // BUG-006: the user's report — copying a transcript from Home after a
+  // mixed-author live session shows every message attributed to 'You'. The
+  // tests below drive the full live arc (send + receive, alternating) and
+  // then assert what `storage.listMessages` returns, since that's what
+  // Home's "Copy transcript" feeds into `formatTranscript`. The failure
+  // mode the ticket describes lives on the persistence path, not in
+  // `formatTranscript`.
+
+  it('BUG-006: a live alternating exchange persists each (from, at) verbatim', async () => {
+    const storage = await import('../core/storage')
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsOfferer('bug6-mixed')
+    })
+    act(() => lastChannel!.open())
+
+    // Stamp distinct moments on each turn so a "everything collapses to one
+    // timestamp" bug shows up against the expected spread.
+    const baseAt = 1_700_000_000_000
+    const t0 = baseAt
+    const t1 = baseAt + 60_000
+    const t2 = baseAt + 120_000
+    const t3 = baseAt + 180_000
+
+    // Send a local message. The hook uses Date.now() for the at, so spy.
+    const dateNow = vi.spyOn(Date, 'now')
+    dateNow.mockReturnValue(t0)
+    act(() => result.current.send('hello'))
+
+    dateNow.mockReturnValue(t1)
+    act(() =>
+      lastChannel!.onmessage?.({
+        data: JSON.stringify({ v: 1, t: 'chat', id: 'inc-1', sentAt: t1 - 100, text: 'hi back' }),
+      }),
+    )
+
+    dateNow.mockReturnValue(t2)
+    act(() => result.current.send('how are you'))
+
+    dateNow.mockReturnValue(t3)
+    act(() =>
+      lastChannel!.onmessage?.({
+        data: JSON.stringify({ v: 1, t: 'chat', id: 'inc-2', sentAt: t3 - 100, text: 'good' }),
+      }),
+    )
+
+    // Yield so the appendMessage IDB transactions resolve.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    })
+
+    dateNow.mockRestore()
+
+    const stored = await storage.listMessages('bug6-mixed')
+    expect(stored).toHaveLength(4)
+    // Each record kept the side that originated it and the moment it was
+    // sent / received. If any of these fail, the persistence path collapsed
+    // the perspective the way the bug ticket describes.
+    expect(stored.map((m) => ({ from: m.from, at: m.at, text: m.text }))).toEqual([
+      { from: 'me', at: t0, text: 'hello' },
+      { from: 'them', at: t1, text: 'hi back' },
+      { from: 'me', at: t2, text: 'how are you' },
+      { from: 'them', at: t3, text: 'good' },
+    ])
+  })
+
+  it('BUG-006: history merge does not overwrite locally-originated from:"me" records', async () => {
+    // Hypothesis #1 from the ticket. The peer's history snapshot contains
+    // our local sends from THEIR perspective (from: 'them'). The merge code
+    // flips perspective, but the dedupe is supposed to skip ids we already
+    // hold so the local `from: 'me'` records aren't overwritten with the
+    // flipped value.
+    const storage = await import('../core/storage')
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsOfferer('bug6-merge')
+    })
+    act(() => lastChannel!.open())
+
+    const dateNow = vi.spyOn(Date, 'now')
+    dateNow.mockReturnValue(1_700_000_000_000)
+    act(() => result.current.send('local-1'))
+    dateNow.mockReturnValue(1_700_000_060_000)
+    act(() => result.current.send('local-2'))
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+
+    // Grab the actual ids the hook minted so the history echo matches.
+    const localIds = result.current.messages.map((m) => m.id)
+    expect(localIds).toHaveLength(2)
+
+    // Peer's history envelope: our two sends from THEIR perspective + a new
+    // peer-originated message.
+    const incoming = [
+      { id: localIds[0], from: 'them' as const, text: 'local-1', at: 1_700_000_000_000 },
+      { id: localIds[1], from: 'them' as const, text: 'local-2', at: 1_700_000_060_000 },
+      { id: 'peer-new', from: 'me' as const, text: 'their-only', at: 1_700_000_090_000 },
+    ]
+    await act(async () => {
+      lastChannel!.onmessage?.({
+        data: JSON.stringify({
+          v: 1,
+          t: 'history',
+          id: 'h-1',
+          sentAt: 1_700_000_100_000,
+          conversationId: 'bug6-merge',
+          messages: incoming,
+        }),
+      })
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+
+    dateNow.mockRestore()
+
+    const stored = await storage.listMessages('bug6-merge')
+    const byId = new Map(stored.map((m) => [m.id, m]))
+    expect(byId.get(localIds[0])?.from).toBe('me')
+    expect(byId.get(localIds[1])?.from).toBe('me')
+    expect(byId.get('peer-new')?.from).toBe('them')
+    expect(byId.get(localIds[0])?.at).toBe(1_700_000_000_000)
+    expect(byId.get(localIds[1])?.at).toBe(1_700_000_060_000)
+  })
+
+  it('BUG-006 canonical: in-chat transcript matches Home-row transcript after the chat ends', async () => {
+    // The user's exact arc: drive a live mixed exchange, capture the markdown
+    // `formatTranscript(session.messages, ...)` would produce mid-session,
+    // tear the session down, then read back from storage and re-format. The
+    // two strings must be equal (modulo `delivery: 'pending'` which the
+    // formatter ignores). This is the test the bug ticket calls out as
+    // canonical — it walks the full live-session → end → read-from-storage
+    // → format path that the unit tests don't.
+    const storage = await import('../core/storage')
+    const { formatTranscript } = await import('../core/transcript')
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsOfferer('bug6-e2e')
+    })
+    act(() => lastChannel!.open())
+
+    const dateNow = vi.spyOn(Date, 'now')
+    const baseAt = 1_700_000_000_000
+    const times = [baseAt, baseAt + 60_000, baseAt + 120_000, baseAt + 180_000]
+
+    dateNow.mockReturnValue(times[0])
+    act(() => result.current.send('first from me'))
+
+    dateNow.mockReturnValue(times[1])
+    act(() =>
+      lastChannel!.onmessage?.({
+        data: JSON.stringify({ v: 1, t: 'chat', id: 'p-1', sentAt: times[1] - 100, text: 'reply from them' }),
+      }),
+    )
+
+    dateNow.mockReturnValue(times[2])
+    act(() => result.current.send('second from me'))
+
+    dateNow.mockReturnValue(times[3])
+    act(() =>
+      lastChannel!.onmessage?.({
+        data: JSON.stringify({ v: 1, t: 'chat', id: 'p-2', sentAt: times[3] - 100, text: 'second from them' }),
+      }),
+    )
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    })
+
+    // Capture mid-session: this is what Chat.tsx's toolbar Copy would emit.
+    const midSessionMd = formatTranscript(result.current.messages, { includeTimestamps: true })
+
+    // End the chat — what `goHome` does.
+    act(() => result.current.reset())
+
+    dateNow.mockRestore()
+
+    // Read back from storage and re-format — this is what Home does on
+    // Copy transcript.
+    const stored = await storage.listMessages('bug6-e2e')
+    const postEndMd = formatTranscript(
+      stored.map((m) => ({ id: m.id, from: m.from, text: m.text, at: m.at })),
+      { includeTimestamps: true },
+    )
+
+    expect(postEndMd).toBe(midSessionMd)
+    // Spot-check both headings are present so a degenerate "both empty"
+    // pass can't slip through.
+    expect(postEndMd).toContain('**You**')
+    expect(postEndMd).toContain('**Them**')
+  })
+
+  it('BUG-006: a chat envelope that arrives before bindConversation resolves still persists with from:"them"', async () => {
+    // Hypothesis #3 from the ticket. Stall the local listMessages so the
+    // bind is still in flight when the chat envelope arrives. The chat-
+    // receive path adds the id to knownIdsRef *before* bind completes, but
+    // bind then reassigns knownIdsRef to a fresh set — losing the id —
+    // which is the suspected vector for a later history merge writing
+    // from:'me' over the just-persisted from:'them' record.
+    const storage = await import('../core/storage')
+    const realListMessages = storage.listMessages
+    const listSpy = vi.spyOn(storage, 'listMessages')
+    let releaseBind: (() => void) | null = null
+    const bindGate = new Promise<void>((resolve) => {
+      releaseBind = resolve
+    })
+    listSpy.mockImplementationOnce(async (id: string) => {
+      await bindGate
+      return realListMessages(id)
+    })
+
+    const { result } = renderHook(() => useChatSession())
+    // Start the bind without awaiting — bind is gated on the first list call.
+    let bindPromise: Promise<void> | null = null
+    act(() => {
+      bindPromise = result.current.bindConversation('bug6-race')
+    })
+    // Drive the answerer side so a channel exists when we feed the message.
+    const { encode } = await import('../core/encoding')
+    const offerCode = encode({ type: 'offer', sdp: 'v=0\r\n' })
+    await act(async () => {
+      await result.current.startAsAnswerer(offerCode, 'bug6-race')
+    })
+    const channel = new FakeDataChannel()
+    channel.readyState = 'open'
+    act(() => lastPc!.emitDataChannel(channel))
+
+    // Chat envelope arrives while bind is still gated.
+    act(() =>
+      channel.onmessage?.({
+        data: JSON.stringify({ v: 1, t: 'chat', id: 'race-1', sentAt: 1_700_000_000_000, text: 'before-bind' }),
+      }),
+    )
+
+    // Yield so the appendMessage IDB tx commits.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+
+    // Release the bind so the rest of the flow can finish.
+    await act(async () => {
+      releaseBind!()
+      await bindPromise
+      // Also let the second listMessages (from startAsAnswerer's bind) finish.
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+
+    listSpy.mockRestore()
+
+    const stored = await storage.listMessages('bug6-race')
+    const incoming = stored.find((m) => m.id === 'race-1')
+    expect(incoming).toBeDefined()
+    expect(incoming!.from).toBe('them')
+  })
+
+  // BUG-006 root cause: `bindConversation`'s deferred `setMessages(seeded)` and
+  // `knownIdsRef.current = ids` setters unconditionally REPLACE state. If a
+  // `send` or incoming `chat` envelope lands in `messages`/`knownIdsRef`
+  // *between* the bind's IDB snapshot and the setter commit, the seed wipes
+  // the live entry from React state AND drops its id from the dedupe set.
+  // The user can then see a transcript that's missing turns; on a resume,
+  // the missing id leaves the slot open for a later history merge to
+  // `bulkInsertMessages.put()` over the locally-stored record with a flipped
+  // perspective — the "all from You under one timestamp" symptom.
+  it('BUG-006: bind seed must not clobber a live send that landed before the seed resolved', async () => {
+    // Gate the bind's IDB read so we can deterministically order the seed
+    // commit *after* a live `send()` has already updated state.
+    const storage = await import('../core/storage')
+    const realListMessages = storage.listMessages
+    const listSpy = vi.spyOn(storage, 'listMessages')
+    let releaseRead: ((records: Awaited<ReturnType<typeof realListMessages>>) => void) | null = null
+    const readGate = new Promise<Awaited<ReturnType<typeof realListMessages>>>((resolve) => {
+      releaseRead = resolve
+    })
+    listSpy.mockImplementationOnce(async () => readGate)
+
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsOfferer('bug6-clobber')
+    })
+    act(() => lastChannel!.open())
+
+    // Live send: commits to messages + queues appendMessage.
+    act(() => result.current.send('live send during bind'))
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+
+    // Bind's listMessages resolves to the pre-send snapshot.
+    await act(async () => {
+      releaseRead!([])
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+
+    listSpy.mockRestore()
+
+    expect(result.current.messages.find((m) => m.text === 'live send during bind')).toBeDefined()
+  })
 })

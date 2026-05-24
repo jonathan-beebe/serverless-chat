@@ -605,6 +605,20 @@ export function useChatSession(): ChatSession {
   // committed so handleEnvelope can await it before merging. Also captures
   // the snapshot we'll ship in our `history` envelope at channel-open time
   // (so live messages during the exchange window aren't double-sent).
+  //
+  // BUG-006: callers (startAsOfferer / startAsAnswerer / politelyAcceptOffer)
+  // fire this without awaiting so connection setup isn't blocked behind an
+  // IDB round-trip. That leaves a window where a live `send()` or `chat`
+  // envelope can land in `messages`/`knownIdsRef` *before* the seed commits.
+  // The seed must therefore MERGE (union, sorted by `at`) rather than
+  // REPLACE — otherwise the live entries get wiped from React state when the
+  // setter finally runs, and their ids get dropped from the dedupe set when
+  // `knownIdsRef.current` is reassigned. Mid-session re-binds (FEAT-008
+  // polite-defer with a swap to the inviter's conv id) also rely on the
+  // merge so we don't wipe live state when the previously-bound conv is
+  // abandoned. Same conv id re-bind is idempotent; different conv id flips
+  // `conversationIdRef.current` first, so subsequent live writes go to the
+  // new conv and the merge here only adds the new conv's persisted history.
   const bindConversation = useCallback(async (id: string) => {
     setConversationId(id)
     conversationIdRef.current = id
@@ -617,12 +631,30 @@ export function useChatSession(): ChatSession {
           await storage.upsertConversation({ id, createdAt: Date.now(), lastActivityAt: Date.now() })
         }
         const records = await storage.listMessages(id)
-        const seeded: ChatMessage[] = records.map((r) => ({ id: r.id, from: r.from, text: r.text, at: r.at }))
-        const ids = new Set<string>()
-        for (const r of records) ids.add(r.id)
-        knownIdsRef.current = ids
+        // Snapshot for the outgoing `history` envelope reflects the persisted
+        // store at bind time — live entries that arrived mid-bind are already
+        // on the wire via the live `chat` path and would be double-sent if
+        // we included them here. So the snapshot stays from storage only.
         historySnapshotRef.current = records.map((r) => ({ id: r.id, from: r.from, text: r.text, at: r.at }))
-        setMessages(seeded)
+        // Union the persisted records into knownIdsRef rather than replace.
+        // A live send/chat-receive that landed during the bind already added
+        // its id to the current set; we must not drop it.
+        for (const r of records) knownIdsRef.current.add(r.id)
+        // Merge persisted records into `messages` state. Skip any record
+        // whose id has already been added to state by a live event during
+        // the bind window; the rest land in time order. We sort the union
+        // by `at` ascending so a persisted record that pre-dates a live
+        // arrival shows above it, matching what the history-merge path does.
+        setMessages((prev) => {
+          const liveIds = new Set(prev.map((m) => m.id))
+          const additions = records
+            .filter((r) => !liveIds.has(r.id))
+            .map<ChatMessage>((r) => ({ id: r.id, from: r.from, text: r.text, at: r.at }))
+          if (additions.length === 0) return prev
+          const next = [...prev, ...additions]
+          next.sort((a, b) => a.at - b.at)
+          return next
+        })
       } catch (err) {
         console.warn('[storage] bindConversation failed', err)
       }
