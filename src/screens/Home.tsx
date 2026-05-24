@@ -72,6 +72,14 @@ interface RowProps {
 // the two surfaces feel consistent.
 const COPY_FLASH_MS = 1500
 
+// A11Y-025: APG type-ahead reset window. After this idle interval the
+// accumulated buffer clears, so subsequent presses start a fresh prefix match.
+const TYPEAHEAD_RESET_MS = 500
+
+// A11Y-025: lowercased labels for type-ahead prefix matching. Parallel to the
+// menu item index (0=Rename, 1=Copy transcript, 2=Delete chat).
+const MENU_ITEM_LABELS = ['rename', 'copy transcript', 'delete chat'] as const
+
 function ConversationRow({
   record,
   onResume,
@@ -106,6 +114,87 @@ function ConversationRow({
   // setTimeout handle for the inline "Copied transcript" auto-dismiss.
   // Cleared on unmount so a fast remount doesn't fire into a dead row.
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // A11Y-025: APG menu pattern. The menu items are indexed [Rename, Copy
+  // transcript, Delete chat]; the order is fixed by FEAT-012/CR-009 and the
+  // ticket. `activeIndex` drives roving tabindex and is the focus target for
+  // every nav key. `menuItemRefs` is parallel to the index so the keyboard
+  // handler can `.focus()` by index. Type-ahead accumulates keystrokes into
+  // a buffer that auto-resets after `TYPEAHEAD_RESET_MS`.
+  const renameItemRef = useRef<HTMLButtonElement | null>(null)
+  const copyItemRef = useRef<HTMLButtonElement | null>(null)
+  const deleteItemRef = useRef<HTMLButtonElement | null>(null)
+  const [activeIndex, setActiveIndex] = useState(0)
+  const typeaheadBufferRef = useRef('')
+  const typeaheadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // A11Y-025: on open, move focus to the first non-disabled menuitem and
+  // reset roving-tabindex state; on close, reset the type-ahead buffer/timer
+  // and rewind activeIndex so the next open starts at the top.
+  useEffect(() => {
+    if (!isMenuOpen) {
+      typeaheadBufferRef.current = ''
+      if (typeaheadTimerRef.current) {
+        clearTimeout(typeaheadTimerRef.current)
+        typeaheadTimerRef.current = null
+      }
+      setActiveIndex(0)
+      return
+    }
+    // Item 1 (Copy transcript) is disabled when the row has no messages;
+    // items 0 (Rename) and 2 (Delete chat) are always enabled. APG: auto-focus
+    // the first non-disabled item.
+    const refs = [renameItemRef, copyItemRef, deleteItemRef]
+    const disabled = [false, !hasMessages, false]
+    let idx = disabled.findIndex((d) => !d)
+    if (idx === -1) idx = 0
+    setActiveIndex(idx)
+    refs[idx].current?.focus()
+  }, [isMenuOpen, hasMessages])
+
+  // A11Y-025: keyboard handler for the open menu. Implements arrow cycling
+  // with wrap, Home/End, type-ahead, and Tab/Shift+Tab dismissal. Escape is
+  // handled by the document-level listener below so it keeps working when
+  // the focused element is the trigger after Escape restores focus.
+  const handleMenuKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const refs = [renameItemRef, copyItemRef, deleteItemRef]
+    const total = refs.length
+    const focusIndex = (idx: number) => {
+      setActiveIndex(idx)
+      refs[idx].current?.focus()
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      focusIndex((activeIndex + 1) % total)
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      focusIndex((activeIndex - 1 + total) % total)
+    } else if (e.key === 'Home') {
+      e.preventDefault()
+      focusIndex(0)
+    } else if (e.key === 'End') {
+      e.preventDefault()
+      focusIndex(total - 1)
+    } else if (e.key === 'Tab') {
+      // APG: Tab leaves the menu entirely. Don't preventDefault so the browser
+      // moves focus naturally; we just collapse the popover.
+      onCloseMenu()
+    } else if (e.key.length === 1 && /\S/.test(e.key)) {
+      // Type-ahead: accumulate non-whitespace single-char keys within the
+      // reset window, match against the menu item label prefixes. Disabled
+      // items remain reachable per APG (we don't filter them out here).
+      typeaheadBufferRef.current += e.key.toLowerCase()
+      if (typeaheadTimerRef.current) clearTimeout(typeaheadTimerRef.current)
+      typeaheadTimerRef.current = setTimeout(() => {
+        typeaheadBufferRef.current = ''
+        typeaheadTimerRef.current = null
+      }, TYPEAHEAD_RESET_MS)
+      const matchIdx = MENU_ITEM_LABELS.findIndex((l) => l.startsWith(typeaheadBufferRef.current))
+      if (matchIdx !== -1) {
+        e.preventDefault()
+        focusIndex(matchIdx)
+      }
+    }
+  }
 
   // CR-008: while this row's menu is open, listen for pointerdown anywhere
   // outside the trigger+menu wrapper (dismiss) and Escape (dismiss + restore
@@ -193,12 +282,11 @@ function ConversationRow({
   // in-chat toolbar (`includeTimestamps: true`); per the ticket there is no
   // toggle UI on the row menu — a single click does a single thing.
   const onCopyTranscript = async () => {
-    onCloseMenu()
-    // Defensive guard — the disabled state on the menu item should prevent
-    // this from ever firing for an empty conversation, but a stale render
-    // (e.g. messages purged in another tab) shouldn't silently succeed
-    // with an empty clipboard.
+    // A11Y-025: with `aria-disabled` (not native `disabled`) the click event
+    // still fires, so the guard runs first — a click on the disabled item
+    // must not close the menu or touch the clipboard.
     if (!hasMessages) return
+    onCloseMenu()
     const msgs = await listMessages(record.id)
     if (msgs.length === 0) return
     // BUG-006: resolve attribution against the conversation's absolute
@@ -318,10 +406,13 @@ function ConversationRow({
             {isMenuOpen && (
               <div
                 role="menu"
+                onKeyDown={handleMenuKeyDown}
                 className="absolute right-0 z-10 mt-1 min-w-[10rem] rounded-md border border-stone-300 bg-white p-1 shadow-md dark:border-stone-700 dark:bg-stone-900">
                 <button
+                  ref={renameItemRef}
                   type="button"
                   role="menuitem"
+                  tabIndex={activeIndex === 0 ? 0 : -1}
                   onClick={startRename}
                   className="block w-full rounded px-2 py-1 text-left text-sm hover:bg-stone-100 dark:hover:bg-stone-800">
                   Rename
@@ -329,18 +420,25 @@ function ConversationRow({
                 {/* CR-009: Copy transcript sits between Rename and Delete.
                     Delete is destructive and stays last per the ticket. The
                     item disables when the row has no messages — silently
-                    succeeding with an empty clipboard is a worse UX. */}
+                    succeeding with an empty clipboard is a worse UX. A11Y-025:
+                    uses `aria-disabled` (not native `disabled`) so the item
+                    remains focusable per APG; the click guard in
+                    `onCopyTranscript` makes the disabled state a no-op. */}
                 <button
+                  ref={copyItemRef}
                   type="button"
                   role="menuitem"
-                  disabled={!hasMessages}
+                  tabIndex={activeIndex === 1 ? 0 : -1}
+                  aria-disabled={!hasMessages}
                   onClick={() => void onCopyTranscript()}
-                  className="block w-full rounded px-2 py-1 text-left text-sm hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-stone-800">
+                  className={`block w-full rounded px-2 py-1 text-left text-sm hover:bg-stone-100 dark:hover:bg-stone-800 ${!hasMessages ? 'cursor-not-allowed opacity-50' : ''}`}>
                   Copy transcript
                 </button>
                 <button
+                  ref={deleteItemRef}
                   type="button"
                   role="menuitem"
+                  tabIndex={activeIndex === 2 ? 0 : -1}
                   onClick={doDelete}
                   className="block w-full rounded px-2 py-1 text-left text-sm text-red-700 hover:bg-stone-100 dark:text-red-300 dark:hover:bg-stone-800">
                   Delete chat

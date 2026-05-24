@@ -426,12 +426,205 @@ describe('Home row menu Copy transcript (CR-009)', () => {
     fireEvent.click(within(row).getByRole('button', { name: /more actions/i }))
 
     const copyItem = screen.getByRole('menuitem', { name: /copy transcript/i })
-    expect(copyItem).toBeDisabled()
+    // A11Y-025 swapped native `disabled` for `aria-disabled` — assertive tech
+    // still treats it as disabled, but the contract is now ARIA-level.
+    expect(copyItem).toHaveAttribute('aria-disabled', 'true')
 
     // Clicking a disabled menuitem must not invoke the clipboard.
     fireEvent.click(copyItem)
     await new Promise((r) => setTimeout(r, 10))
     expect(writeText).not.toHaveBeenCalled()
+  })
+})
+
+describe('Home row menu APG keyboard navigation (A11Y-025)', () => {
+  async function seedRow(id: string, label: string, withMessages = true) {
+    const lastActivityAt = Date.now() - 60_000
+    await upsertConversation({
+      id,
+      createdAt: Date.now() - 60_000,
+      lastActivityAt,
+      label,
+    })
+    if (withMessages) {
+      await appendMessage(id, { id: `m-${id}`, from: 'me', text: 'hi', at: lastActivityAt })
+    }
+  }
+
+  async function openMenuRow(id: string) {
+    const row = await screen.findByTestId(`conversation-row-${id}`)
+    fireEvent.click(within(row).getByRole('button', { name: /more actions/i }))
+    return row
+  }
+
+  it('auto-focuses the first non-disabled menuitem on open (Rename)', async () => {
+    await seedRow('aaa', 'Row A')
+    render(<Home onStart={() => {}} />)
+    const row = await openMenuRow('aaa')
+
+    const rename = within(row).getByRole('menuitem', { name: /^rename$/i })
+    await waitFor(() => {
+      expect(document.activeElement).toBe(rename)
+    })
+  })
+
+  it('ArrowDown cycles forward and wraps at the end', async () => {
+    await seedRow('aaa', 'Row A')
+    render(<Home onStart={() => {}} />)
+    const row = await openMenuRow('aaa')
+    const menu = within(row).getByRole('menu')
+    const rename = within(row).getByRole('menuitem', { name: /^rename$/i })
+    const copy = within(row).getByRole('menuitem', { name: /copy transcript/i })
+    const del = within(row).getByRole('menuitem', { name: /delete chat/i })
+
+    await waitFor(() => expect(document.activeElement).toBe(rename))
+
+    fireEvent.keyDown(menu, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(copy)
+    fireEvent.keyDown(menu, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(del)
+    fireEvent.keyDown(menu, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(rename)
+  })
+
+  it('ArrowUp cycles backward and wraps at the start', async () => {
+    await seedRow('aaa', 'Row A')
+    render(<Home onStart={() => {}} />)
+    const row = await openMenuRow('aaa')
+    const menu = within(row).getByRole('menu')
+    const rename = within(row).getByRole('menuitem', { name: /^rename$/i })
+    const copy = within(row).getByRole('menuitem', { name: /copy transcript/i })
+    const del = within(row).getByRole('menuitem', { name: /delete chat/i })
+
+    await waitFor(() => expect(document.activeElement).toBe(rename))
+
+    fireEvent.keyDown(menu, { key: 'ArrowUp' })
+    expect(document.activeElement).toBe(del)
+    fireEvent.keyDown(menu, { key: 'ArrowUp' })
+    expect(document.activeElement).toBe(copy)
+    fireEvent.keyDown(menu, { key: 'ArrowUp' })
+    expect(document.activeElement).toBe(rename)
+  })
+
+  it('Home jumps to the first item; End jumps to the last', async () => {
+    await seedRow('aaa', 'Row A')
+    render(<Home onStart={() => {}} />)
+    const row = await openMenuRow('aaa')
+    const menu = within(row).getByRole('menu')
+    const rename = within(row).getByRole('menuitem', { name: /^rename$/i })
+    const del = within(row).getByRole('menuitem', { name: /delete chat/i })
+
+    await waitFor(() => expect(document.activeElement).toBe(rename))
+
+    fireEvent.keyDown(menu, { key: 'End' })
+    expect(document.activeElement).toBe(del)
+    fireEvent.keyDown(menu, { key: 'Home' })
+    expect(document.activeElement).toBe(rename)
+  })
+
+  it('Type-ahead focuses items by first letter (case-insensitive)', async () => {
+    await seedRow('aaa', 'Row A')
+    render(<Home onStart={() => {}} />)
+    const row = await openMenuRow('aaa')
+    const menu = within(row).getByRole('menu')
+    const rename = within(row).getByRole('menuitem', { name: /^rename$/i })
+    const copy = within(row).getByRole('menuitem', { name: /copy transcript/i })
+    const del = within(row).getByRole('menuitem', { name: /delete chat/i })
+
+    await waitFor(() => expect(document.activeElement).toBe(rename))
+
+    // The type-ahead buffer accumulates keystrokes within a 500ms window and
+    // then auto-resets. Switch to fake timers so we can advance past the reset
+    // between successive single-char presses; restore real timers in `finally`
+    // so a failed assertion doesn't poison sibling tests.
+    vi.useFakeTimers()
+    try {
+      fireEvent.keyDown(menu, { key: 'd' })
+      expect(document.activeElement).toBe(del)
+      vi.advanceTimersByTime(600)
+      fireEvent.keyDown(menu, { key: 'C' })
+      expect(document.activeElement).toBe(copy)
+      vi.advanceTimersByTime(600)
+      fireEvent.keyDown(menu, { key: 'r' })
+      expect(document.activeElement).toBe(rename)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('Tab closes the menu (does not preventDefault so the browser moves focus naturally)', async () => {
+    await seedRow('aaa', 'Row A')
+    render(<Home onStart={() => {}} />)
+    const row = await openMenuRow('aaa')
+    const menu = within(row).getByRole('menu')
+
+    fireEvent.keyDown(menu, { key: 'Tab' })
+
+    await waitFor(() => {
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    })
+  })
+
+  it('Shift+Tab closes the menu', async () => {
+    await seedRow('aaa', 'Row A')
+    render(<Home onStart={() => {}} />)
+    const row = await openMenuRow('aaa')
+    const menu = within(row).getByRole('menu')
+
+    fireEvent.keyDown(menu, { key: 'Tab', shiftKey: true })
+
+    await waitFor(() => {
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    })
+  })
+
+  it('Copy transcript uses aria-disabled (not native disabled) and remains focusable when the row has no messages', async () => {
+    vi.spyOn(storage, 'cullEmptyConversations').mockResolvedValue([])
+    await seedRow('aaa', 'Empty', false)
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
+    render(<Home onStart={() => {}} />)
+
+    const row = await screen.findByTestId('conversation-row-aaa')
+    await within(row).findByText(/no messages yet/i)
+    fireEvent.click(within(row).getByRole('button', { name: /more actions/i }))
+
+    const copyItem = within(row).getByRole('menuitem', { name: /copy transcript/i })
+    expect(copyItem).toHaveAttribute('aria-disabled', 'true')
+    expect(copyItem).not.toHaveAttribute('disabled')
+
+    // Reachable via type-ahead even when disabled (APG: disabled items remain focusable).
+    const menu = within(row).getByRole('menu')
+    fireEvent.keyDown(menu, { key: 'c' })
+    expect(document.activeElement).toBe(copyItem)
+
+    // Clicking the disabled item must not invoke the clipboard and must not close the menu.
+    fireEvent.click(copyItem)
+    await new Promise((r) => setTimeout(r, 10))
+    expect(writeText).not.toHaveBeenCalled()
+    expect(within(row).getByRole('menu')).toBeInTheDocument()
+  })
+
+  it('Roving tabindex: exactly one menuitem has tabIndex 0 at a time, tracking the active item', async () => {
+    await seedRow('aaa', 'Row A')
+    render(<Home onStart={() => {}} />)
+    const row = await openMenuRow('aaa')
+    const menu = within(row).getByRole('menu')
+    const rename = within(row).getByRole('menuitem', { name: /^rename$/i })
+    const copy = within(row).getByRole('menuitem', { name: /copy transcript/i })
+    const del = within(row).getByRole('menuitem', { name: /delete chat/i })
+
+    await waitFor(() => expect(document.activeElement).toBe(rename))
+
+    const tabbable = () => [rename, copy, del].filter((el) => el.getAttribute('tabindex') === '0')
+
+    expect(tabbable()).toEqual([rename])
+
+    fireEvent.keyDown(menu, { key: 'ArrowDown' })
+    expect(tabbable()).toEqual([copy])
+
+    fireEvent.keyDown(menu, { key: 'End' })
+    expect(tabbable()).toEqual([del])
   })
 })
 

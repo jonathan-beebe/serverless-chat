@@ -20,6 +20,7 @@ id.
 
 ## Log
 
+- 2026-05-24:18:12:25 — A11Y-025 — started
 - 2026-05-24:17:38:00 — A11Y-036 — blocked by ARCH-001 (Back affordance's
   destination is set by the new routing model; revisit after ARCH-001 lands)
 - 2026-05-24:17:37:00 — A11Y-031 — ABANDONED: superseded by ARCH-001 (the

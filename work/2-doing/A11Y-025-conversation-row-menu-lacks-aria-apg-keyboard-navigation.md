@@ -1,7 +1,7 @@
 ---
 id: A11Y-025
 type: a11y
-status: open
+status: in-progress
 created: 2026-05-24
 ---
 
@@ -134,3 +134,45 @@ preserved unchanged.
   dismissal contract" thinking.
 - **A11Y-022** (resolved) — focus race in DesignSystem previews; relevant
   precedent for "we promise AT something we don't deliver."
+
+## Working
+
+**2026-05-24** — Implemented per the "implement the full APG menu pattern"
+decision. Touched `src/screens/Home.tsx`:
+
+- Added `renameItemRef` / `copyItemRef` / `deleteItemRef`, an `activeIndex`
+  state for roving tabindex, and a type-ahead buffer + reset timer.
+- New `useEffect([isMenuOpen, hasMessages])` auto-focuses the first non-disabled
+  menuitem on open; on close it clears the type-ahead buffer/timer and rewinds
+  `activeIndex` so the next open starts fresh.
+- New `handleMenuKeyDown` wired to the popover's `onKeyDown`: ArrowDown / Up
+  cycle with wrap, Home / End jump to the ends, Tab / Shift+Tab close the menu
+  without `preventDefault` so the browser keeps the natural tab order, and any
+  printable single character runs prefix-match type-ahead against
+  `MENU_ITEM_LABELS = ['rename', 'copy transcript', 'delete chat']`. The buffer
+  auto-clears after `TYPEAHEAD_RESET_MS = 500`. Escape is left to the existing
+  document-level dismiss handler (lines 174–186 in the new file).
+- Each menuitem button now gets a ref and
+  `tabIndex={activeIndex === i ? 0 : -1}`. Copy transcript switched from native
+  `disabled` to `aria-disabled` plus a conditional
+  `cursor-not-allowed opacity-50` className so the visual disabled state is
+  preserved without relying on Tailwind's `disabled:` variant.
+- Moved the `if (!hasMessages) return` guard in `onCopyTranscript` ahead of
+  `onCloseMenu()` so a click on the aria-disabled item is a complete no-op
+  (doesn't close the menu, doesn't touch the clipboard).
+
+Tests in `src/screens/Home.test.tsx`:
+
+- New `describe` block "Home row menu APG keyboard navigation (A11Y-025)" with 9
+  tests covering auto-focus, arrow cycling with wrap, Home / End, type-ahead
+  (fake timers used between presses to fire the 500ms reset), Tab / Shift+Tab
+  dismissal, the aria-disabled contract + focusable disabled item + click-no-op,
+  and the roving-tabindex invariant.
+- Updated the existing CR-009 test "Copy transcript is disabled when the
+  conversation has no messages" — replaced `.toBeDisabled()` (which checks the
+  native attribute only on the jest-dom version in use) with
+  `.toHaveAttribute('aria-disabled', 'true')`. Same AT semantics, accurate to
+  the new contract.
+
+Verification: `npm test` → 374/374 pass. `npm run lint` clean.
+`npm run typecheck` clean.
