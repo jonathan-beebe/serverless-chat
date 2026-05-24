@@ -74,11 +74,22 @@ sequenceDiagram
 
 Source map:
 
-- `src/core/rtc.ts` — WebRTC offer/answer wrapper, non-trickle ICE gathering.
+- `src/core/rtc.ts` — WebRTC offer/answer wrapper, non-trickle ICE gathering;
+  optional TURN relay appended to `ICE_CONFIG` when the `VITE_TURN_*` env vars
+  are set.
+- `src/core/rtcDiagnostics.ts` — dev-only ICE/connection-state logging
+  (candidate types, `icecandidateerror`, selected-pair stats); gated by
+  `import.meta.env.DEV` so production stays quiet.
+- `src/core/wire.ts` — versioned JSON envelope protocol over the data channel
+  (chat, delivered receipts, clock-sync, history exchange).
 - `src/core/encoding.ts` — LZ-string + base64url SDP packing.
 - `src/core/url.ts` — invite-URL construction and hash parsing.
+- `src/core/storage.ts` — IndexedDB-backed persistence for conversations and
+  messages so a refresh doesn't nuke the transcript.
 - `src/hooks/useChatSession.ts` — connection state machine; owns the live
-  `RTCPeerConnection`.
+  `RTCPeerConnection`, message transcript, and per-session telemetry.
+- `src/screens/Home.tsx` — entry screen with the conversation list and the
+  "start a new chat" action.
 - `src/screens/Offerer.tsx` / `src/screens/Joiner.tsx` — the two signaling UIs.
 - `src/components/Chat.tsx` — the connected-state chat transcript and composer.
 
