@@ -1,7 +1,7 @@
 ---
 id: A11Y-029
 type: a11y
-status: open
+status: in-progress
 created: 2026-05-24
 ---
 
@@ -127,3 +127,12 @@ follow-up if the design-system team agrees.
   wrapper.
 - **FEAT-011** (resolved) — introduced this checkbox as part of the
   copy-transcript toolbar.
+
+## Working
+
+**2026-05-24** — Token-level fix per the suggested diff. The checkbox at
+`src/components/Chat.tsx:251–257` now appends the canonical A11Y-017
+focus-visible tokens
+(`focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50 dark:focus-visible:ring-offset-stone-900`)
+to its existing className. Added a Chat test that asserts each of the six token
+fragments. `npm test` → 378/378. Lint + typecheck clean.

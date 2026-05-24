@@ -523,6 +523,21 @@ describe('Chat copy-transcript toolbar (FEAT-011)', () => {
     expect(screen.getByRole('checkbox', { name: /include timestamps/i })).toBeChecked()
   })
 
+  // A11Y-029: Tailwind v4 preflight resets the browser default outline; the
+  // checkbox needs the canonical focus-visible ring tokens (A11Y-017) so a
+  // keyboard user can see when focus lands on it. `accent-sky-700` only
+  // colors the check fill, not the focus state.
+  it('Include-timestamps checkbox carries the canonical focus-visible ring tokens (A11Y-029)', () => {
+    render(<Chat messages={[msg('a', 'hi', 'them')]} onSend={() => {}} />)
+    const checkbox = screen.getByRole('checkbox', { name: /include timestamps/i })
+    expect(checkbox.className).toMatch(/focus-visible:outline-none/)
+    expect(checkbox.className).toMatch(/focus-visible:ring-2/)
+    expect(checkbox.className).toMatch(/focus-visible:ring-sky-400/)
+    expect(checkbox.className).toMatch(/focus-visible:ring-offset-2/)
+    expect(checkbox.className).toMatch(/focus-visible:ring-offset-stone-50/)
+    expect(checkbox.className).toMatch(/dark:focus-visible:ring-offset-stone-900/)
+  })
+
   it('Copy button is disabled when messages is empty and enabled when ≥1 message exists', () => {
     const { rerender } = render(<Chat messages={[]} onSend={() => {}} />)
     expect(screen.getByRole('button', { name: /^copy$/i })).toBeDisabled()

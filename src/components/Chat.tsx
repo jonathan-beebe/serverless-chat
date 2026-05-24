@@ -253,7 +253,7 @@ export function Chat({ messages, onSend, disabled, hasResumed }: Props) {
             checked={includeTimestamps}
             onChange={(e) => setIncludeTimestamps(e.target.checked)}
             aria-describedby={copyHintId}
-            className="h-4 w-4 cursor-pointer accent-sky-700"
+            className="h-4 w-4 cursor-pointer accent-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50 dark:focus-visible:ring-offset-stone-900"
           />
           <span>Include timestamps</span>
         </label>
