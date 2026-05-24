@@ -49,7 +49,7 @@ sequenceDiagram
         A->>T: allocate relay
         T-->>A: relay candidate
     end
-    A->>A: encode SDP → invite URL (#offer=…)
+    A->>A: encode SDP → invite URL (offer in URL fragment)
     A->>H: send invite URL
     H->>B: open invite URL
     B->>B: acceptOffer() — setRemote(offer), createAnswer()
