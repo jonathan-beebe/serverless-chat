@@ -131,28 +131,33 @@ function ConversationRow({
   // `confirmDeleteOpen` drives the dialog; cancel and confirm both close it.
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
 
-  // A11Y-025: on open, move focus to the first non-disabled menuitem and
-  // reset roving-tabindex state; on close, reset the type-ahead buffer/timer
-  // and rewind activeIndex so the next open starts at the top.
+  // A11Y-025: on the open transition, move focus to the first non-disabled
+  // menuitem; on the close transition, reset the type-ahead buffer/timer and
+  // rewind activeIndex so the next open starts at the top. Both branches are
+  // gated on `prevMenuOpenRef` so a mid-open re-render (e.g. when
+  // `hasMessages` resolves async-ly from the messages-load effect) does NOT
+  // re-fire the auto-focus and stomp the user's keyboard navigation.
+  const prevMenuOpenRef = useRef(false)
   useEffect(() => {
-    if (!isMenuOpen) {
+    if (isMenuOpen && !prevMenuOpenRef.current) {
+      // Item 1 (Copy transcript) is disabled when the row has no messages;
+      // items 0 (Rename) and 2 (Delete chat) are always enabled. APG:
+      // auto-focus the first non-disabled item.
+      const refs = [renameItemRef, copyItemRef, deleteItemRef]
+      const disabled = [false, !hasMessages, false]
+      let idx = disabled.findIndex((d) => !d)
+      if (idx === -1) idx = 0
+      setActiveIndex(idx)
+      refs[idx].current?.focus()
+    } else if (!isMenuOpen && prevMenuOpenRef.current) {
       typeaheadBufferRef.current = ''
       if (typeaheadTimerRef.current) {
         clearTimeout(typeaheadTimerRef.current)
         typeaheadTimerRef.current = null
       }
       setActiveIndex(0)
-      return
     }
-    // Item 1 (Copy transcript) is disabled when the row has no messages;
-    // items 0 (Rename) and 2 (Delete chat) are always enabled. APG: auto-focus
-    // the first non-disabled item.
-    const refs = [renameItemRef, copyItemRef, deleteItemRef]
-    const disabled = [false, !hasMessages, false]
-    let idx = disabled.findIndex((d) => !d)
-    if (idx === -1) idx = 0
-    setActiveIndex(idx)
-    refs[idx].current?.focus()
+    prevMenuOpenRef.current = isMenuOpen
   }, [isMenuOpen, hasMessages])
 
   // A11Y-025: keyboard handler for the open menu. Implements arrow cycling

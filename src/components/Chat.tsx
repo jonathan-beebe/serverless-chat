@@ -246,35 +246,42 @@ export function Chat({ messages, onSend, disabled, hasResumed }: Props) {
         badge slot is a fixed-width inline container (`min-w-…`) so the
         badge appearing/disappearing doesn't shift the button or composer.
       */}
-      <div className="flex items-center justify-end gap-3">
-        <label className="flex items-center gap-2 text-sm text-stone-700 dark:text-stone-300">
-          <input
-            type="checkbox"
-            checked={includeTimestamps}
-            onChange={(e) => setIncludeTimestamps(e.target.checked)}
-            aria-describedby={copyHintId}
-            className="h-4 w-4 cursor-pointer accent-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50 dark:focus-visible:ring-offset-stone-900"
-          />
-          <span>Include timestamps</span>
-        </label>
-        {/* sr-only hint explaining the toggle's effect on the markdown output.
-            Not visible; assistive tech reads it via the checkbox's
-            aria-describedby. */}
-        <span id={copyHintId} className="sr-only">
-          When on, the copied markdown includes a date header and per-message times. When off, only sender names and
-          message bodies are copied.
-        </span>
-        <div className="flex min-w-[5.5rem] items-center justify-end gap-2">
-          {copyState === 'copied' && (
-            <Callout variant="success" aria-hidden="true">
-              Copied!
-            </Callout>
-          )}
-          <Button variant="primary" size="md" onClick={onCopy} disabled={messages.length === 0}>
-            Copy
-          </Button>
+      {/* A11Y-034: the toolbar is hidden entirely while the transcript is
+          empty. A disabled Copy button announced as "Copy, button, dimmed"
+          gave SR users no programmatic reason for the disabled state; the
+          empty-state placeholder below the toolbar already tells every user
+          the surface is empty, so the controls have nothing to offer. */}
+      {messages.length > 0 && (
+        <div className="flex items-center justify-end gap-3">
+          <label className="flex items-center gap-2 text-sm text-stone-700 dark:text-stone-300">
+            <input
+              type="checkbox"
+              checked={includeTimestamps}
+              onChange={(e) => setIncludeTimestamps(e.target.checked)}
+              aria-describedby={copyHintId}
+              className="h-4 w-4 cursor-pointer accent-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50 dark:focus-visible:ring-offset-stone-900"
+            />
+            <span>Include timestamps</span>
+          </label>
+          {/* sr-only hint explaining the toggle's effect on the markdown output.
+              Not visible; assistive tech reads it via the checkbox's
+              aria-describedby. */}
+          <span id={copyHintId} className="sr-only">
+            When on, the copied markdown includes a date header and per-message times. When off, only sender names and
+            message bodies are copied.
+          </span>
+          <div className="flex min-w-[5.5rem] items-center justify-end gap-2">
+            {copyState === 'copied' && (
+              <Callout variant="success" aria-hidden="true">
+                Copied!
+              </Callout>
+            )}
+            <Button variant="primary" size="md" onClick={onCopy}>
+              Copy
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
       {copyState === 'manual' && (
         <Callout variant="warning" className="text-xs font-medium">
           Press Ctrl+C / Cmd+C to copy

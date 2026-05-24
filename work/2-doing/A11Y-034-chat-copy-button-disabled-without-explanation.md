@@ -1,7 +1,7 @@
 ---
 id: A11Y-034
 type: a11y
-status: open
+status: in-progress
 created: 2026-05-24
 ---
 
@@ -125,3 +125,24 @@ Rationale:
   control, opposite end of the state machine.
 - **FEAT-011** (resolved) — copy-transcript toolbar; the feature that introduced
   this Copy button and the Include-timestamps toggle.
+
+## Working
+
+**2026-05-24** — Wrapped the entire toolbar `<div>` in `src/components/Chat.tsx`
+in `{messages.length > 0 && (...)}` and dropped the now-redundant
+`disabled={messages.length === 0}` from the Copy button. The empty-state
+placeholder below already tells every user the surface is empty; absent controls
+don't need an SR explanation.
+
+Test fallout: the existing FEAT-011 "Copy button is disabled when messages is
+empty" test was inverted — it now asserts both controls are absent when empty
+and present once the first message arrives.
+
+Bundled de-flake: while running the full suite, the A11Y-025 keyboard nav
+effect's deps `[isMenuOpen, hasMessages]` caused activeIndex to reset to 0 every
+time the row's async messages-load effect resolved (flipping `hasMessages` true
+mid-test). The reset stomped the user's keyboard navigation. Gated the
+auto-focus / reset branches on a `prevMenuOpenRef` so they fire only on real
+open ↔ close transitions, not on incidental `hasMessages` changes while the menu
+is open. Three consecutive `npm test` runs now go 389/389. Lint + typecheck
+clean.

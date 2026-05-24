@@ -538,12 +538,19 @@ describe('Chat copy-transcript toolbar (FEAT-011)', () => {
     expect(checkbox.className).toMatch(/dark:focus-visible:ring-offset-stone-900/)
   })
 
-  it('Copy button is disabled when messages is empty and enabled when ≥1 message exists', () => {
+  // A11Y-034: superseded "Copy button is disabled" assertion. The toolbar
+  // (checkbox + button) is now hidden entirely while messages is empty so
+  // SR users tabbing through controls don't land on a dimmed Copy button
+  // with no programmatic explanation for the disabled state.
+  it('Copy toolbar is hidden when messages is empty and appears once the first message arrives (A11Y-034)', () => {
     const { rerender } = render(<Chat messages={[]} onSend={() => {}} />)
-    expect(screen.getByRole('button', { name: /^copy$/i })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: /^copy$/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('checkbox', { name: /include timestamps/i })).not.toBeInTheDocument()
 
     rerender(<Chat messages={[msg('a', 'hi', 'them')]} onSend={() => {}} />)
+    expect(screen.getByRole('button', { name: /^copy$/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^copy$/i })).not.toBeDisabled()
+    expect(screen.getByRole('checkbox', { name: /include timestamps/i })).toBeInTheDocument()
   })
 
   it('clicking Copy with toggle ON writes the timestamped markdown to the clipboard', async () => {
