@@ -389,7 +389,7 @@ function ConversationRow({
       </div>
       {!editing && (
         <div className="flex items-center gap-2">
-          <Button variant="primary" size="sm" onClick={onResume}>
+          <Button variant="primary" size="sm" aria-label={`Resume ${label}`} onClick={onResume}>
             Resume
           </Button>
           <div ref={containerRef} className="relative">
@@ -397,7 +397,7 @@ function ConversationRow({
               ref={triggerRef}
               variant="secondary"
               size="sm"
-              aria-label="More actions"
+              aria-label={`More actions for ${label}`}
               aria-haspopup="menu"
               aria-expanded={isMenuOpen}
               onClick={() => (isMenuOpen ? onCloseMenu() : onOpenMenu())}>

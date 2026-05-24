@@ -99,9 +99,11 @@ describe('Home conversation list (FEAT-012 AC#18 / #20 / #21 / #26)', () => {
     const rowB = await screen.findByTestId('conversation-row-bbb')
     expect(within(rowA).getByText('Lunch chat')).toBeInTheDocument()
     expect(within(rowB).getByText('Project sync')).toBeInTheDocument()
-    // Both rows expose a primary Resume affordance (AC#18).
-    expect(within(rowA).getByRole('button', { name: /^resume$/i })).toBeInTheDocument()
-    expect(within(rowB).getByRole('button', { name: /^resume$/i })).toBeInTheDocument()
+    // Both rows expose a primary Resume affordance (AC#18). After A11Y-030
+    // the accessible name includes the row label, so anchor the match at the
+    // start of the name and allow whitespace + label after.
+    expect(within(rowA).getByRole('button', { name: /^resume\b/i })).toBeInTheDocument()
+    expect(within(rowB).getByRole('button', { name: /^resume\b/i })).toBeInTheDocument()
   })
 
   it('Resume forwards the row`s conversation id to onStart (AC#26)', async () => {
@@ -110,7 +112,7 @@ describe('Home conversation list (FEAT-012 AC#18 / #20 / #21 / #26)', () => {
     render(<Home onStart={onStart} />)
 
     const row = await screen.findByTestId('conversation-row-aaa')
-    fireEvent.click(within(row).getByRole('button', { name: /^resume$/i }))
+    fireEvent.click(within(row).getByRole('button', { name: /^resume\b/i }))
 
     expect(onStart).toHaveBeenCalledWith('aaa')
   })
@@ -183,6 +185,28 @@ describe('Home conversation list (FEAT-012 AC#18 / #20 / #21 / #26)', () => {
     await waitFor(() => {
       expect(within(row).getByText('New name')).toBeInTheDocument()
     })
+  })
+
+  // A11Y-030: in a list of N rows, "Resume" / "More actions" repeated without
+  // row context is useless in SR rotor / element-list / list-buttons modes
+  // and ambiguous to voice control. Extend each accessible name with the
+  // row's label so AT in out-of-context navigation can disambiguate.
+  it('Resume and More-actions buttons carry row-specific accessible names (A11Y-030)', async () => {
+    await seed('aaa', { label: 'Lunch chat' })
+    await seed('bbb', { label: 'Project sync' })
+    render(<Home onStart={() => {}} />)
+
+    const rowA = await screen.findByTestId('conversation-row-aaa')
+    const rowB = await screen.findByTestId('conversation-row-bbb')
+
+    // Resume buttons: visible text "Resume" preserved (WCAG 2.5.3 Label in
+    // Name); accessible name starts with "Resume" and appends the label.
+    expect(within(rowA).getByRole('button', { name: 'Resume Lunch chat' })).toBeInTheDocument()
+    expect(within(rowB).getByRole('button', { name: 'Resume Project sync' })).toBeInTheDocument()
+
+    // The trigger has only a glyph (⋯), so the aria-label is its full name.
+    expect(within(rowA).getByRole('button', { name: 'More actions for Lunch chat' })).toBeInTheDocument()
+    expect(within(rowB).getByRole('button', { name: 'More actions for Project sync' })).toBeInTheDocument()
   })
 
   // A11Y-026: A11Y-016 (commit 7008835) bumped form-control border tokens

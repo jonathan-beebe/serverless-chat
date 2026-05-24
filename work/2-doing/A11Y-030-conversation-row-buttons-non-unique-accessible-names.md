@@ -1,7 +1,7 @@
 ---
 id: A11Y-030
 type: a11y
-status: open
+status: in-progress
 created: 2026-05-24
 ---
 
@@ -154,3 +154,18 @@ fine; capture as a follow-up if the i18n design locks in a different pattern.
 - **IMPRV-009** (resolved) — Copy transcript action; same row context.
 - **FEAT-012** (resolved) — Resume conversation feature; original feature this
   ticket follows up on.
+
+## Working
+
+**2026-05-24** — Implemented per the suggested diff. The Resume `<Button>` in
+`src/screens/Home.tsx` now sets `aria-label={\`Resume
+${label}\`}`(the visible text "Resume" stays, satisfying WCAG 2.5.3 Label in Name since the accessible name starts with the visible word). The More-actions trigger changed from a fixed`aria-label="More
+actions"`to`aria-label={\`More actions for ${label}\`}`; the trigger has only a
+glyph so 2.5.3 doesn't bind.
+
+Test fallout: three existing queries used
+`getByRole('button', { name: /^resume$/i })` which the new dynamic name fails.
+Loosened the anchors to `/^resume\b/i` so the existing assertions keep meaning
+"the Resume button" without overfitting. Added a new A11Y-030 test that seeds
+two rows with distinct labels and asserts each Resume / More-actions pair has
+the expected row-specific name. `npm test` → 379/379. Lint + typecheck clean.
