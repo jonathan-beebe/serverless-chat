@@ -95,9 +95,16 @@ Source map:
 
 ## Coding Principles
 
-- Favor simple over complex, clear over clever.
-- Favor a functional core / imperative shell pattern.
-- Favor a TDD approach, ensuring the functional core is well tested, and the
-  imperative shell protects user flows and expected behavior with integration
-  tests.
-- Always keep the app fully accessible and adhere to WCAG.
+- Favor simple over complex, clear over clever — readable beats cute.
+- Favor existing patterns; don't invent new ones. If two patterns conflict, ask
+  which is canonical and refactor toward it.
+- Favor a functional core / imperative shell: highly composable, testable
+  functions and components.
+- Apply TDD: unit-test the functional core; integration-test the shell to
+  protect user flows and business value.
+- Maintain strong architectural boundaries between API code, view components,
+  and the controllers that glue them together.
+- Leverage the atomic design system; prefer reusable building blocks over
+  one-off components.
+- Document the _why_ in code comments. Annotated code is good.
+- Always adhere to WCAG — accessibility is a first-class concern.
