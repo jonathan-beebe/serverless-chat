@@ -43,7 +43,7 @@ export interface ChatSession {
    * flow can finish the handshake. Only valid while `state === 'awaiting-answer'`.
    *
    * When `conversationId` is supplied, the hook rebinds to that conversation
-   * before kicking off the answerer flow — used by the Joiner path (BUG-007)
+   * before kicking off the answerer flow — used by the Joiner path (FEAT-008)
    * where Bob's offerer session was bound to his own conv id and the polite-
    * defer should follow Alice's invite into her conversation so the FEAT-012
    * history exchange sees a matching id on both ends. Omit on the Offerer-side
@@ -129,6 +129,15 @@ export function useChatSession(): ChatSession {
   const [telemetry, setTelemetry] = useState<NetworkTelemetry>(emptyTelemetry)
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [hasResumed, setHasResumed] = useState(false)
+  // BUG-007: monotonic counter that `transition()` bumps from inside its
+  // `setState` updater to *request* a telemetry commit without calling
+  // `setTelemetry` from within another setter's updater. A `useEffect` below
+  // reads this version and runs `commitTelemetry()` in the React commit
+  // phase, which is naturally inside `act()` in tests and still batches with
+  // surrounding renders in production. Replaces the previous
+  // `queueMicrotask(commitTelemetry)` scheduling that escaped synchronous
+  // `act(...)` blocks and surfaced as nine "not wrapped in act" warnings.
+  const [telemetryCommitVersion, setTelemetryCommitVersion] = useState(0)
 
   const pcRef = useRef<RTCPeerConnection | null>(null)
   const channelRef = useRef<RTCDataChannel | null>(null)
@@ -203,16 +212,31 @@ export function useChatSession(): ChatSession {
         if (resolved === 'connected' && connectedAtRef.current === null) {
           connectedAtRef.current = Date.now()
         }
-        // We don't `commitTelemetry()` here directly — React batches multiple
-        // state setters together, and `setTelemetry` from within `setState`'s
-        // updater would be a double-batched render. Instead schedule via the
-        // microtask queue so it lands after the current React batch.
-        queueMicrotask(commitTelemetry)
+        // BUG-007: bump a version counter to request a telemetry commit. The
+        // companion `useEffect` below runs `commitTelemetry()` in the commit
+        // phase — naturally wrapped by React's `act()` in tests and still
+        // batched with the surrounding render in production. Calling
+        // `setTelemetry` directly from inside this updater would be a setter
+        // inside a setter, which is the bad pattern the previous
+        // `queueMicrotask(commitTelemetry)` scheduling was working around.
+        setTelemetryCommitVersion((v) => v + 1)
         return resolved
       })
     },
-    [pushSample, commitTelemetry],
+    [pushSample],
   )
+
+  // BUG-007: commit telemetry during the React commit phase whenever
+  // `transition()` has requested one. The dependency on
+  // `telemetryCommitVersion` re-runs this on every bump; `commitTelemetry`
+  // itself is stable (empty dep list). Skip the initial mount run — the
+  // `useState(emptyTelemetry)` initializer already gives us the right
+  // snapshot, and committing again would create a spurious second render
+  // with an equivalent-but-not-identical object.
+  useEffect(() => {
+    if (telemetryCommitVersion === 0) return
+    commitTelemetry()
+  }, [telemetryCommitVersion, commitTelemetry])
 
   const teardown = useCallback(() => {
     channelRef.current?.close()
@@ -702,7 +726,7 @@ export function useChatSession(): ChatSession {
       teardown()
       setError(null)
       setEncodedLocal(null)
-      // BUG-007: the Joiner path passes the offer's conversation id so the
+      // FEAT-008: the Joiner path passes the offer's conversation id so the
       // session follows the inviter's conversation across the swap. Without
       // this, Bob's session stays bound to his old offerer conv id and
       // Alice's FEAT-012 history envelope is rejected with a mismatch warn.

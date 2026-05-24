@@ -740,6 +740,31 @@ describe('useChatSession FEAT-010 telemetry, sync, receipts', () => {
     })
     expect(typeof result.current.telemetry.connectedAt).toBe('number')
   })
+
+  // BUG-007 regression: state-change-driven telemetry commits must land
+  // inside the synchronous act() block, not after it. Before the fix,
+  // `transition()` scheduled commitTelemetry via queueMicrotask, which
+  // resolved after the sync act() returned — producing both a "not wrapped
+  // in act" warning *and* a stale `telemetry` snapshot until the next
+  // render. We assert the new state-change sample is visible immediately
+  // after a sync act() that drives a transition.
+  it('telemetry samples reflect a state transition immediately after a sync act() block', async () => {
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsOfferer('test-conv')
+    })
+    const beforeCount = result.current.telemetry.samples.length
+    act(() => lastChannel!.open())
+    // No `await` and no microtask flush — the commit must already have
+    // landed via the useEffect-driven commit path.
+    const after = result.current.telemetry.samples
+    const newStateChanges = after
+      .slice(beforeCount)
+      .filter((s): s is Extract<typeof s, { kind: 'state-change' }> => s.kind === 'state-change')
+      .map((s) => s.state)
+    expect(newStateChanges).toContain('connected')
+    expect(typeof result.current.telemetry.connectedAt).toBe('number')
+  })
 })
 
 describe('useChatSession teardown', () => {
