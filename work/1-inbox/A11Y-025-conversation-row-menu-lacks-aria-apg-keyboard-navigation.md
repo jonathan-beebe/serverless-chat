@@ -62,76 +62,66 @@ incomplete.
 
 ## Suggested fix
 
-Two viable directions; option (b) is likely the right call for this app's
-complexity.
+**Decision (2026-05-24): implement the full APG menu pattern.** The popover
+keeps `role="menu"` / `role="menuitem"` and the `aria-haspopup="menu"` trigger,
+and the missing behaviours are added so the contract is honoured end-to-end. The
+alternative — stripping the menu role and exposing plain buttons — was
+considered and rejected; the menu role is the right model for a keyboard-driven
+row-action surface and the cost of implementing the pattern correctly is paid
+once.
 
-**Option (a) — implement the full menu role contract.** Adopt the APG menu
-pattern end-to-end:
+Required behaviours:
 
 - On open, programmatically focus the first non-`aria-disabled` `menuitem`.
-- Wire `onKeyDown` on the popover for: Down (next item, wrap), Up (previous
-  item, wrap), Home (first), End (last), type-ahead (first item whose label
-  starts with the typed character), Escape (already handled, restore focus to
-  trigger — already handled), Tab (close menu, let the natural tab order take
-  over).
+- Wire `onKeyDown` on the popover for:
+  - **Down**: focus next item, wrap to first at end.
+  - **Up**: focus previous item, wrap to last at start.
+  - **Home**: focus first item.
+  - **End**: focus last item.
+  - **Type-ahead**: focus the first item whose label starts with the typed
+    character (case-insensitive). Standard APG idiom: accumulate keystrokes for
+    ~500ms, then reset.
+  - **Escape**: close menu, restore focus to trigger (existing behavior at
+    `src/screens/Home.tsx:121–125` — preserve).
+  - **Tab / Shift+Tab**: close menu, let natural tab order take over (Tab from a
+    menu is supposed to leave the menu entirely).
 - Replace `disabled={!hasMessages}` on the Copy transcript button with
   `aria-disabled={!hasMessages}` plus an `onClick` guard that no-ops when
-  disabled — so the item remains focusable but doesn't fire.
-- Add `tabIndex={-1}` to every menu item except whichever one is "active" (the
-  one focus is on), per APG's roving-tabindex idiom.
+  disabled — so the item remains focusable per APG (SR users discover it and
+  hear the state).
+- Implement the roving-tabindex idiom: `tabIndex={-1}` on every `menuitem`
+  except the currently active one (which gets `tabIndex={0}`); the active index
+  moves with arrow / Home / End / type-ahead.
 
-**Option (b) — drop `role="menu"` / `role="menuitem"` and expose the items as
-plain buttons under the trigger.** The popover already behaves like a small
-button cluster: three actions, no submenus, no separators, no checkbox / radio
-items. Removing the menu role contract means:
-
-- Strip `role="menu"` from the popover wrapper (line 319) — it becomes a generic
-  styling container.
-- Strip `role="menuitem"` from each of the three buttons. They stay as
-  `<button type="button">` and inherit native button semantics.
-- Strip `aria-haspopup="menu"` from the trigger (line 312); leave
-  `aria-expanded={isMenuOpen}` so AT still announces open/closed state via the
-  disclosure idiom.
-- Optionally: focus the first button on open so keyboard users land inside the
-  popover. (Even without this, Tab from the trigger lands on the first button
-  next, which is acceptable for a 3-item popover.)
-- Optionally: convert `disabled={!hasMessages}` on Copy transcript to
-  `aria-disabled={!hasMessages}` so SR users still hear the item; keep the
-  visual disabled styling. Or keep the native `disabled` — for a plain button
-  (not a menuitem) hiding it from focus is acceptable, just less discoverable.
-
-Option (b) keeps the dismiss-on-outside-click and Escape paths exactly as they
-are (they don't depend on the menu role), and shrinks the surface area of
-"things AT promises but we don't deliver" to zero.
+The outside-click and Escape dismiss paths (`useEffect` at lines 115–133) and
+the existing `aria-expanded` / `aria-label="More actions"` trigger wiring are
+preserved unchanged.
 
 ## Acceptance
 
-For option (b) (recommended):
-
-- The popover wrapper at `src/screens/Home.tsx:319` no longer carries
-  `role="menu"`.
-- None of the three buttons inside the popover (Rename, Copy transcript, Delete
-  chat) carry `role="menuitem"`.
-- The trigger button at line 312 no longer carries `aria-haspopup="menu"`;
-  `aria-expanded={isMenuOpen}` is preserved.
-- Outside-click and Escape dismiss continue to work (existing `useEffect` at
-  lines 115–133 is untouched).
-- Focus returns to the trigger when Escape closes the menu (existing behavior,
-  lines 121–125, preserved).
-- Either: the Copy transcript button keeps native `disabled={!hasMessages}`
-  (acceptable for a plain button), OR it switches to
-  `aria-disabled={!hasMessages}` with an `onClick` guard if discoverability
-  matters more.
-- A new test in `src/screens/Home.test.tsx` (or wherever Home tests live)
-  asserts the popover has no `role="menu"` and the items have no
-  `role="menuitem"`.
+- The popover at `src/screens/Home.tsx:319` retains `role="menu"`; the three
+  buttons retain `role="menuitem"`; the trigger retains `aria-haspopup="menu"`
+  and `aria-expanded={isMenuOpen}`.
+- On open, focus moves to the first non-disabled `menuitem` (Rename, in the
+  current layout).
+- Arrow Down / Up cycle through the items with wrap.
+- Home / End jump to the first / last item.
+- Type-ahead: pressing "R" focuses Rename; "C" focuses Copy transcript; "D"
+  focuses Delete chat (case-insensitive, ~500ms reset window).
+- Escape closes the menu and returns focus to the trigger (existing behavior
+  preserved).
+- Tab / Shift+Tab close the menu and move focus to the next / previous element
+  in the natural tab order.
+- The Copy transcript item uses `aria-disabled={!hasMessages}` (not native
+  `disabled`) with an `onClick` guard; it remains focusable when disabled.
+- Roving tabindex: at any moment, exactly one `menuitem` has `tabIndex={0}` (the
+  active item); the other two have `tabIndex={-1}`.
+- New tests in the Home tests assert: auto-focus first item on open; arrow-key
+  cycling (with wrap); Home / End; type-ahead for the three letters;
+  `aria-disabled` items remaining focusable; roving tabindex invariant.
 - Existing tests for outside-click dismiss (IMPRV-008), Escape dismiss, and the
-  Copy transcript flow (IMPRV-009) all pass unchanged.
+  Copy transcript flow (IMPRV-009) pass unchanged.
 - `npm test`, `npm run lint`, `npm run typecheck` clean.
-
-If option (a) is chosen instead, add tests for: auto-focus first item on open,
-arrow-key cycling, Home/End, type-ahead, and `aria-disabled` items remaining
-focusable.
 
 ## Related work
 

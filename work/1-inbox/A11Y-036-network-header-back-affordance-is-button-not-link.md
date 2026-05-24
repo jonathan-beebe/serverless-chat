@@ -3,7 +3,15 @@ id: A11Y-036
 type: a11y
 status: open
 created: 2026-05-24
+blocked_by: ARCH-001
 ---
+
+> **Blocked by ARCH-001.** Under real routing the Network header Back affordance
+> becomes a normal `<a>` whose destination depends on the URL the user came from
+> (a conversation URL, or home, etc.) rather than always clearing the hash to
+> home. Don't work this in isolation — wait for ARCH-001 so the destination
+> model is settled, then revisit. The Problem / Outcome / Why-it-matters below
+> still describe the user-visible defect.
 
 # A11Y-036: Network header Back affordance is a button, not a link
 

@@ -67,19 +67,15 @@ That's the entire change. `stone-400` on white is ≈3.00:1, `stone-500` on
 variants, which carry to stone since the perceptual lightness curve is identical
 between the two Tailwind neutrals).
 
-**Better fix (recommended follow-up, not blocking this ticket):** extract the
-rename input into an `Input` primitive in `src/components/Input.tsx` that
-mirrors `Textarea.tsx`'s token discipline (border, focus-visible ring, disabled,
-padding). That way the token can't drift again, and any future form control gets
-the focus-visible style and contrast tokens for free. File this follow-up as a
-separate IMPRV ticket if accepted.
+**Decision (2026-05-24): no `Input` primitive follow-up.** The rename input is
+the only raw `<input>` site in the app today; extracting a primitive on a single
+consumer is YAGNI. File the primitive when a second consumer appears.
 
-Also, the rename input currently lacks the
+Note: the rename input also lacks the
 `focus-visible:ring-2 focus-visible:ring-sky-400` treatment A11Y-007 / A11Y-017
-standardized for form controls — but that defect is out of scope for this ticket
-(would need its own A11Y issue; this ticket is specifically the 1.4.11 contrast
-regression). Mention only because the future `Input` primitive would fix both at
-once.
+standardized for form controls. That defect is out of scope for this ticket
+(which is specifically the 1.4.11 contrast regression); a separate A11Y issue
+should capture it if the gap matters.
 
 ## Acceptance
 

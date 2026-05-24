@@ -65,38 +65,12 @@ the difference.
 
 ## Suggested fix
 
-Two acceptable directions; option (b) is recommended.
-
-**Option (a) — add an sr-only explanation via `aria-describedby`.**
-
-Conditionally render an sr-only span and wire the Copy button's
-`aria-describedby` to it when `messages.length === 0`:
-
-```tsx
-const emptyHintId = useId()
-// ...
-{
-  messages.length === 0 && (
-    <span id={emptyHintId} className="sr-only">
-      No messages to copy yet.
-    </span>
-  )
-}
-;<Button
-  variant="primary"
-  size="md"
-  onClick={onCopy}
-  disabled={messages.length === 0}
-  aria-describedby={messages.length === 0 ? emptyHintId : undefined}>
-  Copy
-</Button>
-```
-
-This keeps the button visible (matching the sighted layout) and gives SR users
-the missing context.
-
-**Option (b) — hide both the Copy button and the Include-timestamps toggle until
-there is at least one message.** Recommended.
+**Decision (2026-05-24): hide the entire toolbar when no messages.** Render the
+Copy button and the Include-timestamps toggle only once `messages.length > 0`.
+The alternative — keep the controls rendered with `disabled` plus an sr-only
+`aria-describedby` hint — was considered and rejected; absent controls don't
+need explanation, and the empty-state placeholder already tells every user the
+surface is empty.
 
 ```tsx
 {
@@ -125,13 +99,11 @@ Rationale:
 
 ## Acceptance
 
-Recommended (option (b)):
-
 - When `messages.length === 0`, the entire toolbar `<div>` at
   `src/components/Chat.tsx:249–277` is not rendered (or its inner contents are
   not rendered, preserving the empty layout).
-- When the first message arrives, the toolbar fades / appears in (no animation
-  required for v1; just conditional rendering).
+- When the first message arrives, the toolbar appears (no animation required for
+  v1; just conditional rendering).
 - The empty-state placeholder below remains as the only thing shown above the
   composer when the transcript is empty.
 - Tests:
@@ -143,15 +115,6 @@ Recommended (option (b)):
 - `npm test`, `npm run lint`, `npm run typecheck` clean.
 - Manual smoke with NVDA / VoiceOver on an empty chat: tabbing from the page
   lands on the composer next, not on a dimmed Copy button.
-
-If option (a) is chosen instead:
-
-- The Copy button stays rendered when `messages.length === 0` with `disabled`
-  set.
-- An sr-only `<span>` carrying "No messages to copy yet." is rendered when the
-  transcript is empty.
-- The Copy button's `aria-describedby` points at that span only while the
-  transcript is empty.
 - VoiceOver / NVDA announce "Copy, button, dimmed, No messages to copy yet" when
   the button receives focus.
 

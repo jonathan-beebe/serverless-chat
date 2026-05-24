@@ -1,9 +1,19 @@
 ---
 id: A11Y-031
 type: a11y
-status: open
+status: abandoned
 created: 2026-05-24
+abandoned: 2026-05-24
+superseded_by: ARCH-001
 ---
+
+> **Abandoned in favor of ARCH-001.** This ticket's deliverable (confirm the
+> EmptyState's `<a href="#">` is honest, add a doc-comment, add a role/href
+> test) falls out of ARCH-001's implementation: once the chat surface is
+> URL-addressable, the "Back to home" destination is the real home URL, and the
+> link/button choice for in-app navigation is settled at the architecture level
+> rather than as a one-off cleanup. Implementer should work ARCH-001; any
+> residual EmptyState test belongs in that PR.
 
 # A11Y-031: Network EmptyState "Back to home" uses `<a href="#">` for an in-app action
 

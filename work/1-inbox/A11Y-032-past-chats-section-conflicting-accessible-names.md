@@ -69,24 +69,14 @@ redundant region landmark doesn't add value.
 
 ## Suggested fix
 
-Two acceptable directions; option (b) is the recommended one.
-
-**Option (a) — keep the region, point the label at the heading.**
-
-Give the `<h2>` an `id` and replace `aria-label` with `aria-labelledby`:
-
-```diff
-- <section aria-label="Past conversations" className="w-full text-left">
--   <h2 className="mb-2 text-sm font-semibold text-stone-700 dark:text-stone-300">Past chats</h2>
-+ <section aria-labelledby="past-chats-heading" className="w-full text-left">
-+   <h2 id="past-chats-heading" className="mb-2 text-sm font-semibold text-stone-700 dark:text-stone-300">Past chats</h2>
-```
-
-After this change, the section's accessible name comes from the visible `<h2>`
-("Past chats"). 2.5.3 holds (accessible name = visible text); 1.3.1 holds (the
-relationship is programmatic).
-
-**Option (b) — drop the region landmark; let the heading do the work.**
+**Decision (2026-05-24): drop the region landmark.** The past-chats list isn't a
+top-level surface in the user's mental model — it's a subsection inside the Home
+`<main>` — so the heading-navigation shortcut (H in NVDA, Cmd+Option+H in
+VoiceOver) is the right and sufficient signal. Removing the `aria-label`
+eliminates the name conflict and cleans up the landmark list. The alternative of
+swapping to `aria-labelledby="past-chats-heading"` was considered and rejected;
+it resolves the name conflict but keeps a region landmark that doesn't earn its
+slot.
 
 ```diff
 - <section aria-label="Past conversations" className="w-full text-left">
@@ -96,17 +86,6 @@ relationship is programmatic).
 
 After this change, the `<section>` is a plain grouping element (no accessible
 name, no landmark exposure). The `<h2>` remains as the heading-navigable signal.
-AT users find it via the heading list (one of the most common SR navigation
-idioms) and the visible / accessible names no longer conflict because there's
-only one — the heading text.
-
-Option (b) is recommended because:
-
-- The past-chats list isn't a top-level landmark in the user's mental model.
-  It's a subsection inside the Home `<main>`.
-- Heading navigation already handles this case; promoting to a region is
-  redundant.
-- Fewer landmarks → cleaner landmark list, faster AT navigation.
 
 ### What "drop the aria-label" preserves
 
@@ -126,8 +105,6 @@ promote to a landmark.
 
 ## Acceptance
 
-Recommended (option (b)):
-
 - The `<section>` at `src/screens/Home.tsx:418` no longer carries
   `aria-label="Past conversations"`.
 - The `<h2>Past chats</h2>` at line 419 is preserved unchanged (visible text,
@@ -146,13 +123,6 @@ Recommended (option (b)):
     present (only the page's `<main>` landmark remains for this screen).
   - Open the AT's heading list. Confirm "Past chats" (level 2) is present and
     navigates to the section.
-
-If option (a) is chosen instead:
-
-- `<h2>` gets `id="past-chats-heading"`.
-- `<section>` swaps `aria-label="Past conversations"` for
-  `aria-labelledby="past-chats-heading"`.
-- The section's accessible name becomes "Past chats" (matches visible heading).
 
 ## Related work
 

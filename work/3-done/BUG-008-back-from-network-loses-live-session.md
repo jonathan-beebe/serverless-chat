@@ -1,9 +1,19 @@
 ---
 id: BUG-008
 type: bug
-status: open
+status: abandoned
 created: 2026-05-24
+abandoned: 2026-05-24
+superseded_by: ARCH-001
 ---
+
+> **Abandoned in favor of ARCH-001.** This ticket scoped a localized fix for the
+> "back from #network strands the user" symptom. During inbox review, the
+> reporter proposed addressing the root cause instead — make the chat surface
+> URL-addressable so route and session no longer fall out of sync. ARCH-001
+> captures that direction. The fix described here (Options A / B / C in
+> "Suggested directions") falls out of ARCH-001's OUTCOME and is therefore not
+> needed as a standalone change. Implementer should work ARCH-001.
 
 # BUG-008: Navigating from a live chat to `#network` and back to home strands the user on the conversation list
 

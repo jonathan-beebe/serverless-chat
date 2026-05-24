@@ -10,7 +10,7 @@ id.
 
 - RSRCH: 1
 - DSGN: 1
-- ARCH: 1
+- ARCH: 2
 - FEAT: 14
 - IMPRV: 17
 - MAINT: 1
@@ -20,6 +20,17 @@ id.
 
 ## Log
 
+- 2026-05-24:17:38:00 — A11Y-036 — blocked by ARCH-001 (Back affordance's
+  destination is set by the new routing model; revisit after ARCH-001 lands)
+- 2026-05-24:17:37:00 — A11Y-031 — ABANDONED: superseded by ARCH-001 (the
+  link/button choice for in-app navigation is settled at the architecture level
+  by ARCH-001; the EmptyState already uses `<a href="#">` so no residual fix);
+  moved to `3-done/`
+- 2026-05-24:17:35:00 — BUG-008 — ABANDONED: superseded by ARCH-001 (the route
+  vs session gap is the root cause; the routing change subsumes the fix); moved
+  to `3-done/`
+- 2026-05-24:17:34:00 — ARCH-001 — defined: route the chat surface so
+  conversations are addressable
 - 2026-05-24:16:05:00 — IMPRV-016 — started
 - 2026-05-24:15:55:00 — A11Y-035 — ABANDONED: superseded by A11Y-036 (same
   problem, re-scoped under the new `/work-scope` + `/work-write` flow to drop

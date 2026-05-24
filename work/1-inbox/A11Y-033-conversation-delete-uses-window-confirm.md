@@ -84,13 +84,23 @@ but it is buried in a chrome-rendered string the user may not hear.
 ## Suggested fix
 
 Build a small Dialog primitive in the design system and replace the
-`window.confirm()` call with it. The primitive should:
+`window.confirm()` call with it.
 
-- Render `<dialog role="alertdialog">` natively where supported, falling back to
-  a `role="alertdialog"` div + scrim if `<dialog>` is too heavyweight for v1.
-  (`<dialog>` brings built-in top-layer rendering, ESC handling, and
-  inert-background for free; it is well-supported in all current evergreen
-  browsers as of 2024.)
+**Decisions (2026-05-24):**
+
+- **Render with native `<dialog role="alertdialog">`.** Built-in top-layer
+  rendering, ESC handling, and inert-background are free; well-supported in all
+  current evergreen browsers. The div + scrim fallback was considered and
+  rejected — the implementation cost (top-layer / focus-trap / inert / ESC by
+  hand) is not justified for any browser we target.
+- **Focus-return cascade after a confirmed Delete removes the row:** next
+  conversation row → previous row if there is no next → "Start a chat" CTA if
+  the list is empty. Industry-standard pattern for list-item deletion; spatially
+  coherent for sighted keyboard users and predictable for SR users.
+
+The primitive should:
+
+- Render `<dialog role="alertdialog">`.
 - Expose `aria-labelledby` pointing at a visible title and `aria-describedby`
   pointing at the body text, so the accessible name and description are
   programmatic.
@@ -99,10 +109,8 @@ Build a small Dialog primitive in the design system and replace the
 - On open, move focus to the Cancel button (safest default for destructive
   actions; matches WAI-ARIA APG alertdialog pattern).
 - On close (Confirm, Cancel, ESC, or scrim click), restore focus to the
-  triggering element — in this case, the More-actions button on the conversation
-  row (or, if the row is removed by a confirmed delete, a documented neighbour:
-  the next conversation row, the previous one if there is no next, or the "Start
-  a chat" CTA when the list becomes empty).
+  documented destination — the More-actions trigger on the row if the row
+  survives, or the focus-return cascade above if the row is removed.
 - Wire ESC to cancel (matches alertdialog APG; matches native `confirm` too).
 - Render the destructive action button with the existing `Button`
   `variant="danger"` (or whichever destructive variant the design system already
@@ -123,13 +131,14 @@ const doDelete = () => {
     cancelLabel: 'Cancel',
     destructive: true,
     onConfirm: onDelete,
-    returnFocusTo: moreActionsTriggerRef, // or the documented neighbour
+    returnFocusTo: moreActionsTriggerRef, // resolved per the focus-return cascade above
   })
 }
 ```
 
-This Dialog primitive is also the right home for A11Y-025's menu-as-dialog
-ideas; bundling the work is likely the simplest path.
+Note: A11Y-025 was scoped (2026-05-24) to implement the full APG menu pattern
+rather than convert the row menu into a dialog, so this Dialog primitive is no
+longer a shared substrate with that ticket.
 
 ## Acceptance
 
@@ -163,5 +172,6 @@ ideas; bundling the work is likely the simplest path.
 - **A11Y-022** (resolved) — preview focus race; the dialog must not race the
   page on mount, same class of focus-ordering hazard.
 - **A11Y-025** (open, inbox) — ConversationRow menu lacks ARIA APG keyboard
-  navigation. The new Dialog primitive built for this ticket is likely the right
-  substrate for that work too; bundle if scheduled together.
+  navigation. Originally flagged as a possible bundle with this ticket's Dialog
+  primitive; A11Y-025 was subsequently scoped to the APG menu pattern (not a
+  dialog), so the two are now independent.
