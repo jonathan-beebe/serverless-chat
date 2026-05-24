@@ -6,6 +6,7 @@ import { CopyBox } from '../components/CopyBox'
 import { Heading } from '../components/Heading'
 import { LiveRegion } from '../components/LiveRegion'
 import { ScreenContainer, useScreenChrome } from '../components/ScreenChrome'
+import { Spinner } from '../components/Spinner'
 import type { ChatSession } from '../hooks/useChatSession'
 import { useFocusOnMount } from '../hooks/useFocusOnMount'
 import { usePageTitle } from '../hooks/usePageTitle'
@@ -184,7 +185,10 @@ export function Joiner({ session, offerCode, conversationId, onCancel }: Props) 
       {liveStatus}
 
       {session.state === 'gathering' && (
-        <Callout variant="info">Preparing reply (gathering network candidates)…</Callout>
+        <Callout variant="info" className="inline-flex items-center gap-2">
+          <Spinner />
+          Preparing reply (gathering network candidates)…
+        </Callout>
       )}
 
       {session.encodedLocal && (

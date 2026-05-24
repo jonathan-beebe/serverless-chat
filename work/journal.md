@@ -20,6 +20,7 @@ id.
 
 ## Log
 
+- 2026-05-24:16:05:00 — IMPRV-016 — started
 - 2026-05-24:15:55:00 — A11Y-035 — ABANDONED: superseded by A11Y-036 (same
   problem, re-scoped under the new `/work-scope` + `/work-write` flow to drop
   the pre-committed implementation path); moved to `3-done/`

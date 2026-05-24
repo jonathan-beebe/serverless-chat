@@ -97,6 +97,35 @@ describe('Joiner focus-on-mount (A11Y-005 + A11Y-022)', () => {
   })
 })
 
+describe('Joiner gathering-state spinner (IMPRV-016)', () => {
+  it('renders a spinner inside the "(gathering network candidates)…" callout once the reply branch is in gathering state', () => {
+    // The gathering callout in Joiner lives on the reply branch (post-Accept),
+    // so we start in 'idle', click Accept to flip the local `accepted` latch,
+    // then assert the gathering UI. Since the stub `startAsAnswerer` is a
+    // no-op, session.state stays 'idle' after Accept — to hit the gathering
+    // branch we re-render with the gathering state already set and accepted=true,
+    // which we achieve by starting from awaiting-answer (no-op idle path) then
+    // simulating the gathering state via a fresh render.
+    const session = makeSession({ state: 'gathering' })
+    render(<Joiner session={session} offerCode="OFFER" conversationId={TEST_CONV_ID} onCancel={() => {}} />)
+    // Click Accept to enter the reply branch (Joiner's local `accepted` flips).
+    fireEvent.click(screen.getByRole('button', { name: /^accept$/i }))
+
+    const callout = screen.getByText(/preparing reply \(gathering network candidates\)/i)
+    const svg = callout.querySelector('svg')
+    expect(svg).not.toBeNull()
+    expect(svg!.getAttribute('aria-hidden')).toBe('true')
+    expect(svg!.getAttribute('class')).toMatch(/animate-spin/)
+  })
+
+  it('does not render the gathering callout (or its spinner) once state moves past gathering', () => {
+    const session = makeSession({ state: 'awaiting-answer', encodedLocal: 'REPLY' })
+    render(<Joiner session={session} offerCode="OFFER" conversationId={TEST_CONV_ID} onCancel={() => {}} />)
+    fireEvent.click(screen.getByRole('button', { name: /^accept$/i }))
+    expect(screen.queryByText(/gathering network candidates/i)).not.toBeInTheDocument()
+  })
+})
+
 describe('Joiner polite-defer on Accept (BUG-007)', () => {
   // App.tsx hoists `useChatSession` and shares it across routes — when the user
   // already started as offerer and then loads the other peer's invite URL in

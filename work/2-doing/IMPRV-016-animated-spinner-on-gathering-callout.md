@@ -118,3 +118,23 @@ inline.
   spinner must keep `aria-hidden` so it doesn't duplicate.
 - FEAT-007 (`work/3-done/FEAT-007-design-system.md`) — pattern for adding a new
   primitive to the design system catalogue.
+
+## Working
+
+- Created `src/components/Spinner.tsx` per the ticket defaults (`h-4 w-4`,
+  `currentColor` stroke, `aria-hidden="true"`, accepts caller `className`).
+- Created `src/components/Spinner.test.tsx` — 5 assertions: aria-hidden,
+  animate-spin, default sizing, caller className appended, currentColor on every
+  stroke.
+- Wired the spinner into the three gathering-callout sites:
+  - `src/screens/Offerer.tsx` (invite + polite-defer reply branches)
+  - `src/screens/Joiner.tsx` (reply branch)
+  - Each callout switched to `className="inline-flex items-center gap-2"`.
+- DesignSystem: added a dedicated `Spinner` row above the info callout, and
+  renamed the existing "Callout — info" row to "Callout — info (with spinner)"
+  since the gathering preview now carries the spinner inline.
+- Scope kept to `gathering` per the ticket's stated default; `connecting` state
+  was not touched.
+- Spinner lives in `src/components/` per the ticket's stated preference (matches
+  `Callout`'s location).
+- `npm run ci` clean (format / typecheck / lint / test).

@@ -6,6 +6,7 @@ import { CopyBox } from '../components/CopyBox'
 import { Heading } from '../components/Heading'
 import { LiveRegion } from '../components/LiveRegion'
 import { ScreenContainer, useScreenChrome } from '../components/ScreenChrome'
+import { Spinner } from '../components/Spinner'
 import { Textarea } from '../components/Textarea'
 import { decode } from '../core/encoding'
 import { currentOfferUrl, readHashParam } from '../core/url'
@@ -256,7 +257,10 @@ export function Offerer({ session, conversationId, onCancel }: Props) {
         <Callout variant="info">{POLITE_DEFER_MESSAGE}</Callout>
 
         {session.state === 'gathering' && (
-          <Callout variant="info">Preparing reply (gathering network candidates)…</Callout>
+          <Callout variant="info" className="inline-flex items-center gap-2">
+            <Spinner />
+            Preparing reply (gathering network candidates)…
+          </Callout>
         )}
 
         {session.encodedLocal && (
@@ -303,7 +307,10 @@ export function Offerer({ session, conversationId, onCancel }: Props) {
       </header>
 
       {session.state === 'gathering' && (
-        <Callout variant="info">Preparing invite (gathering network candidates)…</Callout>
+        <Callout variant="info" className="inline-flex items-center gap-2">
+          <Spinner />
+          Preparing invite (gathering network candidates)…
+        </Callout>
       )}
 
       {offerUrl && (

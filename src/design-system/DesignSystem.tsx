@@ -7,6 +7,7 @@ import { Divider } from '../components/Divider'
 import { Heading } from '../components/Heading'
 import { LiveRegion } from '../components/LiveRegion'
 import { ScreenChromeContext, type ScreenChromeValue } from '../components/ScreenChrome'
+import { Spinner } from '../components/Spinner'
 import { Textarea } from '../components/Textarea'
 import type { ChatMessage } from '../core/rtc'
 import { useFocusOnMount } from '../hooks/useFocusOnMount'
@@ -288,8 +289,14 @@ export function DesignSystem() {
           <Row label="Textarea">
             <Textarea aria-label="Sample textarea" rows={3} placeholder="Type something…" className="max-w-sm" />
           </Row>
-          <Row label="Callout — info">
-            <Callout variant="info">Preparing invite (gathering network candidates)…</Callout>
+          <Row label="Spinner">
+            <Spinner />
+          </Row>
+          <Row label="Callout — info (with spinner)">
+            <Callout variant="info" className="inline-flex items-center gap-2">
+              <Spinner />
+              Preparing invite (gathering network candidates)…
+            </Callout>
           </Row>
           <Row label="Callout — success">
             <Callout variant="success">Copied!</Callout>

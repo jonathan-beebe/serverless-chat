@@ -209,6 +209,28 @@ describe('Offerer post-connect drop (BUG-005)', () => {
   })
 })
 
+describe('Offerer gathering-state spinner (IMPRV-016)', () => {
+  it('renders a spinner inside the "(gathering network candidates)…" callout while state === gathering', () => {
+    const session = makeSession({ state: 'gathering' })
+    const { container } = render(<Offerer session={session} conversationId={TEST_CONV_ID} onCancel={() => {}} />)
+    const callout = screen.getByText(/preparing invite \(gathering network candidates\)/i)
+    // Spinner is aria-hidden so it's outside the accessible tree — query the
+    // SVG directly inside the callout's bounding paragraph.
+    const svg = callout.querySelector('svg')
+    expect(svg).not.toBeNull()
+    expect(svg!.getAttribute('aria-hidden')).toBe('true')
+    expect(svg!.getAttribute('class')).toMatch(/animate-spin/)
+    // Sanity: a non-gathering state should not have the gathering callout at all.
+    expect(container.textContent).toMatch(/preparing invite/i)
+  })
+
+  it('does not render the gathering callout (or its spinner) once state moves past gathering', () => {
+    const session = makeSession({ state: 'awaiting-answer', encodedLocal: 'OFFER' })
+    render(<Offerer session={session} conversationId={TEST_CONV_ID} onCancel={() => {}} />)
+    expect(screen.queryByText(/gathering network candidates/i)).not.toBeInTheDocument()
+  })
+})
+
 describe('Offerer polite-peer defer (FEAT-008)', () => {
   // The Offerer screen is in `awaiting-answer` with a generated offer. When
   // the user pastes another *offer* into the reply box (because both peers
