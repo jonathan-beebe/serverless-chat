@@ -4,3 +4,5 @@ dist
 .DS_Store
 .claude/settings.local.json
 .devcontainer/.env
+.env.local
+.env.*.local

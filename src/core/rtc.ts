@@ -4,14 +4,42 @@
 // signaling channel is a human pasting a string into Teams, not a socket.
 
 import { decode, encode } from './encoding'
+import { attachRtcDiagnostics } from './rtcDiagnostics'
 
-export const ICE_CONFIG: RTCConfiguration = {
-  iceServers: [
-    // Cloudflare primary, Google fallback. Browser races them; see §3.2.
-    { urls: 'stun:stun.cloudflare.com:3478' },
-    { urls: 'stun:stun.l.google.com:19302' },
-  ],
+// Cloudflare primary, Google fallback. Browser races them; see §3.2. Always
+// present; a configured TURN entry is appended below when env vars are set.
+const BASE_ICE_SERVERS: RTCIceServer[] = [
+  { urls: 'stun:stun.cloudflare.com:3478' },
+  { urls: 'stun:stun.l.google.com:19302' },
+]
+
+// Optional TURN relay for traversing symmetric NATs (VPN exits, corporate
+// guest Wi-Fi, carrier-grade NAT). Pasted from a provider's dashboard into
+// `.env.local`; see `.env.example` for the schema. When unset the app
+// behaves exactly as before — STUN-only — so contributors without TURN
+// creds can still run the spike on home networks.
+//
+// SECURITY: VITE_* env vars are bundled into the client JS. For `npm run
+// dev` on localhost the creds never leave the machine. If this app is ever
+// built and deployed publicly with these env vars set, the credentials
+// leak to anyone viewing source and can be used to consume bandwidth on
+// your TURN account. The production-shaped fix is a small server that
+// mints short-lived per-session creds — see step 3 of
+// docs/known_limitations.md.
+function buildIceServers(): RTCIceServer[] {
+  const urlsRaw = import.meta.env.VITE_TURN_URLS
+  const username = import.meta.env.VITE_TURN_USERNAME
+  const credential = import.meta.env.VITE_TURN_CREDENTIAL
+  if (!urlsRaw || !username || !credential) return BASE_ICE_SERVERS
+  const urls = urlsRaw
+    .split(',')
+    .map((u) => u.trim())
+    .filter(Boolean)
+  if (urls.length === 0) return BASE_ICE_SERVERS
+  return [...BASE_ICE_SERVERS, { urls, username, credential }]
 }
+
+export const ICE_CONFIG: RTCConfiguration = { iceServers: buildIceServers() }
 
 // `failed` covers pre-connect failures (ICE never converged, setup blew up).
 // `closed` covers post-connect drops (channel was open, then went away — peer
@@ -85,6 +113,7 @@ export function waitForIceComplete(pc: RTCPeerConnection, timeoutMs: number = IC
  */
 export async function createOffer(): Promise<PeerSession> {
   const pc = new RTCPeerConnection(ICE_CONFIG)
+  attachRtcDiagnostics(pc, 'offerer')
   const channel = pc.createDataChannel('chat', { ordered: true })
 
   await pc.setLocalDescription(await pc.createOffer())
@@ -114,6 +143,7 @@ export async function acceptOffer(
   onChannel: (channel: RTCDataChannel) => void,
 ): Promise<PeerSession> {
   const pc = new RTCPeerConnection(ICE_CONFIG)
+  attachRtcDiagnostics(pc, 'answerer')
   const offer = decode<RTCSessionDescriptionInit>(offerCode)
 
   let channel: RTCDataChannel | null = null
