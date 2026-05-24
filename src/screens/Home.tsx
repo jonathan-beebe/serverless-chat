@@ -513,8 +513,13 @@ export function Home({ onStart }: Props) {
       </Button>
       {/* Conversation list. Null while the first load is in flight (no flash
           of empty state); [] thereafter if there are no prior chats. */}
+      {/* A11Y-032: <section> deliberately has no `aria-label` — the visible
+          <h2> "Past chats" is the authoritative name and the heading shortcut
+          is the canonical entry point. The prior shape `aria-label="Past
+          conversations"` both conflicted with the visible heading and
+          promoted the section to a landmark slot it didn't earn. */}
       {conversations !== null && conversations.length > 0 && (
-        <section aria-label="Past conversations" className="w-full text-left">
+        <section className="w-full text-left">
           <h2 className="mb-2 text-sm font-semibold text-stone-700 dark:text-stone-300">Past chats</h2>
           <ul className="flex flex-col gap-2">
             {conversations.map((c) => (

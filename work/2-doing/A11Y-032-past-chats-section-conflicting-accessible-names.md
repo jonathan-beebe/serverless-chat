@@ -1,7 +1,7 @@
 ---
 id: A11Y-032
 type: a11y
-status: open
+status: in-progress
 created: 2026-05-24
 ---
 
@@ -135,3 +135,14 @@ promote to a landmark.
   surface AT navigates to" reasoning.
 - **FEAT-012** (resolved) — Resume conversation; this section was added by that
   feature.
+
+## Working
+
+**2026-05-24** — Dropped `aria-label="Past conversations"` from the `<section>`
+in `src/screens/Home.tsx`. The `<h2>Past chats</h2>` is now the authoritative
+name and is reachable via heading-shortcut; the section is no longer exposed as
+a region landmark. The pre-existing empty-state test queried for
+`getByRole('region', ...)` which becomes vacuously true after this change —
+re-anchored it on the heading instead. Added a new A11Y-032 test that seeds a
+row and asserts the heading is present while the region landmark is not.
+`npm test` → 380/380. Lint + typecheck clean.

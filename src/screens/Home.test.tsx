@@ -65,11 +65,32 @@ describe('Home empty state (FEAT-012 AC#19)', () => {
   it('renders no past-chats section when storage is empty', async () => {
     render(<Home onStart={() => {}} />)
     // Wait for the async listConversations() to resolve and the hook to
-    // commit the (empty) list. If the section ever appeared, it'd be in a
-    // <section> with this aria-label.
+    // commit the (empty) list. After A11Y-032 the section no longer carries
+    // `aria-label="Past conversations"` (it didn't earn a landmark slot),
+    // so the heading is the canonical anchor for "section is rendered."
     await waitFor(() => {
-      expect(screen.queryByRole('region', { name: /past conversations/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('heading', { name: /past chats/i })).not.toBeInTheDocument()
     })
+  })
+
+  // A11Y-032: the surrounding <section> previously claimed
+  // aria-label="Past conversations" while the visible <h2> read "Past chats".
+  // Two names disagreeing is a 2.5.3 / 1.3.1 mismatch and the section did
+  // not earn a landmark slot — the heading is the canonical entry point.
+  it('past-chats section is not a region landmark; the h2 is the entry point (A11Y-032)', async () => {
+    await upsertConversation({
+      id: 'aaa',
+      createdAt: Date.now() - 60_000,
+      lastActivityAt: Date.now() - 60_000,
+      label: 'Lunch chat',
+    })
+    await appendMessage('aaa', { id: 'm-aaa', from: 'me', text: 'hi', at: Date.now() - 60_000 })
+    render(<Home onStart={() => {}} />)
+
+    // The h2 "Past chats" is present and SR-navigable via heading shortcut.
+    expect(await screen.findByRole('heading', { name: /^past chats$/i })).toBeInTheDocument()
+    // The wrapping <section> must NOT be exposed as a region landmark.
+    expect(screen.queryByRole('region', { name: /past conversations/i })).not.toBeInTheDocument()
   })
 })
 
