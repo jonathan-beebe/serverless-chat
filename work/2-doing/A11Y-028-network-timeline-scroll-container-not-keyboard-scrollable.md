@@ -1,7 +1,7 @@
 ---
 id: A11Y-028
 type: a11y
-status: open
+status: in-progress
 created: 2026-05-24
 ---
 
@@ -162,3 +162,15 @@ you can scroll with the keyboard." Same reasoning as A11Y-021.
 - **A11Y-027** (this batch) — adds `aria-labelledby` + `scope="col"` to the
   inner `<table>`; coordinate landing order so the labelled-region and
   labelled-table both make sense together.
+
+## Working
+
+**2026-05-24** — Implemented per the suggested diff. The wrapper `<div>` in
+`src/network/Network.tsx` now carries `role="region"`,
+`aria-label="Per-message timeline (scrollable)"`, `tabIndex={0}`, and the
+canonical
+`focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400`
+ring tokens. Landed on top of A11Y-027 (which added the table's
+`aria-labelledby`), so both labelled surfaces ship together. Test asserts the
+role + name + tabindex + class tokens. `npm test` → 377/377. Lint + typecheck
+clean.

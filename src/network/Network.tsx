@@ -167,7 +167,18 @@ function MessageTimeline({ telemetry }: { telemetry: NetworkTelemetry }) {
       <Heading level={2} size="sm" id="net-timeline-heading">
         Per-message timeline (last {Math.min(rows.length, TIMELINE_ROWS)})
       </Heading>
-      <div className="overflow-x-auto rounded-md border border-stone-300 bg-white/50 dark:border-stone-700 dark:bg-stone-900/50">
+      {/* A11Y-028: wrapper is the only horizontal scroll surface on viewports
+          narrower than 36rem. Chromium auto-promotes overflow containers to
+          focusable since M126, but Firefox / Safari do not — so without an
+          explicit `tabIndex={0}` keyboard-only users on those engines can't
+          reach the off-screen columns. `role="region"` + `aria-label` makes
+          it a navigable landmark; the focus-visible ring matches A11Y-021's
+          treatment of the chat transcript wrapper. */}
+      <div
+        role="region"
+        aria-label="Per-message timeline (scrollable)"
+        tabIndex={0}
+        className="overflow-x-auto rounded-md border border-stone-300 bg-white/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 dark:border-stone-700 dark:bg-stone-900/50">
         <table aria-labelledby="net-timeline-heading" className="w-full min-w-[36rem] text-left text-sm">
           <thead className="text-xs font-medium text-stone-600 dark:text-stone-400">
             <tr className="border-b border-stone-300 dark:border-stone-700">

@@ -129,6 +129,20 @@ describe('Network with active telemetry', () => {
     expect(screen.getByText(/peer's clock is \+105 ms ahead of yours/i)).toBeInTheDocument()
   })
 
+  // A11Y-028: mirror of A11Y-021's chat-transcript fix on the Network
+  // timeline scroll wrapper. Chromium auto-promotes scroll containers to
+  // focusable but Firefox / Safari do not — so without `tabIndex={0}` plus a
+  // labelled `role="region"`, keyboard-only / screen-magnifier / switch users
+  // on those engines cannot reach the off-screen columns.
+  it('per-message timeline wrapper is a focusable labelled scroll region (A11Y-028)', () => {
+    render(<Network session={stubSession(activeTelemetry())} />)
+    const wrapper = screen.getByRole('region', { name: /per-message timeline \(scrollable\)/i })
+    expect(wrapper).toHaveAttribute('tabindex', '0')
+    expect(wrapper.className).toMatch(/overflow-x-auto/)
+    expect(wrapper.className).toMatch(/focus-visible:ring-sky-400/)
+    expect(wrapper.className).toMatch(/focus-visible:outline-none/)
+  })
+
   // A11Y-027: SR table-navigation mode skips the surrounding prose, so the
   // <table> needs its own programmatic name (aria-labelledby reuses the
   // existing <h2 id>). And explicit scope="col" on each <th> is the canonical
