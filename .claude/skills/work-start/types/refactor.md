@@ -1,7 +1,3 @@
-# work — refactor
-
-> TO BE DEFINED — owner: human.
->
-> What is the type-specific workflow for working a refactor ticket? Examples:
-> characterization tests first, target shape, behavior-preservation
-> verification, definition of done (no behavior change, target shape achieved).
+Your goal is to bring the code into alignment with the core principles,
+architecure, and common patterns in use. The code should always be clearer,
+better factored, and more in alignment after your work is done.
