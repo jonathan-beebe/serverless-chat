@@ -33,19 +33,37 @@ describe('FEAT-013 mobile-responsive chat', () => {
     expect(declarations).toMatch(/(input|textarea|select)[^{]*\{[^}]*font-size:\s*16px/)
   })
 
-  it('connected Offerer/Joiner branches consume `--vvh` so the chat tracks the visual viewport when the iOS soft keyboard opens (IMPRV-017)', () => {
+  it('connected Offerer/Joiner branches consume `--vvh` so the chat tracks the visual viewport when the iOS soft keyboard opens (IMPRV-017, IMPRV-020)', () => {
     const offerer = readFileSync(resolve(projectRoot, 'src/screens/Offerer.tsx'), 'utf8') as string
     const joiner = readFileSync(resolve(projectRoot, 'src/screens/Joiner.tsx'), 'utf8') as string
-    // The connected branch in each screen sizes against the `--vvh` custom
-    // property (set by `useVisualViewportHeight` when supported, falling
-    // back to `100dvh` via `:root` in index.css when not).
-    expect(offerer).toMatch(/calc\(var\(--vvh\)-3rem\)/)
-    expect(joiner).toMatch(/calc\(var\(--vvh\)-3rem\)/)
-    // Negative guards: the pre-IMPRV-017 shapes must be fully replaced.
+    // IMPRV-020: the container fills `--vvh` directly — no `-3rem` slack.
+    // `useVisualViewportHeight` sets `--vvh` to the live visual-viewport height,
+    // falling back to `100dvh` via `:root` in index.css when unsupported.
+    expect(offerer).toMatch(/h-\[var\(--vvh\)\]/)
+    expect(joiner).toMatch(/h-\[var\(--vvh\)\]/)
+    // Negative guards: the pre-IMPRV-020 (`-3rem`) and pre-IMPRV-017 (`100dvh`/`100vh`) shapes must be fully replaced.
+    expect(offerer).not.toMatch(/calc\(var\(--vvh\)-3rem\)/)
+    expect(joiner).not.toMatch(/calc\(var\(--vvh\)-3rem\)/)
     expect(offerer).not.toMatch(/h-\[calc\(100dvh-3rem\)\]/)
     expect(joiner).not.toMatch(/h-\[calc\(100dvh-3rem\)\]/)
     expect(offerer).not.toMatch(/calc\(100vh-3rem\)/)
     expect(joiner).not.toMatch(/calc\(100vh-3rem\)/)
+  })
+
+  it('connected Offerer/Joiner branches use asymmetric vertical padding (`pt-6 pb-1`) so the composer sits ~4px above the visual-viewport bottom (IMPRV-020)', () => {
+    const offerer = readFileSync(resolve(projectRoot, 'src/screens/Offerer.tsx'), 'utf8') as string
+    const joiner = readFileSync(resolve(projectRoot, 'src/screens/Joiner.tsx'), 'utf8') as string
+    // Match the connected `ScreenContainer` className block (multi-line tolerant)
+    // and assert both axes — `pt-6` keeps the header breathing room, `pb-1`
+    // collapses the dead space below the composer.
+    expect(offerer).toMatch(/label="Connected"[\s\S]*?className="[^"]*\bpt-6\b[^"]*"/)
+    expect(offerer).toMatch(/label="Connected"[\s\S]*?className="[^"]*\bpb-1\b[^"]*"/)
+    expect(joiner).toMatch(/label="Connected"[\s\S]*?className="[^"]*\bpt-6\b[^"]*"/)
+    expect(joiner).toMatch(/label="Connected"[\s\S]*?className="[^"]*\bpb-1\b[^"]*"/)
+    // Negative guard: the symmetric `py-6` shape from FEAT-013 must be gone
+    // from the connected branches.
+    expect(offerer).not.toMatch(/label="Connected"[\s\S]*?className="[^"]*\bpy-6\b[^"]*"/)
+    expect(joiner).not.toMatch(/label="Connected"[\s\S]*?className="[^"]*\bpy-6\b[^"]*"/)
   })
 
   it('index.css declares a `:root` fallback of `--vvh: 100dvh` so browsers without `window.visualViewport` keep the FEAT-013 behavior (IMPRV-017)', () => {

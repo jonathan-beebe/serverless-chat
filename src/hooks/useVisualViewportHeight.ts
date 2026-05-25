@@ -15,8 +15,9 @@ import { useEffect } from 'react'
 // gesture in a single hook.
 //
 // The hook writes `vv.height` (in `px`) to `--vvh` on `:root`. The connected
-// shell consumes it as `h-[calc(var(--vvh)-3rem)]`. `:root { --vvh: 100dvh }`
-// in `index.css` is the unmounted/unsupported fallback.
+// shell consumes it as `h-[var(--vvh)]` (IMPRV-020 dropped the `-3rem` slack).
+// `:root { --vvh: 100dvh }` in `index.css` is the unmounted/unsupported
+// fallback.
 //
 // `window.scrollTo(0, 0)` on each update cancels iOS's visual-viewport pan
 // over the layout viewport. Body is `overflow: hidden` globally, so this is

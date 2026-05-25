@@ -123,7 +123,7 @@ export function Joiner({ session, offerCode, conversationId, onCancel, onOfferCa
     return (
       <ScreenContainer
         label="Connected"
-        className="mx-auto flex h-[calc(var(--vvh)-3rem)] max-w-xl flex-col gap-3 overflow-hidden px-4 py-6">
+        className="mx-auto flex h-[var(--vvh)] max-w-xl flex-col gap-3 overflow-hidden px-4 pt-6 pb-1">
         {liveStatus}
         <header className="flex items-center justify-between">
           {/* No focus ref here — Chat owns focus via FEAT-002 (input is the

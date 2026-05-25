@@ -26,8 +26,9 @@ body,
   height: 100%;
 }
 
-/* IMPRV-017: `--vvh` is the height the connected chat shell sizes against
-   (`h-[calc(var(--vvh)-3rem)]` on the Offerer/Joiner connected branches).
+/* IMPRV-017 / IMPRV-020: `--vvh` is the height the connected chat shell sizes
+   against (`h-[var(--vvh)]` on the Offerer/Joiner connected branches — the
+   container fills the visual viewport with no extra slack).
    This `:root` declaration is the unmounted / unsupported-browser fallback —
    `useVisualViewportHeight` overrides it with `visualViewport.height` (px)
    as an inline style on `<html>` while the connected branch is mounted. */

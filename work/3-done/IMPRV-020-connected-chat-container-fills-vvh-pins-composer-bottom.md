@@ -1,8 +1,9 @@
 ---
 id: IMPRV-020
 type: improvement
-status: open
+status: resolved
 created: 2026-05-25
+resolved: 2026-05-25
 ---
 
 # IMPRV-020: connected-chat container fills --vvh and pins composer to viewport bottom
@@ -65,3 +66,30 @@ visually detached from the input it competes with.
   on it.
 - IMPRV-007 — body-lock + #root-scroll pattern that the connected shell still
   relies on.
+
+## Working
+
+- Code paths from the ticket were nominal — the connected `ScreenContainer`
+  class strings lived at `src/screens/Offerer.tsx:200` and
+  `src/screens/Joiner.tsx:126` (ticket dropped the `src/screens/` prefix), and
+  the only other `var(--vvh)` references were doc comments in `src/index.css`
+  and `src/hooks/useVisualViewportHeight.ts`.
+- TDD red step: extended the existing IMPRV-017 assertion in
+  `src/mobile-responsive.test.tsx` to require `h-[var(--vvh)]` and added a new
+  test for the asymmetric `pt-6 pb-1` pair, both with negative guards for the
+  pre-IMPRV-020 shapes (`calc(var(--vvh)-3rem)`, `py-6`). Test run failed 2/7
+  before the fix.
+- Applied the change verbatim per the recommendation: `h-[var(--vvh)]` and
+  `pt-6 pb-1` on both connected branches. Picked `pb-1` (4px) over `pb-2` (8px)
+  per the ticket's "adjust if 4px reads too flush in the device check" wording —
+  kept the tighter default; a follow-up device check can loosen if needed.
+- Updated the doc-comment references to `h-[calc(var(--vvh)-3rem)]` in
+  `src/index.css` and `src/hooks/useVisualViewportHeight.ts` to the new shape so
+  future readers don't grep their way to the wrong expression.
+- `DesignSystemChat` mounts `Offerer` directly, so the design-system/chat route
+  inherits the fix without a separate edit. Verified by grep — no other call
+  sites or duplicate class strings.
+- Final: `npm test` → 396/396, `npm run lint` and `npm run typecheck` clean.
+- Real-device verification (iOS Safari / Android Chrome) is still required per
+  the ticket — JSDOM can't exercise `visualViewport`. Not blocking commit; the
+  static tests guard the class strings, and IMPRV-017's binding is unchanged.
