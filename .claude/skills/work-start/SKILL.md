@@ -67,8 +67,8 @@ Zero or one argument:
       patterns over new ones.
    9. **Run all tests** — green before committing.
    10. **Commit** with the ticket id in the message.
-   11. **Mark accepted.** Once the user has accepted the change, update the
-       ticket status, move the file to `work/3-done/`, and invoke the skill
-       `/work-log`: `<PREFIX>-<NNN> — done: <one-line summary>`.
+   11. **Mark accepted.** Update the ticket status to resolved, move the file to
+       `work/3-done/`, and invoke the skill `/work-log`:
+       `<PREFIX>-<NNN> — done: <one-line summary>`.
 3. If a worker step fails or asks for human input, stop the drain loop and
    surface the question — do not silently skip ahead.
