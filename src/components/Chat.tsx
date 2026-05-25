@@ -252,7 +252,7 @@ export function Chat({ messages, onSend, disabled, hasResumed }: Props) {
           empty-state placeholder below the toolbar already tells every user
           the surface is empty, so the controls have nothing to offer. */}
       {messages.length > 0 && (
-        <div className="flex items-center justify-end gap-3">
+        <div className="hidden sm:flex items-center justify-end gap-3">
           <label className="flex items-center gap-2 text-sm text-stone-700 dark:text-stone-300">
             <input
               type="checkbox"

@@ -1,8 +1,9 @@
 ---
 id: IMPRV-021
 type: improvement
-status: open
+status: resolved
 created: 2026-05-25
+resolved: 2026-05-25
 ---
 
 # IMPRV-021: hide chat copy-transcript toolbar below sm breakpoint
@@ -73,3 +74,30 @@ for itself on a phone.
   extends that conditional with a viewport-width rule.
 - IMPRV-020 — sibling small-screen vertical-space reclaim on the same connected
   chat surface.
+
+## Working
+
+- Ticket paths were slightly off — toolbar wrapper lives at
+  `src/components/Chat.tsx:255` (line 254 is the `{messages.length > 0 && (`
+  opener). Class string was exactly as quoted in the ticket.
+- TDD red step landed two static-class assertions in
+  `src/mobile-responsive.test.tsx`:
+  1. Chat toolbar wrapper className equals
+     `hidden sm:flex items-center justify-end gap-3`, with a negative guard that
+     the bare `flex …` shape is gone.
+  2. Home row-menu "Copy transcript" button's className does not contain
+     `hidden`, `sm:hidden`, or `max-sm:hidden`, as a guard against anyone later
+     mirroring the Chat hide rule on the small-screen fallback path. The toolbar
+     assertion failed before the fix; the Home guard passed (regression-shield
+     only).
+- Fix is the one-token swap from the recommendation: `flex` → `hidden sm:flex`.
+  Jsdom doesn't apply Tailwind CSS, so `hidden` is an inert string in tests —
+  existing render-based FEAT-011 / A11Y-034 toolbar tests (`Chat.test.tsx`)
+  still locate the checkbox and Copy button via the accessibility tree at any
+  viewport, and all 398 tests pass.
+- `/design-system/chat` mounts `Offerer` which renders `<Chat>` — the route
+  picks the fix up implicitly. Did not bundle the "render the preview at a known
+  viewport" suggestion; the showcase already renders at its host viewport, and
+  the IMPRV-019 stub is a real `<Offerer>` so the toolbar reflects whatever
+  width the reviewer is on.
+- Final: `npm test` → 398/398, `npm run lint` and `npm run typecheck` clean.

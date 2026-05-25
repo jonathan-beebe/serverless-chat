@@ -83,4 +83,31 @@ describe('FEAT-013 mobile-responsive chat', () => {
     expect(offerer).toMatch(/useVisualViewportHeight\s*\(/)
     expect(joiner).toMatch(/useVisualViewportHeight\s*\(/)
   })
+
+  it('Chat copy-transcript toolbar wrapper is `hidden sm:flex` so it does not eat a row on phone-width viewports (IMPRV-021)', () => {
+    const chat = readFileSync(resolve(projectRoot, 'src/components/Chat.tsx'), 'utf8') as string
+    // The toolbar wrapper is the immediate child of the `messages.length > 0`
+    // gate. The `hidden sm:flex` pair takes it out of the layout below 640px
+    // and restores the flex row at ≥ 640px.
+    expect(chat).toMatch(
+      /messages\.length\s*>\s*0\s*&&\s*\([\s\S]*?<div\s+className="hidden sm:flex items-center justify-end gap-3"/,
+    )
+    // Negative guard: the pre-IMPRV-021 unconditional `flex` shape must be gone.
+    expect(chat).not.toMatch(/<div\s+className="flex items-center justify-end gap-3"/)
+  })
+
+  it('Home row-menu "Copy transcript" item is not viewport-gated, so small-screen users keep a one-click copy path (IMPRV-021)', () => {
+    const home = readFileSync(resolve(projectRoot, 'src/screens/Home.tsx'), 'utf8') as string
+    // Locate the menuitem button by its label, walk back to capture its
+    // className (template-literal or quoted). The item's class string must
+    // not contain `hidden` or any `sm:hidden` / `max-sm:hidden` viewport-hide
+    // tokens that would mirror the Chat toolbar rule from IMPRV-021.
+    const tmpl = home.match(/<button\b[\s\S]*?className=\{`([^`]*)`\}[\s\S]*?>\s*Copy transcript\s*</)
+    const quoted = home.match(/<button\b[\s\S]*?className="([^"]*)"[\s\S]*?>\s*Copy transcript\s*</)
+    const itemClass = tmpl?.[1] ?? quoted?.[1]
+    expect(itemClass, 'Copy transcript menu item must exist in Home.tsx').toBeTruthy()
+    expect(itemClass!).not.toMatch(/\bhidden\b/)
+    expect(itemClass!).not.toMatch(/\bsm:hidden\b/)
+    expect(itemClass!).not.toMatch(/\bmax-sm:hidden\b/)
+  })
 })
