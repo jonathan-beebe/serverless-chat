@@ -1,8 +1,9 @@
 ---
 id: IMPRV-016
 type: improvement
-status: open
+status: done
 created: 2026-05-24
+done: 2026-05-24
 ---
 
 # IMPRV-016: Animated spinner alongside "(gathering network candidates)…" callout
