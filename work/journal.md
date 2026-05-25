@@ -20,6 +20,10 @@ id.
 
 ## Log
 
+- 2026-05-25:16:18:33 — IMPRV-018 — done: render **COMMIT_HASH** as muted text
+  below the "How does this work?" disclosure on Home; "dev" passes through
+  unchanged when git was unavailable at build time
+- 2026-05-25:16:15:40 — IMPRV-018 — started
 - 2026-05-25:16:14:47 — IMPRV-019 — done: added /design-system/chat route that
   mounts Offerer's connected branch with a local stub ChatSession; removed inert
   ConnectedChromePreview from /design-system and replaced it with a link to the
