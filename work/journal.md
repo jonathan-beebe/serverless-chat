@@ -20,6 +20,11 @@ id.
 
 ## Log
 
+- 2026-05-25:16:41:05 — IMPRV-020 — done: connected chat container now fills
+  `h-[var(--vvh)]` and uses asymmetric `pt-6 pb-1` so the composer sits ~4px
+  above the visual-viewport bottom; doc comments and the mobile-responsive test
+  were updated to match
+- 2026-05-25:16:37:17 — IMPRV-020 — started
 - 2026-05-25:16:36:05 — IMPRV-022 — defined: PWA update banner on Home prompts
   user to activate waiting service worker
 - 2026-05-25:16:30:50 — IMPRV-021 — defined: hide chat copy-transcript toolbar
