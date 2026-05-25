@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Button } from '../components/Button'
 import { Callout } from '../components/Callout'
 import { Chat } from '../components/Chat'
@@ -409,9 +410,20 @@ export function DesignSystem() {
             />
           </ScreenPreview>
 
-          <ScreenPreview label="Connected chat layout (header chrome)">
-            <ConnectedChromePreview />
-          </ScreenPreview>
+          {/* IMPRV-019: the connected screen used to live here as an inert
+              ConnectedChromePreview (header + dashed-box placeholder, no real
+              Chat instance — you couldn't tab into it, type, or see the
+              transcript shell). It moved to its own route so mobile reviewers
+              can verify the visualViewport / keyboard binding without a SDP
+              handshake. The link below keeps this section self-documenting. */}
+          <div className="flex flex-col gap-2">
+            <span className="text-xs font-medium text-stone-600 dark:text-stone-400">Connected chat (real route)</span>
+            <Link
+              to="/design-system/chat"
+              className="self-start text-sm text-sky-700 underline underline-offset-2 hover:text-sky-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 dark:text-sky-300 dark:hover:text-sky-100">
+              Open /design-system/chat →
+            </Link>
+          </div>
 
           <ScreenPreview label="Network telemetry — empty state">
             <Network session={stubSession()} />
@@ -496,35 +508,6 @@ function ScreenPreview({ label, children }: { label: string; children: React.Rea
         className="rounded-md border border-stone-300 bg-stone-50 dark:border-stone-700 dark:bg-stone-900">
         <ScreenChromeContext.Provider value={SHOWCASE_CHROME}>{children}</ScreenChromeContext.Provider>
       </div>
-    </div>
-  )
-}
-
-// The connected screen's outer chrome (header + End chat button) rendered
-// without nesting a second Chat instance. The Chat organism above is the
-// interactive one — sharing IDs across two Chat renders would dup the
-// `chat-input` id and break label associations.
-//
-// Note: this is rendered inside `<ScreenPreview>`, which provides a
-// `ScreenChromeContext` that already demotes the heading semantics. We use a
-// `<div>` instead of `<main>` directly because there's no `ScreenContainer`
-// indirection here (real screens use one — this preview is local to the
-// showcase file).
-function ConnectedChromePreview() {
-  return (
-    <div className="mx-auto flex max-w-xl flex-col gap-3 px-4 py-6">
-      <header className="flex items-center justify-between">
-        <Heading level={1} size="sm">
-          Connected
-        </Heading>
-        <Button variant="secondary" size="sm">
-          End chat
-        </Button>
-      </header>
-      <p className="rounded-md border border-dashed border-stone-300 p-3 text-xs italic text-stone-500 dark:border-stone-700 dark:text-stone-400">
-        ↑ The Chat transcript + composer renders below this header on the real screen — see the interactive Chat in the
-        Organisms section above.
-      </p>
     </div>
   )
 }

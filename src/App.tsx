@@ -1,5 +1,6 @@
 import { BrowserRouter, Outlet, Route, Routes } from 'react-router-dom'
 import { DesignSystem } from './design-system/DesignSystem'
+import { DesignSystemChat } from './design-system/DesignSystemChat'
 import { Home } from './screens/Home'
 import { NotFound } from './screens/NotFound'
 import { Network } from './network/Network'
@@ -38,6 +39,7 @@ export function AppRoutes() {
         <Route path="/" element={<Home />} />
         <Route path="/conversation/:id" element={<ConversationRoute />} />
         <Route path="/design-system" element={<DesignSystem />} />
+        <Route path="/design-system/chat" element={<DesignSystemChat />} />
         <Route path="/network" element={<NetworkRoute />} />
         <Route path="*" element={<NotFound />} />
       </Route>

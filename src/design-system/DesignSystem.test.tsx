@@ -118,7 +118,13 @@ describe('DesignSystem showcase', () => {
     expect(screen.getByText(/Joiner — You've been invited/)).toBeInTheDocument()
     expect(screen.getByText(/Joiner — Send this code back/)).toBeInTheDocument()
     expect(screen.getByText(/Joiner — Connection lost/)).toBeInTheDocument()
-    expect(screen.getByText(/Connected chat layout/)).toBeInTheDocument()
+    // IMPRV-019: the old inert "Connected chat layout (header chrome)" preview
+    // is gone — the connected screen lives at /design-system/chat now. The
+    // showcase keeps a labeled link in its place.
+    expect(screen.getByRole('link', { name: /open \/design-system\/chat/i })).toHaveAttribute(
+      'href',
+      '/design-system/chat',
+    )
     // The actual previewed screen content still renders (just at <h2>).
     expect(screen.getByRole('heading', { level: 2, name: /serverless p2p chat/i })).toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 2, name: /you've been invited to chat/i })).toBeInTheDocument()
@@ -326,7 +332,6 @@ describe('DesignSystem showcase', () => {
         "Joiner — You've been invited",
         'Joiner — Send this code back',
         'Joiner — Connection lost',
-        'Connected chat layout (header chrome)',
       ]
       for (const label of labels) {
         const labelEl = Array.from(container.querySelectorAll('span')).find((el) => el.textContent === label)
@@ -353,7 +358,7 @@ describe('DesignSystem showcase', () => {
       // the live-focus path in real browsers.
       const { container } = renderShowcase(<DesignSystem />)
       const previewWrappers = Array.from(container.querySelectorAll('[inert]'))
-      expect(previewWrappers.length).toBeGreaterThanOrEqual(7)
+      expect(previewWrappers.length).toBeGreaterThanOrEqual(6)
 
       // All natively focusable controls inside any inert wrapper.
       const focusableSelector = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
