@@ -152,13 +152,12 @@ Some types lend themselves to recommendations more than others.
      violated?"
    - Push back when the human starts solutioning; redirect to outcome.
    - Skip questions whose answer is already unambiguous from the description.
-6. **Present the packet.** Print it back in the labeled shape above and ask:
-   "Approve to write?" The human can edit any field, ask for more discovery, or
-   reject.
-7. **On approval, hand off to `/work-write`.** Invoke
-   `/work-write <type> <packet>` with the packet inline. `/work-write` will
-   validate the packet, allocate the id, write the file, and log it. If
-   `/work-write` rejects the packet, surface its reason and loop back to step 5.
+6. **Draft the packet.** Draft the packet and print it for the user to view. You
+   don't need to wait for approval (you already got it through the dialogue).
+7. **Hand off to `/work-write`.** Invoke `/work-write <type> <packet>` with the
+   packet inline. `/work-write` will validate the packet, allocate the id, write
+   the file, and log it. If `/work-write` rejects the packet, surface its reason
+   and loop back to step 5.
 
 ## When to skip this skill
 

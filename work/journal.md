@@ -12,7 +12,7 @@ id.
 - DSGN: 1
 - ARCH: 2
 - FEAT: 14
-- IMPRV: 20
+- IMPRV: 23
 - MAINT: 1
 - A11Y: 37
 - RFCTR: 1
@@ -20,6 +20,12 @@ id.
 
 ## Log
 
+- 2026-05-25:16:36:05 — IMPRV-022 — defined: PWA update banner on Home prompts
+  user to activate waiting service worker
+- 2026-05-25:16:30:50 — IMPRV-021 — defined: hide chat copy-transcript toolbar
+  below sm breakpoint
+- 2026-05-25:16:27:54 — IMPRV-020 — defined: connected-chat container fills
+  --vvh and pins composer to viewport bottom
 - 2026-05-25:16:18:33 — IMPRV-018 — done: render **COMMIT_HASH** as muted text
   below the "How does this work?" disclosure on Home; "dev" passes through
   unchanged when git was unavailable at build time
