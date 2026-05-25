@@ -29,41 +29,45 @@ list the valid types and ask again — do NOT guess.
 
 ## What "scoped" means
 
-A scope is **what the problem is** and **what success looks like** — nothing
-more. The fix is `/work-start`'s job, done with fresh eyes against the code as
-it stands when the ticket is picked up. Solutioning here freezes assumptions
-that may be stale by then, and crowds out the problem statement so the
-implementer skims past it.
+A scope is a definition of the problem, a definition of what success looks like,
+and includes adequate boundaries and constraints so the work can be easily
+validated using unit tests and objective measures.
+
+A scope is not a solution.
+
+A scope can include recommendations and suggestions.
 
 The dialogue is done when you can produce, with the human's agreement, this
 packet:
 
 ```
-PROBLEM: <factual statement — what is broken / missing / unclear, and where>
+PROBLEM: <factual statement — what is being solved, or what is broken / missing / unclear, and where>
+GOAL: <what does success look like? What is this work aiming at?>
 OUTCOME: <observable, verifiable end state — the user or system reaches X>
 WHY IT MATTERS: <user impact, constraint violated, downstream effect>
 RELATED WORK: <list of TICKET-### and/or commit SHAs, or "none">
 DISCOVERY NOTES (optional): <advisory diagnostic notes from the reporter>
-RECOMMENDATION (optional, type-gated): <how to address the problem — anything from a one-line direction to sample code; only included when the type's policy allows it (see Recommendation policy below)>
+RECOMMENDATION (optional): <suggestions that may help address the problem — anything from a one-line direction to sample pseudo-code>
 ONE-LINE SUMMARY: <short phrase — used for filename slug and journal entry>
 ```
 
 ### Rules the dialogue must honor
 
-- `PROBLEM` is factual and grounded (file paths / line numbers when applicable).
-  Push back on vague phrasings ("fix the menu thing").
+- `PROBLEM` the what, is factual and grounded (file paths / line numbers when
+  applicable). Push back on vague phrasings ("fix the menu thing").
+- `GOAL` the why, is a clear, one line statement of what the finish line looks
+  like.
 - `OUTCOME` is phrased as an observable state ("the user can dismiss the dialog
   with Escape", "the table has an accessible name"), **not** as a code change
   ("add an `aria-label`", "wrap in `<dialog>`"). The mechanism — even when
   obvious — belongs in `RECOMMENDATION` (when the type allows it) or in
   `/work-start`, not in `OUTCOME`.
-- `RECOMMENDATION` is **type-gated** (see Recommendation policy below). For
-  types where it's allowed, the recommendation can be anything from a one-line
-  direction ("just make it a link") to sample code — whatever level of detail
-  the human and the dialogue land on. For types where it's forbidden, push back
-  on any solutioning attempt: the maker decides shape, not the reporter. If the
-  human is mid-recommendation when the type forbids it, route the observable
-  part to `OUTCOME` and the causal part to `DISCOVERY NOTES`.
+- `RECOMMENDATION` the recommendation can be anything from a one-line direction
+  ("just make it a link") to sample code — whatever level of detail the human
+  and the dialogue land on. For types where it's forbidden, push back on any
+  solutioning attempt: the maker decides shape, not the reporter. If the human
+  is mid-recommendation when the type forbids it, route the observable part to
+  `OUTCOME` and the causal part to `DISCOVERY NOTES`.
 - If the human has done diagnostic work worth preserving (a likely root cause, a
   reproduction recipe, a constraint they uncovered), put it under
   `DISCOVERY NOTES` and mark it advisory — not a directive. `/work-start` may
@@ -73,22 +77,34 @@ ONE-LINE SUMMARY: <short phrase — used for filename slug and journal entry>
 
 ### Recommendation policy by type
 
-Some work types have a well-precedented remediation shape (bug, a11y) where the
-recommendation is genuine signal. Others are open-ended creative work (feature,
-design) where prescribing a fix at definition time forecloses on options the
-maker would otherwise see.
+Some types lend themselves to recommendations more than others.
 
-| type         | RECOMMENDATION allowed? | rationale                                                          |
-| ------------ | ----------------------- | ------------------------------------------------------------------ |
-| bug          | yes                     | Fix is usually mechanical once root cause is known.                |
-| a11y         | yes                     | WCAG often dictates a specific remediation pattern.                |
-| maintenance  | yes                     | Usually a clear, well-precedented change.                          |
-| improvement  | yes                     | Often has a clear nudge; recommendation can stay loose.            |
-| feature      | no                      | Maker decides shape; pre-committing forecloses on options.         |
-| refactor     | no                      | The refactor target _is_ the recommendation; mechanism stays open. |
-| design       | no                      | Design is open exploration; recommending a path defeats the point. |
-| architecture | no                      | Same as design.                                                    |
-| research     | no                      | The question is the work; no recommendation to make.               |
+- `bug` should include references to affected source code and suggestions for
+  where to start inquiry.
+- `a11y` should include be a very clear and direct fix along with precise
+  measurements the fix is passing. If an issue might point to a deeper
+  architectural problem, suggest to the agent this problem be routed to the
+  research or architecture type for deeper work.
+- `maintenance` should include recommendations for how to align the code and
+  what success looks like.
+- `improvement` should include guidance of how to improve the situation.
+- `feature` should clearly document the problem and user/business goals of the
+  feature, but leaves implementation up to the maker.
+- `refactor` should suggest the ideal end state and how to measure that the code
+  is more well factored after the work is done. Sometimes a refactor may point
+  at a deeper architectural issue; if this is the case suggest the agent route
+  this to the research agent to capture options for eventual architecture
+  changes.
+- `design` recommendations focus on design principles and remain the design
+  layer, leaving technical underpinings up to the maker.
+- `architecture` recommendations should be in the form of mermaind diagrams that
+  capture data flow, module relationships, etc. Use ERDs, sequencie diagrams,
+  and flow charts as needed. architecture can always be pictured. sometimes what
+  appears to be an architecture problem is actually a refactoring problem; if
+  this is the case then suggest to the agent we use the refactor type.
+- `research` captures what should be learned and why, and what this learning
+  will contribute to next, connecting the dots between the research effort and
+  the value to be ultimately delivered.
 
 ## Type registry
 
