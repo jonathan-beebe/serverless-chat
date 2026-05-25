@@ -33,6 +33,8 @@ Consequences observable today:
 
 ## Outcome
 
+- Every feature of the app is routable via standard url route paths, e.g.
+  `/conversation/{id}` or `/design-system` or `/network`.
 - Each conversation is reachable at a stable URL. Bookmarking it, copying it via
   right-click → "Copy Link Address", pasting it into a fresh tab, and reloading
   the current tab all return the user to the same conversation (or to the "not
