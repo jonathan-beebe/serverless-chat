@@ -12,7 +12,7 @@ id.
 - DSGN: 1
 - ARCH: 2
 - FEAT: 14
-- IMPRV: 18
+- IMPRV: 20
 - MAINT: 1
 - A11Y: 37
 - RFCTR: 1
@@ -20,6 +20,15 @@ id.
 
 ## Log
 
+- 2026-05-25:16:14:47 — IMPRV-019 — done: added /design-system/chat route that
+  mounts Offerer's connected branch with a local stub ChatSession; removed inert
+  ConnectedChromePreview from /design-system and replaced it with a link to the
+  new route
+- 2026-05-25:16:11:12 — IMPRV-019 — started
+- 2026-05-25:16:08:35 — IMPRV-019 — defined: mock connected-chat route at
+  /design-system/chat for mobile testing
+- 2026-05-25:16:01:00 — IMPRV-018 — defined: show short commit hash as version
+  on home screen
 - 2026-05-25:15:53:01 — IMPRV-017 — done: added `useVisualViewportHeight` hook +
   `:root --vvh: 100dvh` fallback; Offerer/Joiner connected branches now size via
   `h-[calc(var(--vvh)-3rem)]` and mount the hook so iOS Safari can no longer pan
