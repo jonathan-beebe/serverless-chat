@@ -104,6 +104,11 @@ echo "Host network detected as: $HOST_NETWORK"
 iptables -A INPUT -s "$HOST_NETWORK" -j ACCEPT
 iptables -A OUTPUT -d "$HOST_NETWORK" -j ACCEPT
 
+# Allow inbound dev server (vite --host on 5173) so the host machine can
+# reach `npm run dev:host` via the published Docker port. Without this,
+# the DROP policy below would block SYNs coming through the bridge.
+iptables -A INPUT -p tcp --dport 5173 -j ACCEPT
+
 # Set default policies to DROP first
 iptables -P INPUT DROP
 iptables -P FORWARD DROP
