@@ -1,7 +1,7 @@
 ---
 id: A11Y-030
 type: a11y
-status: in-progress
+status: done
 created: 2026-05-24
 ---
 

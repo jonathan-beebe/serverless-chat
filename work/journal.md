@@ -20,6 +20,57 @@ id.
 
 ## Log
 
+- 2026-05-24:20:34:48 — A11Y-034 — done: hid the chat copy toolbar when
+  `messages.length === 0` so SR users no longer hear an unexplained "Copy,
+  button, dimmed" (the empty-state placeholder already conveys the surface
+  state); bundled a de-flake of the A11Y-025 row-menu effect by gating
+  auto-focus / reset on a `prevMenuOpenRef` so async `hasMessages` updates don't
+  stomp `activeIndex` (`src/components/Chat.tsx`, `src/screens/Home.tsx`)
+- 2026-05-24:20:34:47 — A11Y-033 — done: added a `ConfirmDialog` design-system
+  primitive (native `<dialog role="alertdialog">`, programmatic
+  title/description, initial focus on Cancel, ESC routed through onCancel,
+  two-button focus trap, focus restoration to a `returnFocusTo` ref); swapped
+  `ConversationRow.doDelete`'s `window.confirm` for it (AC#20 wording verbatim);
+  FEAT-012 AC#20 tests rewritten to drive the dialog
+  (`src/design-system/ConfirmDialog.tsx`, `src/screens/Home.tsx`,
+  `src/screens/Home.test.tsx`)
+- 2026-05-24:20:34:46 — A11Y-032 — done: dropped the conflicting
+  `aria-label="Past conversations"` on the past-chats `<section>` so the visible
+  `<h2>` ("Past chats") is the authoritative name and the region landmark earns
+  its slot inside the Home `<main>`; empty-state test re-anchored on the heading
+  (`src/screens/Home.tsx`, `src/screens/Home.test.tsx`)
+- 2026-05-24:20:34:45 — A11Y-030 — done: appended row labels to past-chats list
+  buttons — `Resume <label>` (visible text "Resume" preserved → WCAG 2.5.3
+  holds) and `More actions for <label>` (glyph-only trigger); loosened three
+  `/^resume$/i` test queries to `/^resume\b/i` so they keep meaning "the Resume
+  button" (`src/screens/Home.tsx`, `src/screens/Home.test.tsx`)
+- 2026-05-24:20:34:44 — A11Y-029 — done: added the canonical focus-visible ring
+  tokens (sky-400 ring + stone-50 / stone-900 offset) to the Include-timestamps
+  checkbox — Tailwind v4 preflight had reset the default outline and
+  `accent-sky-700` only paints the check fill (`src/components/Chat.tsx`)
+- 2026-05-24:20:34:43 — A11Y-028 — done: wrapped the per-message timeline in a
+  `role="region"` with `tabIndex={0}`, `aria-label`, and the canonical
+  focus-visible ring tokens so Firefox / Safari keyboard-only / screen-magnifier
+  / switch users can reach the right-hand columns at narrow viewports (mirrors
+  A11Y-021's chat-transcript fix) (`src/network/Network.tsx`)
+- 2026-05-24:20:34:42 — A11Y-027 — done: gave the per-message timeline `<table>`
+  a programmatic name via `aria-labelledby="net-timeline-heading"` (reusing the
+  existing heading id rather than minting a caption) and added `scope="col"` to
+  the five `<th>` cells so column→cell relationships are explicit in SR
+  table-navigation mode (`src/network/Network.tsx`)
+- 2026-05-24:20:34:41 — A11Y-026 — done: bumped the rename input border tokens
+  from `stone-300 / stone-600` (≈1.48 / 2.4:1) to `stone-400 / stone-500` (≈3.00
+  / 3.45:1) to clear WCAG 1.4.11's 3:1 non-text contrast floor — the input is a
+  raw `<input>` and was missed by A11Y-016's Textarea sweep; pinned by a Home
+  test (`src/screens/Home.tsx`, `src/screens/Home.test.tsx`)
+- 2026-05-24:20:34:40 — A11Y-025 — done: implemented the full WAI-ARIA APG menu
+  pattern on the ConversationRow row menu — auto-focus first non-disabled
+  menuitem on open, ArrowDown / Up cycle with wrap, Home / End jump to the ends,
+  case-insensitive 500ms type-ahead, Tab / Shift+Tab close without
+  preventDefault, roving tabindex; Copy transcript swapped native `disabled` for
+  `aria-disabled` plus an onClick no-op so the item stays focusable per APG
+  while preserving the visual disabled state (`src/screens/Home.tsx`,
+  `src/screens/Home.test.tsx`)
 - 2026-05-24:18:58:12 — A11Y-036 — skipped: still blocked by ARCH-001 (the Back
   affordance's destination depends on the routing model ARCH-001 settles);
   leaving in `1-inbox/` to revisit after ARCH-001 lands
@@ -31,6 +82,9 @@ id.
 - 2026-05-24:18:32:14 — A11Y-028 — started
 - 2026-05-24:18:30:08 — A11Y-027 — started
 - 2026-05-24:18:27:02 — A11Y-026 — started
+- 2026-05-24:18:12:41 — IMPRV-016 — done: added a Spinner primitive (Tailwind
+  `animate-spin`, `aria-hidden`) and wired it into the three gathering-network
+  callouts in Offerer/Joiner; previewed in DesignSystem
 - 2026-05-24:18:12:25 — A11Y-025 — started
 - 2026-05-24:17:38:00 — A11Y-036 — blocked by ARCH-001 (Back affordance's
   destination is set by the new routing model; revisit after ARCH-001 lands)
