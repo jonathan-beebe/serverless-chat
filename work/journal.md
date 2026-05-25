@@ -8,7 +8,7 @@ id.
 
 ## Next ticket numbers
 
-- RSRCH: 1
+- RSRCH: 2
 - DSGN: 1
 - ARCH: 2
 - FEAT: 14
@@ -20,6 +20,13 @@ id.
 
 ## Log
 
+- 2026-05-25:12:17:03 — retro — covered 73 done tickets / 151 journal entries
+  (first retro, full project history); themes: a11y dominant (35/73, ~48%), two
+  architectural pivots (ARCH-001 routing, BUG-006 senderId) that absorbed 4+
+  symptom tickets, test suite halved + noise-floor guarded; six failure modes
+  filed as RSRCH-001 in `0-refine/`
+- 2026-05-25:12:10:03 — RSRCH-001 — defined: harden workflow against six
+  retro-surfaced failure modes
 - 2026-05-25:07:44:03 — ARCH-001 — done: replaced hash router with react-router
   BrowserRouter at path-based URLs (/, /conversation/:id, /design-system,
   /network); session lifted into AppShell via new SessionContext so navigating

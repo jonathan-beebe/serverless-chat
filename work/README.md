@@ -1,8 +1,9 @@
 # Work
 
-Tickets flow through three buckets:
+Tickets flow through four buckets:
 
-- `1-inbox/` — defined but not started
+- `0-refine/` — drafted but not ready; needs human refinement before promotion
+- `1-inbox/` — defined and ready; `/work-start` will pick from here
 - `2-doing/` — in development or under regression / validation
 - `3-done/` — merged, tested, accepted
 
@@ -42,3 +43,7 @@ missing scope, and the scoper isn't tempted to skip ahead to file mechanics.
   drain the whole inbox; routes by id prefix to the matching `types/<type>.md`
   steps.
 - `/work-log <TICKET-###> <entry text>` — append a single line to `journal.md`.
+- `/work-retro [<YYYY-MM-DD:HH:MM:SS>]` — sweep tickets resolved and journal
+  entries logged since the last retro, walk the human through six categories of
+  observations, and prepend a dated entry to `retro.md`. Window start is read
+  from `retro.md`'s own `Last Retro:` line; pass a timestamp to override.

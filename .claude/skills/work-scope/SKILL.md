@@ -136,6 +136,11 @@ Some types lend themselves to recommendations more than others.
    - Skim `git log` for related commits (by keyword, by affected paths).
    - Collect anything relevant — what was tried, what was rejected, decisions
      that constrain this ticket. This becomes `RELATED WORK`.
+   - **Watch for recurrence.** If 2+ prior 3-done tickets touched the same
+     surface or concern, surface that pattern to the human and ask whether the
+     new ticket should be reframed as research or architecture rather than filed
+     as another symptom. (RSRCH-001 may refine this rule; this is the
+     starting-point version.)
 4. **Understand the affected code.** Read the file(s) at issue so you can
    articulate the intent — what value the code delivers today and what about it
    is broken / missing / unclear. Pin line numbers where they sharpen the
