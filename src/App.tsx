@@ -1,4 +1,5 @@
 import { BrowserRouter, Outlet, Route, Routes } from 'react-router-dom'
+import { UpdatePrompt } from './components/UpdatePrompt'
 import { DesignSystem } from './design-system/DesignSystem'
 import { DesignSystemChat } from './design-system/DesignSystemChat'
 import { Home } from './screens/Home'
@@ -18,6 +19,10 @@ function AppShell() {
   return (
     <SessionContext.Provider value={session}>
       <Outlet />
+      {/* IMPRV-022: PWA "new version available" banner. Registers the
+          service worker once for the app's lifetime and gates the banner
+          rendering to the Home route internally. */}
+      <UpdatePrompt />
     </SessionContext.Provider>
   )
 }

@@ -1,6 +1,5 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { registerSW } from 'virtual:pwa-register'
 import { App } from './App'
 import './index.css'
 
@@ -13,6 +12,7 @@ createRoot(root).render(
   </StrictMode>,
 )
 
-// PWA registration. `prompt` mode means the user gets to choose when to update —
-// no surprise reloads in the middle of a chat.
-registerSW({ immediate: true })
+// IMPRV-022: SW registration now lives in `<UpdatePrompt>` via
+// `useRegisterSW({ immediate: true })`. That single React-side entry handles
+// both registration and the user-facing "new version available" banner that
+// `registerType: 'prompt'` was already configured for.

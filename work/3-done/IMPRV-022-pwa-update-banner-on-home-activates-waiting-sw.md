@@ -1,8 +1,9 @@
 ---
 id: IMPRV-022
 type: improvement
-status: open
+status: resolved
 created: 2026-05-25
+resolved: 2026-05-25
 ---
 
 # IMPRV-022: PWA update banner on Home prompts user to activate waiting service worker
@@ -106,3 +107,42 @@ missing.
   wiring is missing.
 - src/**mocks**/virtual-pwa-register-react.ts — pre-stubbed `useRegisterSW`
   shape, ready for a real consumer to import.
+
+## Working
+
+- Code paths from the ticket were accurate: `src/main.tsx:18` carried the
+  non-React `registerSW({ immediate: true })` call;
+  `src/__mocks__/virtual-pwa-register-react.ts` carried a stub-only
+  `useRegisterSW`; no app code consumed the React hook.
+- Mock turned spy-friendly: re-wrote
+  `src/__mocks__/virtual-pwa-register-react.ts` to back the hook with
+  module-level `needRefreshValue` and a `Set<listener>` so tests can flip the
+  flag from outside React. Added a `__pwaTest` driver (`setNeedRefresh`,
+  `updateServiceWorkerCalls`, `reset`) and an in-effect
+  `setNeed(needRefreshValue)` resync so a test that flips the flag before render
+  still sees a true initial state after mount.
+- TDD red step: `src/components/UpdatePrompt.test.tsx` covers all six bullets
+  from the recommendation — hidden by default, visible on Home when
+  `needRefresh=true`, hidden on `/conversation/:id` and `/design-system/chat`,
+  Update calls `updateServiceWorker(true)`, Dismiss hides for the session, and
+  the LiveRegion announces "App update available". Pre-implementation run failed
+  at the import resolution step as expected.
+- Implementation: `src/components/UpdatePrompt.tsx` composes
+  `Callout`/`Button`/`LiveRegion`, gates rendering on
+  `useLocation().pathname === '/'`, and uses a component-local `dismissed` state
+  per the "no localStorage" stance. Mounted inside `AppShell` next to
+  `<Outlet />` so the SW registration happens once for the app's lifetime even
+  as routes change. Dropped the redundant `registerSW` call in `src/main.tsx`;
+  the React hook now owns registration.
+- Did not bundle: a "render the connected design-system preview at a known
+  viewport" change — orthogonal to the update-banner UX. The Update banner is
+  gated to `/` only, which keeps the preview surface clean by design.
+- Type plumbing: the test driver `__pwaTest` is imported from the mock's
+  relative path rather than the `virtual:pwa-register/react` alias, because
+  vite-plugin-pwa's `.d.ts` types only declare `useRegisterSW`. The alias and
+  the relative path resolve to the same module under vitest so shared
+  module-level state is consistent across the two import shapes.
+- Final: `npm test` → 405/405 (+7 new tests), `npm run lint` and
+  `npm run typecheck` clean. Real-device verification on a deployed build is
+  still needed to confirm `updateServiceWorker(true)` activates the waiting SW
+  and reloads — JSDOM has no real service-worker pipeline.
