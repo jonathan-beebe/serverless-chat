@@ -20,6 +20,12 @@ id.
 
 ## Log
 
+- 2026-05-25:16:50:53 — IMPRV-022 — done: UpdatePrompt component reads
+  `useRegisterSW`'s `needRefresh`, renders a bottom-fixed "new version
+  available" banner on Home only, and calls `updateServiceWorker(true)` on
+  click; the mock was rewritten with a `__pwaTest` driver so tests can flip the
+  flag from outside React
+- 2026-05-25:16:45:22 — IMPRV-022 — started
 - 2026-05-25:16:44:51 — IMPRV-021 — done: chat copy-transcript toolbar wrapper
   switched to `hidden sm:flex` so it disappears below 640px; the Home row-menu
   Copy transcript path remains the small-screen fallback (guarded by a new
