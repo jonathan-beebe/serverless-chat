@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "dev:host": "vite --host",
+    "dev:container": "./scripts/container.sh npm run dev:host",
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
@@ -15,7 +16,8 @@
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
     "ci": "./scripts/ci.sh",
-    "prepare": "git config core.hooksPath .githooks"
+    "prepare": "git config core.hooksPath .githooks",
+    "container": "devcontainer up --workspace-folder . && devcontainer exec --workspace-folder . zsh"
   },
   "dependencies": {
     "lz-string": "^1.5.0",
