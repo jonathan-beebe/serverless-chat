@@ -20,6 +20,11 @@ id.
 
 ## Log
 
+- 2026-05-25:16:44:51 — IMPRV-021 — done: chat copy-transcript toolbar wrapper
+  switched to `hidden sm:flex` so it disappears below 640px; the Home row-menu
+  Copy transcript path remains the small-screen fallback (guarded by a new
+  mobile-responsive assertion)
+- 2026-05-25:16:41:35 — IMPRV-021 — started
 - 2026-05-25:16:41:05 — IMPRV-020 — done: connected chat container now fills
   `h-[var(--vvh)]` and uses asymmetric `pt-6 pb-1` so the composer sits ~4px
   above the visual-viewport bottom; doc comments and the mobile-responsive test
