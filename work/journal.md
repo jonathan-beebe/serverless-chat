@@ -20,6 +20,11 @@ id.
 
 ## Log
 
+- 2026-05-25:15:53:01 — IMPRV-017 — done: added `useVisualViewportHeight` hook +
+  `:root --vvh: 100dvh` fallback; Offerer/Joiner connected branches now size via
+  `h-[calc(var(--vvh)-3rem)]` and mount the hook so iOS Safari can no longer pan
+  the page beneath the soft keyboard; 7 behavioral hook tests + refreshed
+  mobile-responsive file-content assertions (commit 5e5780b)
 - 2026-05-25:15:46:55 — IMPRV-017 — started
 - 2026-05-25:15:46:04 — IMPRV-017 — defined: bind chat surface to visualViewport
   so composer stays above iOS keyboard
