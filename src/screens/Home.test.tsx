@@ -796,3 +796,12 @@ describe('Home "Start a chat" (FEAT-012 AC#25 / ARCH-001)', () => {
     })
   })
 })
+
+describe('Home build-version indicator (IMPRV-018)', () => {
+  // vitest.config.ts:8 defines __COMMIT_HASH__ as the literal 'test' so the
+  // build-time string-replace has a stable value under the test runner.
+  it('renders the short commit hash as muted text at the bottom of the screen', () => {
+    renderWithProviders(<Home />)
+    expect(screen.getByText('test')).toBeInTheDocument()
+  })
+})

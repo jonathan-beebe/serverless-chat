@@ -618,6 +618,11 @@ export function Home() {
           touches a server.
         </p>
       </details>
+      {/* IMPRV-018: short commit SHA (literal "dev" when git was unavailable
+          at build time). Constant per build via vite's `define`; no runtime
+          cost beyond a text node. Plain text — no link, no copy affordance —
+          so it sits quietly as a triage anchor. */}
+      <p className="text-xs text-stone-500 dark:text-stone-400">{__COMMIT_HASH__}</p>
     </ScreenContainer>
   )
 }
