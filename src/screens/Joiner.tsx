@@ -10,6 +10,7 @@ import { Spinner } from '../components/Spinner'
 import type { ChatSession } from '../hooks/useChatSession'
 import { useFocusOnMount } from '../hooks/useFocusOnMount'
 import { usePageTitle } from '../hooks/usePageTitle'
+import { useVisualViewportHeight } from '../hooks/useVisualViewportHeight'
 import type { ConnectionState } from '../core/rtc'
 
 interface Props {
@@ -110,6 +111,10 @@ export function Joiner({ session, offerCode, conversationId, onCancel, onOfferCa
   const restartRef = useFocusOnMount<HTMLButtonElement>([branch], {
     skip: suppressInitialFocus || branch !== 'closed',
   })
+  // IMPRV-017: bind the connected shell to `visualViewport.height` so the
+  // composer stays above the iOS soft keyboard. No-op on every other branch
+  // (and on browsers without `visualViewport`).
+  useVisualViewportHeight(branch === 'connected')
 
   const liveBranchKind = branch === 'invite' ? 'invite' : branch === 'reply' ? 'reply' : 'other'
   const liveStatus = <LiveRegion>{statusMessage(session.state, !!session.encodedLocal, liveBranchKind)}</LiveRegion>
@@ -118,7 +123,7 @@ export function Joiner({ session, offerCode, conversationId, onCancel, onOfferCa
     return (
       <ScreenContainer
         label="Connected"
-        className="mx-auto flex h-[calc(100dvh-3rem)] max-w-xl flex-col gap-3 overflow-hidden px-4 py-6">
+        className="mx-auto flex h-[calc(var(--vvh)-3rem)] max-w-xl flex-col gap-3 overflow-hidden px-4 py-6">
         {liveStatus}
         <header className="flex items-center justify-between">
           {/* No focus ref here — Chat owns focus via FEAT-002 (input is the

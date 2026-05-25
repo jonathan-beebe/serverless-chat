@@ -26,6 +26,15 @@ body,
   height: 100%;
 }
 
+/* IMPRV-017: `--vvh` is the height the connected chat shell sizes against
+   (`h-[calc(var(--vvh)-3rem)]` on the Offerer/Joiner connected branches).
+   This `:root` declaration is the unmounted / unsupported-browser fallback —
+   `useVisualViewportHeight` overrides it with `visualViewport.height` (px)
+   as an inline style on `<html>` while the connected branch is mounted. */
+:root {
+  --vvh: 100dvh;
+}
+
 /* `body` is locked so a bounded screen (e.g. the connected chat with its
    internally-scrolling transcript) can never leak page-level scroll. `#root`
    becomes the page's scroll container, so intrinsic-height screens (Home,

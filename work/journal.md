@@ -12,7 +12,7 @@ id.
 - DSGN: 1
 - ARCH: 2
 - FEAT: 14
-- IMPRV: 17
+- IMPRV: 18
 - MAINT: 1
 - A11Y: 37
 - RFCTR: 1
@@ -20,6 +20,9 @@ id.
 
 ## Log
 
+- 2026-05-25:15:46:55 — IMPRV-017 — started
+- 2026-05-25:15:46:04 — IMPRV-017 — defined: bind chat surface to visualViewport
+  so composer stays above iOS keyboard
 - 2026-05-25:12:17:03 — retro — covered 73 done tickets / 151 journal entries
   (first retro, full project history); themes: a11y dominant (35/73, ~48%), two
   architectural pivots (ARCH-001 routing, BUG-006 senderId) that absorbed 4+
