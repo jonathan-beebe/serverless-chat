@@ -1,7 +1,18 @@
+import type { ReactElement } from 'react'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { MemoryRouter } from 'react-router-dom'
 import { DesignSystem } from './DesignSystem'
+
+// ARCH-001: the showcase mounts every screen, including ones that now use
+// react-router Links (Home → Resume, Network → Back to home). Wrap every
+// DesignSystem render in a MemoryRouter so those Links have router context.
+// SessionContext is provided inside DesignSystem itself for the Home preview;
+// the other previews still pass their session via props.
+function renderShowcase(ui: ReactElement) {
+  return render(<MemoryRouter initialEntries={['/design-system']}>{ui}</MemoryRouter>)
+}
 
 describe('DesignSystem showcase', () => {
   // Several previewed screens reach into the live WebRTC stack on mount.
@@ -34,7 +45,7 @@ describe('DesignSystem showcase', () => {
   })
 
   it('renders the page heading + section headings (Typography, Color, Atoms, Molecules, Organisms, Screen previews)', () => {
-    render(<DesignSystem />)
+    renderShowcase(<DesignSystem />)
 
     expect(screen.getByRole('heading', { level: 1, name: /design system/i })).toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 2, name: /typography/i })).toBeInTheDocument()
@@ -46,7 +57,7 @@ describe('DesignSystem showcase', () => {
   })
 
   it('renders a theme toggle group with System / Light / Dark choices, defaulting to System', () => {
-    render(<DesignSystem />)
+    renderShowcase(<DesignSystem />)
     const group = screen.getByRole('group', { name: /theme/i })
     expect(group).toBeInTheDocument()
 
@@ -60,7 +71,7 @@ describe('DesignSystem showcase', () => {
   })
 
   it('applies a `.dark` class to the showcase root when the Dark toggle is active', () => {
-    const { container } = render(<DesignSystem />)
+    const { container } = renderShowcase(<DesignSystem />)
     const root = container.firstElementChild as HTMLElement
     expect(root.classList.contains('dark')).toBe(false)
     expect(root.classList.contains('light')).toBe(false)
@@ -83,7 +94,7 @@ describe('DesignSystem showcase', () => {
     // screen normally renders its own <main>; inside the showcase they
     // must demote to labelled regions so the host page keeps a single
     // top-level landmark. Landmark navigation breaks otherwise.
-    const { container } = render(<DesignSystem />)
+    const { container } = renderShowcase(<DesignSystem />)
     expect(container.querySelectorAll('main')).toHaveLength(1)
   })
 
@@ -92,14 +103,14 @@ describe('DesignSystem showcase', () => {
     // page <h1> is "Design system"; every previewed screen's heading
     // demotes to <h2> via ScreenChromeContext, and the Typography /
     // Atoms heading swatches render as <p>.
-    const { container } = render(<DesignSystem />)
+    const { container } = renderShowcase(<DesignSystem />)
     const h1s = container.querySelectorAll('h1')
     expect(h1s).toHaveLength(1)
     expect(h1s[0]).toHaveTextContent(/design system/i)
   })
 
   it('still renders every screen preview visually (label + content)', () => {
-    render(<DesignSystem />)
+    renderShowcase(<DesignSystem />)
     // The seven preview labels above the framed boxes.
     expect(screen.getByText('Home')).toBeInTheDocument()
     expect(screen.getByText(/Offerer — Invite your friend/)).toBeInTheDocument()
@@ -115,7 +126,7 @@ describe('DesignSystem showcase', () => {
   })
 
   it('labels each previewed screen as an accessible region (showcase landmark navigation)', () => {
-    render(<DesignSystem />)
+    renderShowcase(<DesignSystem />)
     // role=region only gets an accessible-landmark exposure when it has a
     // name — each real screen passes one via `ScreenContainer label=…`.
     // (The two inline previews — `ConnectedChromePreview` and
@@ -138,7 +149,7 @@ describe('DesignSystem showcase', () => {
     // keyboard / AT users deep inside a preview region, past the page <h1>.
     // The `suppressInitialFocus` flag on `SHOWCASE_CHROME` must keep every
     // preview out of the race.
-    render(<DesignSystem />)
+    renderShowcase(<DesignSystem />)
 
     // Wait for all preview mount effects to settle.
     await waitFor(() => {
@@ -155,7 +166,7 @@ describe('DesignSystem showcase', () => {
     // so it sees the default context (suppressInitialFocus: false) and its
     // own `useFocusOnMount` call fires normally. Consistent with every
     // other route in the app per A11Y-005.
-    render(<DesignSystem />)
+    renderShowcase(<DesignSystem />)
     const pageH1 = screen.getByRole('heading', { level: 1, name: /design system/i })
 
     await waitFor(() => {
@@ -164,7 +175,7 @@ describe('DesignSystem showcase', () => {
   })
 
   it('renders an interactive Chat organism that appends to local state on send (no peer needed)', () => {
-    render(<DesignSystem />)
+    renderShowcase(<DesignSystem />)
 
     // Showcase wires the Chat composer to local state so reviewers can type without a peer.
     const composer = screen.getByLabelText(/^message$/i) as HTMLTextAreaElement
@@ -186,7 +197,7 @@ describe('DesignSystem showcase', () => {
     // sentinel against re-conflation.
 
     it('does not put an unconditional `ring-2 ring-sky-400` on the selected theme button', () => {
-      render(<DesignSystem />)
+      renderShowcase(<DesignSystem />)
       // System is the default selected mode. The bug was a permanent
       // (non-`focus-visible:`-scoped) `ring-2 ring-sky-400` painted on the
       // selected button, which collided with the Button primitive's base
@@ -201,7 +212,7 @@ describe('DesignSystem showcase', () => {
     })
 
     it('paints the selected theme button with the tinted-fill cue', () => {
-      render(<DesignSystem />)
+      renderShowcase(<DesignSystem />)
       const selected = screen.getByRole('button', { name: /^system$/i })
       // Light-mode tokens always present; dark-mode tokens layered via the
       // `dark:` variant. We assert the raw class string carries both halves
@@ -215,7 +226,7 @@ describe('DesignSystem showcase', () => {
     })
 
     it('does not paint unselected siblings with the tinted-fill cue', () => {
-      render(<DesignSystem />)
+      renderShowcase(<DesignSystem />)
       const light = screen.getByRole('button', { name: /^light$/i })
       const dark = screen.getByRole('button', { name: /^dark$/i })
       for (const btn of [light, dark]) {
@@ -227,7 +238,7 @@ describe('DesignSystem showcase', () => {
     })
 
     it('gives focused-unselected and selected-unfocused buttons distinguishable class shapes', () => {
-      render(<DesignSystem />)
+      renderShowcase(<DesignSystem />)
       const selected = screen.getByRole('button', { name: /^system$/i })
       const sibling = screen.getByRole('button', { name: /^light$/i })
       // Class strings differ — the selected button carries the tint, the
@@ -245,7 +256,7 @@ describe('DesignSystem showcase', () => {
       // gap reads as page surface, not as a halo). When the selected button
       // gains focus, the offset keeps the ring clearly outside the tinted
       // fill rather than abutting the border.
-      render(<DesignSystem />)
+      renderShowcase(<DesignSystem />)
       const system = screen.getByRole('button', { name: /^system$/i })
       const light = screen.getByRole('button', { name: /^light$/i })
       const dark = screen.getByRole('button', { name: /^dark$/i })
@@ -261,7 +272,7 @@ describe('DesignSystem showcase', () => {
       // implementation — the ticket is sighted-keyboard-only and explicitly
       // carves AT scope. Guard against a future "fix" that migrates to
       // role=radio / aria-checked sneaking in under this ticket.
-      render(<DesignSystem />)
+      renderShowcase(<DesignSystem />)
       const system = screen.getByRole('button', { name: /^system$/i })
       const light = screen.getByRole('button', { name: /^light$/i })
       const dark = screen.getByRole('button', { name: /^dark$/i })
@@ -280,7 +291,7 @@ describe('DesignSystem showcase', () => {
       // Functional sanity: clicking re-targets the selection cue. Pairs with
       // the aria-pressed test above and guards against the ternary becoming
       // always-truthy or pinned to the initial mode.
-      render(<DesignSystem />)
+      renderShowcase(<DesignSystem />)
       const system = screen.getByRole('button', { name: /^system$/i })
       const light = screen.getByRole('button', { name: /^light$/i })
 
@@ -304,7 +315,7 @@ describe('DesignSystem showcase', () => {
     // rendering for sighted visual review. These tests are the sentinel.
 
     it('marks every ScreenPreview content wrapper with the inert attribute', () => {
-      const { container } = render(<DesignSystem />)
+      const { container } = renderShowcase(<DesignSystem />)
       // Each preview label sits as a sibling <span> above its inert
       // content wrapper. Walking labels → next-sibling div is the most
       // direct way to assert the relationship from the rendered DOM.
@@ -340,7 +351,7 @@ describe('DesignSystem showcase', () => {
       // exercises the contract — a regression that strips `inert` would
       // flip this assertion. Manual smoke (recorded in the ticket) covers
       // the live-focus path in real browsers.
-      const { container } = render(<DesignSystem />)
+      const { container } = renderShowcase(<DesignSystem />)
       const previewWrappers = Array.from(container.querySelectorAll('[inert]'))
       expect(previewWrappers.length).toBeGreaterThanOrEqual(7)
 
@@ -367,7 +378,7 @@ describe('DesignSystem showcase', () => {
       // interactive composite in the showcase and must remain fully
       // keyboard-driven after this ticket lands. It is rendered *outside*
       // <ScreenPreview>, so it must NOT inherit the inert wrapper.
-      render(<DesignSystem />)
+      renderShowcase(<DesignSystem />)
       const composer = screen.getByLabelText(/^message$/i) as HTMLTextAreaElement
       expect(composer.closest('[inert]')).toBeNull()
 

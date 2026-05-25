@@ -4,10 +4,13 @@
     <meta charset="UTF-8" />
     <title>P2P Chat</title>
     <script>
-      // GH Pages serves 404.html for any unknown path. Save the original URL,
-      // then redirect to the SPA root so index.html can restore it. The hash
-      // (which carries `#offer=...` signaling payloads) survives the redirect.
-      sessionStorage.redirect = location.href
+      // ARCH-001: GitHub Pages serves 404.html for any unknown path. Stash the
+      // full original URL (pathname + search + hash) before bouncing to /, so
+      // main.tsx can restore it via history.replaceState() — the SPA router
+      // then sees the path the user actually requested. The hash continues to
+      // survive (privacy: `#offer=...` signaling payloads never leave the
+      // browser even through this round-trip).
+      sessionStorage.setItem('__spa_redirect', location.href)
       location.replace('/')
     </script>
   </head>

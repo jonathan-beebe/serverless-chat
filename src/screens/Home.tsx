@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { Button } from '../components/Button'
 import { Callout } from '../components/Callout'
 import { ConfirmDialog } from '../components/ConfirmDialog'
@@ -11,14 +12,14 @@ import { useConversations } from '../hooks/useConversations'
 import { copyTextToClipboard } from '../core/clipboard'
 import { listMessages, type ConversationRecord } from '../core/storage'
 import { formatTranscript } from '../core/transcript'
+import { useSession } from '../SessionContext'
 import { useEffect } from 'react'
 
-interface Props {
-  /** Called with the conversation id to start the Offerer flow against.
-   *  Home generates a fresh UUID for "Start a new chat" and passes the
-   *  existing id for "Resume" — both paths route into Offerer the same way. */
-  onStart: (conversationId: string) => void
-}
+// ARCH-001: a session is "live" for badge purposes when it's bound to a
+// conversation id and the connection state is anything in the negotiation /
+// connected window. `'closed'` and `'failed'` are intentionally excluded —
+// they reach the past-chats row via persistence, not via the live marker.
+const LIVE_STATES = new Set(['gathering', 'awaiting-answer', 'connecting', 'connected'])
 
 // Format a `lastActivityAt` epoch ms into a short relative-time string for
 // the conversation row. Kept tiny and English-only on purpose: the design
@@ -54,7 +55,6 @@ function autoLabel(record: ConversationRecord): string {
 
 interface RowProps {
   record: ConversationRecord
-  onResume: () => void
   onRename: (label: string) => void
   onDelete: () => void
   // CR-009: announce copy outcomes via the Home-level LiveRegion so AT
@@ -66,6 +66,9 @@ interface RowProps {
   isMenuOpen: boolean
   onOpenMenu: () => void
   onCloseMenu: () => void
+  // ARCH-001: rendered as a small badge next to the row's primary affordance
+  // when this conversation matches the live session.
+  isLive: boolean
 }
 
 // CR-009: how long the inline "Copied transcript" badge stays visible
@@ -83,13 +86,13 @@ const MENU_ITEM_LABELS = ['rename', 'copy transcript', 'delete chat'] as const
 
 function ConversationRow({
   record,
-  onResume,
   onRename,
   onDelete,
   onAnnounce,
   isMenuOpen,
   onOpenMenu,
   onCloseMenu,
+  isLive,
 }: RowProps) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
@@ -397,9 +400,29 @@ function ConversationRow({
       </div>
       {!editing && (
         <div className="flex items-center gap-2">
-          <Button variant="primary" size="sm" aria-label={`Resume ${label}`} onClick={onResume}>
+          {/* ARCH-001: a "Live" badge marks the row whose conversation matches
+              the live session so a user who navigated away mid-session can
+              find their way back. aria-hidden because the Resume link's
+              accessible name already carries the row context (A11Y-030); the
+              badge is the visual signal for sighted users. */}
+          {isLive && (
+            <span
+              aria-hidden="true"
+              className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-600 dark:bg-emerald-400" />
+              Live
+            </span>
+          )}
+          {/* ARCH-001: Resume is a real link (honest right-click "Open in new
+              tab" / "Copy link address" / middle-click semantics). A11Y-030's
+              row-specific accessible name is preserved unchanged — the live
+              state changes the visible badge, not the link's name. */}
+          <Link
+            to={`/conversation/${record.id}`}
+            aria-label={`Resume ${label}`}
+            className="rounded-md bg-sky-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50 dark:focus-visible:ring-offset-stone-900">
             Resume
-          </Button>
+          </Link>
           <div ref={containerRef} className="relative">
             <Button
               ref={triggerRef}
@@ -503,7 +526,7 @@ function ConversationRow({
   )
 }
 
-export function Home({ onStart }: Props) {
+export function Home() {
   usePageTitle('P2P Chat')
   // In a showcase context the host page owns initial focus; the screen
   // would otherwise race siblings to programmatically focus its heading and
@@ -511,6 +534,8 @@ export function Home({ onStart }: Props) {
   const { suppressInitialFocus } = useScreenChrome()
   const startRef = useFocusOnMount<HTMLButtonElement>([], { skip: suppressInitialFocus })
   const { conversations, remove, rename } = useConversations()
+  const session = useSession()
+  const navigate = useNavigate()
   // CR-008: at most one row's "More actions" menu is open at a time. Lifting
   // this state here gives us the single-open invariant for free — opening
   // row B flips row A's `isMenuOpen` prop to false on the same render.
@@ -521,11 +546,27 @@ export function Home({ onStart }: Props) {
   // the announcement entirely.
   const [announcement, setAnnouncement] = useState('')
 
+  // ARCH-001: a row is "live" when its conversation matches the session that
+  // App owns (across route changes). Anything outside the negotiation /
+  // connected window doesn't earn the badge — `'closed'` and `'failed'`
+  // surface via persistence, not the live marker.
+  const liveConversationId = session.conversationId && LIVE_STATES.has(session.state) ? session.conversationId : null
+
   const startNew = () => {
     // FEAT-012 AC#5: generate the conversation ID at "Start" click, before
     // any offer is created. Stable across the offerer / awaiting-answer /
     // connected states for the session.
-    onStart(crypto.randomUUID())
+    //
+    // ARCH-001: pre-bind the session to the new conversation id BEFORE
+    // navigating. ConversationRoute's "no live session, no persisted record →
+    // NotFound" branch would otherwise fire for the freshly-minted id (the
+    // record doesn't exist yet; the session isn't bound yet). startAsOfferer
+    // synchronously sets `conversationId` and transitions to `'gathering'`,
+    // so by the time React commits the navigate() call ConversationRoute
+    // already sees session.conversationId === newId and renders Offerer.
+    const newId = crypto.randomUUID()
+    void session.startAsOfferer(newId)
+    navigate(`/conversation/${newId}`)
   }
 
   return (
@@ -553,13 +594,13 @@ export function Home({ onStart }: Props) {
               <ConversationRow
                 key={c.id}
                 record={c}
-                onResume={() => onStart(c.id)}
                 onRename={(label) => void rename(c.id, label)}
                 onDelete={() => void remove(c.id)}
                 onAnnounce={setAnnouncement}
                 isMenuOpen={openMenuId === c.id}
                 onOpenMenu={() => setOpenMenuId(c.id)}
                 onCloseMenu={() => setOpenMenuId(null)}
+                isLive={liveConversationId === c.id}
               />
             ))}
           </ul>

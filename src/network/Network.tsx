@@ -1,4 +1,4 @@
-import { Button } from '../components/Button'
+import { Link } from 'react-router-dom'
 import { Callout } from '../components/Callout'
 import { Divider } from '../components/Divider'
 import { Heading } from '../components/Heading'
@@ -255,12 +255,15 @@ function EmptyState() {
         No active session. Start a chat to see network telemetry. Telemetry is per-session and not persisted across
         reloads.
       </Callout>
-      <a
+      {/* ARCH-001: A11Y-031 — real link to home (was href="#", which only
+          worked because the previous hash router treated empty fragment as
+          home). Right-click "Copy link address" now yields the home URL. */}
+      <Link
         ref={homeRef}
-        href="#"
+        to="/"
         className="self-start rounded-md bg-sky-700 px-3 py-2 text-sm font-medium text-white hover:bg-sky-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50 dark:focus-visible:ring-offset-stone-900">
         Back to home
-      </a>
+      </Link>
     </ScreenContainer>
   )
 }
@@ -287,16 +290,15 @@ export function Network({ session }: Props) {
             Live numbers for the current session. Reload or end the chat to reset.
           </p>
         </div>
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => {
-            // Hash-clear nav back home. Same pattern as `clearHash` but
-            // avoids importing it here (Network is decoupled from url.ts).
-            window.location.hash = ''
-          }}>
-          Back
-        </Button>
+        {/* ARCH-001: A11Y-036 — Back is a real link now, not a button that
+            mutates location.hash. Right-click / middle-click / Cmd-click all
+            work as link interactions, and SR announces "Back to home, link"
+            with a destination that names the target. */}
+        <Link
+          to="/"
+          className="rounded-md border border-stone-400 px-3 py-1.5 text-sm font-medium text-stone-800 hover:bg-stone-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50 dark:border-stone-500 dark:text-stone-200 dark:hover:bg-stone-800 dark:focus-visible:ring-offset-stone-900">
+          Back to home
+        </Link>
       </header>
 
       <HeaderSummary telemetry={telemetry} />

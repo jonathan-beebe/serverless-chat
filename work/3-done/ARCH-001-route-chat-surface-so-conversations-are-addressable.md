@@ -1,8 +1,9 @@
 ---
 id: ARCH-001
 type: architecture
-status: open
+status: resolved
 created: 2026-05-24
+resolved: 2026-05-25
 ---
 
 # ARCH-001: Route the chat surface so conversations are addressable
@@ -132,3 +133,63 @@ Other discovery context for the maker:
 - BUG-001 (resolved) — established the hashchange listener as the route
   authority; the hash-scrub invariant for joiner needs to survive this work
 - BUG-005 (resolved) — session-state-drives-screen precedent
+
+## Working
+
+Installed `react-router-dom@^7` and replaced the hand-rolled hashchange router
+with `BrowserRouter`. The chat session moved up a layer into an `AppShell` that
+hands the live `useChatSession()` instance to every route via a new
+`SessionContext` — so navigating between `/conversation/:id`, `/network`, and
+`/` no longer tears down the PeerConnection (BUG-008 invariant).
+
+URL shape:
+
+- `/` → Home
+- `/conversation/:id` → chat surface (Joiner if the URL hash carries `#offer`;
+  Offerer if the live session is bound to this id or a persisted record exists;
+  NotFound otherwise — the explicit empty state the Outcome calls for)
+- `/design-system` → DesignSystem
+- `/network` → Network
+
+The invite URL became `/conversation/<id>#offer=<encoded>` — conversation id in
+the path, encoded SDP still in the fragment so the static host never sees it
+(privacy invariant the README calls out). `core/url.ts#buildOfferUrl` now
+constructs this shape; the previous `&conv=` query param is gone (the id lives
+in the path now).
+
+Joiner→canonical URL settle: `ConversationRoute` keeps a sticky-per-id reference
+to the offer so that scrubbing the `#offer` fragment after Accept leaves the
+canonical `/conversation/<id>` URL while the Joiner branch stays mounted (it
+would otherwise flip to Offerer the moment the hash is gone and the joiner's
+reply / connected / closed sub-states would lose their state).
+
+Home "Start a chat" now pre-binds the session (`startAsOfferer` is synchronous
+about setting `conversationId` + `'gathering'`) before navigating to
+`/conversation/<newId>` — without that, `ConversationRoute` would see "no live
+session, no persisted record" for the freshly-minted id and render NotFound.
+
+Resume in the past-chats list is now a real `<Link to="/conversation/:id">`
+(honest right-click "Open in new tab" / middle-click / "Copy link address"
+semantics) and a `Live` badge marks whichever row matches the live session.
+Network's header Back and EmptyState Back are real `<Link to="/">` — folding in
+A11Y-031 and A11Y-036 along the way.
+
+SPA fallback: `public/_redirects` handles Cloudflare Pages / Netlify;
+`public/404.html` stashes the deep-link URL in sessionStorage before GitHub
+Pages bounces to `/`, and `main.tsx` restores it via `history.replaceState`
+before BrowserRouter reads the location. The hash survives both round-trips so
+the privacy invariant holds end-to-end.
+
+Test rewrites:
+
+- `App.test.tsx` — moved off `history.replaceState` + `hashchange` events and
+  onto MemoryRouter-driven navigation; added joiner-canonicalization and
+  privacy-invariant cases.
+- `Home.test.tsx` — Resume tests assert `href` on a real `<Link>`; Start-a-chat
+  test asserts `session.startAsOfferer` is called and the location pathname
+  flips to `/conversation/<newId>`.
+- `Network.test.tsx`, `DesignSystem.test.tsx`, `dark-mode.test.tsx` — wrapped
+  renders in `MemoryRouter`; Home preview in DesignSystem now sits inside a stub
+  `SessionContext.Provider`.
+- New `src/test-utils.tsx` exports `renderWithProviders` and `makeStubSession`
+  so future tests don't re-roll the router + session wrapping.

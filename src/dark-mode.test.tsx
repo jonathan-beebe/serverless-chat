@@ -1,6 +1,7 @@
-import { render, screen } from '@testing-library/react'
+import { screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { Home } from './screens/Home'
+import { renderWithProviders } from './test-utils'
 
 // Node built-ins; @types/node isn't in this project's `types`, so suppress the type-only complaint.
 // The test runner is vitest-in-node, so these resolve fine at runtime.
@@ -30,7 +31,10 @@ describe('FEAT-001 dark mode wiring', () => {
   })
 
   it('Home renders surface classes that respond to dark mode (Tailwind dark: variant)', () => {
-    render(<Home onStart={() => {}} />)
+    // ARCH-001: Home now reads from SessionContext + react-router. Use the
+    // shared provider helper so this test exercises the real component tree
+    // instead of a hand-rolled stub.
+    renderWithProviders(<Home />)
     const heading = screen.getByRole('heading', { name: /serverless p2p chat/i })
     // The heading carries both a light-mode text class and a dark-mode override.
     expect(heading.className).toMatch(/\bdark:text-/)

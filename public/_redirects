@@ -1,0 +1,5 @@
+# ARCH-001: SPA catchall for path-based routing on Cloudflare Pages / Netlify.
+# Every deep link (e.g. /conversation/<id>) serves index.html with a 200 so
+# react-router can hydrate it client-side. GitHub Pages uses 404.html for the
+# same effect (the static host doesn't honour _redirects).
+/*    /index.html    200

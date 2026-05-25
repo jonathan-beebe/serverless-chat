@@ -28,38 +28,25 @@ describe('readHashParam', () => {
 })
 
 describe('buildOfferUrl', () => {
-  it('joins origin + base + offer payload', () => {
-    expect(buildOfferUrl('https://example.com', '/', 'PAYLOAD')).toBe('https://example.com/#offer=PAYLOAD')
-  })
-
-  it('normalizes a base path without trailing slash', () => {
-    expect(buildOfferUrl('https://example.com', '/p2p', 'X')).toBe('https://example.com/p2p/#offer=X')
-  })
-
-  it('keeps a base path with trailing slash', () => {
-    expect(buildOfferUrl('https://example.com', '/p2p/', 'X')).toBe('https://example.com/p2p/#offer=X')
-  })
-
-  it('appends a conversationId as &conv= when provided (FEAT-012)', () => {
+  // ARCH-001: invite URL is now path-based — the conversation id moves into
+  // the path (`/conversation/<id>`) and the SDP stays in the fragment so it
+  // never reaches the static host (privacy invariant the README calls out).
+  it('joins origin + base + /conversation/<id> + #offer fragment', () => {
     expect(buildOfferUrl('https://example.com', '/', 'PAYLOAD', 'uuid-1')).toBe(
-      'https://example.com/#offer=PAYLOAD&conv=uuid-1',
+      'https://example.com/conversation/uuid-1#offer=PAYLOAD',
     )
   })
 
-  it('omits the conv param when conversationId is null/undefined', () => {
-    expect(buildOfferUrl('https://example.com', '/', 'PAYLOAD', null)).toBe('https://example.com/#offer=PAYLOAD')
-    expect(buildOfferUrl('https://example.com', '/', 'PAYLOAD')).toBe('https://example.com/#offer=PAYLOAD')
-  })
-})
-
-describe('readHashParam reads conv alongside offer (FEAT-012)', () => {
-  it('returns the conv value from a hash with both offer and conv params', () => {
-    expect(readHashParam('#offer=ABC&conv=uuid-1', 'conv')).toBe('uuid-1')
-    expect(readHashParam('#offer=ABC&conv=uuid-1', 'offer')).toBe('ABC')
+  it('normalizes a base path without trailing slash', () => {
+    expect(buildOfferUrl('https://example.com', '/p2p', 'X', 'uuid-2')).toBe(
+      'https://example.com/p2p/conversation/uuid-2#offer=X',
+    )
   })
 
-  it('returns null when conv is absent', () => {
-    expect(readHashParam('#offer=ABC', 'conv')).toBeNull()
+  it('keeps a base path with trailing slash', () => {
+    expect(buildOfferUrl('https://example.com', '/p2p/', 'X', 'uuid-3')).toBe(
+      'https://example.com/p2p/conversation/uuid-3#offer=X',
+    )
   })
 })
 
@@ -68,8 +55,8 @@ describe('currentOfferUrl', () => {
   // or `import.meta.env.BASE_URL` themselves — env access stays inside core/url.
   // jsdom's default `location.origin` is `http://localhost:3000` and Vite's
   // default `BASE_URL` is `'/'`, which together produce the assertion below.
-  it('joins the ambient origin + BASE_URL + offer payload', () => {
-    expect(currentOfferUrl('PAYLOAD')).toBe('http://localhost:3000/#offer=PAYLOAD')
+  it('joins the ambient origin + BASE_URL + /conversation/<id> + offer payload', () => {
+    expect(currentOfferUrl('PAYLOAD', 'uuid-1')).toBe('http://localhost:3000/conversation/uuid-1#offer=PAYLOAD')
   })
 
   it('reads BASE_URL from import.meta.env at call time', () => {
@@ -78,7 +65,7 @@ describe('currentOfferUrl', () => {
     // (e.g. GitHub Pages project site) produces the correct URL.
     vi.stubEnv('BASE_URL', '/p2p/')
     try {
-      expect(currentOfferUrl('X')).toBe('http://localhost:3000/p2p/#offer=X')
+      expect(currentOfferUrl('X', 'uuid-2')).toBe('http://localhost:3000/p2p/conversation/uuid-2#offer=X')
     } finally {
       vi.unstubAllEnvs()
     }

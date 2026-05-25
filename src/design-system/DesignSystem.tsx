@@ -14,6 +14,7 @@ import { useFocusOnMount } from '../hooks/useFocusOnMount'
 import type { ChatSession } from '../hooks/useChatSession'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { Home } from '../screens/Home'
+import { SessionContext } from '../SessionContext'
 import { Joiner } from '../screens/Joiner'
 import { Network } from '../network/Network'
 import { Offerer } from '../screens/Offerer'
@@ -361,7 +362,13 @@ export function DesignSystem() {
           title="Screen previews"
           description="Static renders of each post-connect / between-states screen — review without a SDP handshake.">
           <ScreenPreview label="Home">
-            <Home onStart={() => {}} />
+            {/* ARCH-001: Home now reads the session from context and uses
+                react-router navigate for Start. Provide an idle stub session
+                so the preview doesn't depend on the live one and the badge
+                logic doesn't light up for any stub conversation. */}
+            <SessionContext.Provider value={stubSession()}>
+              <Home />
+            </SessionContext.Provider>
           </ScreenPreview>
 
           <ScreenPreview label="Offerer — Invite your friend">

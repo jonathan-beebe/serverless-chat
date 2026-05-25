@@ -1,10 +1,13 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { IDBFactory } from 'fake-indexeddb'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { Home } from './Home'
 import { ScreenChromeContext, type ScreenChromeValue } from '../components/ScreenChrome'
 import { __resetForTests as resetStorage, appendMessage, upsertConversation } from '../core/storage'
 import * as storage from '../core/storage'
+import { SessionContext } from '../SessionContext'
+import { makeStubSession, renderWithProviders } from '../test-utils'
 
 const SHOWCASE_CHROME: ScreenChromeValue = {
   landmark: 'region',
@@ -25,7 +28,7 @@ afterEach(() => {
 
 describe('Home focus-on-mount (A11Y-005 + A11Y-022)', () => {
   it('focuses the "Start a chat" button on mount under the default ScreenChrome context', async () => {
-    render(<Home onStart={() => {}} />)
+    renderWithProviders(<Home />)
     const startButton = screen.getByRole('button', { name: /start a chat/i })
 
     await waitFor(() => {
@@ -34,10 +37,17 @@ describe('Home focus-on-mount (A11Y-005 + A11Y-022)', () => {
   })
 
   it('does NOT focus the "Start a chat" button when rendered inside a showcase context with suppressInitialFocus: true (A11Y-022)', async () => {
+    // ARCH-001: the showcase mounts Home below MemoryRouter + SessionContext
+    // just like every other call site; the ScreenChrome wrapping rides on
+    // top of that.
     render(
-      <ScreenChromeContext.Provider value={SHOWCASE_CHROME}>
-        <Home onStart={() => {}} />
-      </ScreenChromeContext.Provider>,
+      <MemoryRouter>
+        <SessionContext.Provider value={makeStubSession()}>
+          <ScreenChromeContext.Provider value={SHOWCASE_CHROME}>
+            <Home />
+          </ScreenChromeContext.Provider>
+        </SessionContext.Provider>
+      </MemoryRouter>,
     )
     const startButton = screen.getByRole('button', { name: /start a chat/i })
 
@@ -55,7 +65,7 @@ describe('Home empty state (FEAT-012 AC#19)', () => {
   // history is now an opt-in-by-default local feature. The "no chat server,
   // no accounts" promise stays — that's the actual privacy stance.
   it('renders without the legacy "no history" copy', () => {
-    render(<Home onStart={() => {}} />)
+    renderWithProviders(<Home />)
     // The exact replacement wording is subject to PR-time bikeshedding, but
     // the AC is unambiguous about the word that must be gone.
     expect(screen.queryByText(/no history/i)).not.toBeInTheDocument()
@@ -63,7 +73,7 @@ describe('Home empty state (FEAT-012 AC#19)', () => {
   })
 
   it('renders no past-chats section when storage is empty', async () => {
-    render(<Home onStart={() => {}} />)
+    renderWithProviders(<Home />)
     // Wait for the async listConversations() to resolve and the hook to
     // commit the (empty) list. After A11Y-032 the section no longer carries
     // `aria-label="Past conversations"` (it didn't earn a landmark slot),
@@ -85,7 +95,7 @@ describe('Home empty state (FEAT-012 AC#19)', () => {
       label: 'Lunch chat',
     })
     await appendMessage('aaa', { id: 'm-aaa', from: 'me', text: 'hi', at: Date.now() - 60_000 })
-    render(<Home onStart={() => {}} />)
+    renderWithProviders(<Home />)
 
     // The h2 "Past chats" is present and SR-navigable via heading shortcut.
     expect(await screen.findByRole('heading', { name: /^past chats$/i })).toBeInTheDocument()
@@ -113,29 +123,31 @@ describe('Home conversation list (FEAT-012 AC#18 / #20 / #21 / #26)', () => {
     await seed('aaa', { label: 'Lunch chat' })
     await seed('bbb', { label: 'Project sync' })
 
-    render(<Home onStart={() => {}} />)
+    renderWithProviders(<Home />)
 
     // Find the rows via the test id our row component stamps on its <li>.
     const rowA = await screen.findByTestId('conversation-row-aaa')
     const rowB = await screen.findByTestId('conversation-row-bbb')
     expect(within(rowA).getByText('Lunch chat')).toBeInTheDocument()
     expect(within(rowB).getByText('Project sync')).toBeInTheDocument()
-    // Both rows expose a primary Resume affordance (AC#18). After A11Y-030
-    // the accessible name includes the row label, so anchor the match at the
-    // start of the name and allow whitespace + label after.
-    expect(within(rowA).getByRole('button', { name: /^resume\b/i })).toBeInTheDocument()
-    expect(within(rowB).getByRole('button', { name: /^resume\b/i })).toBeInTheDocument()
+    // ARCH-001: Resume is now a real <Link> (was a <Button>) so right-click /
+    // Cmd-click / "Copy link address" all work as link interactions. A11Y-030
+    // still owns the row-specific accessible name — anchor at "Resume".
+    expect(within(rowA).getByRole('link', { name: /^resume\b/i })).toBeInTheDocument()
+    expect(within(rowB).getByRole('link', { name: /^resume\b/i })).toBeInTheDocument()
   })
 
-  it('Resume forwards the row`s conversation id to onStart (AC#26)', async () => {
+  it('Resume is a link to the row`s canonical conversation URL (AC#26 / ARCH-001)', async () => {
+    // ARCH-001: under hash routing, Home called `onStart(c.id)` and `App`
+    // pushed an internal route. Now Resume is a real link pointing at the
+    // canonical /conversation/<id> URL; the browser does the navigation
+    // and the URL is honestly bookmarkable / shareable.
     await seed('aaa', { label: 'Lunch chat' })
-    const onStart = vi.fn()
-    render(<Home onStart={onStart} />)
+    renderWithProviders(<Home />)
 
     const row = await screen.findByTestId('conversation-row-aaa')
-    fireEvent.click(within(row).getByRole('button', { name: /^resume\b/i }))
-
-    expect(onStart).toHaveBeenCalledWith('aaa')
+    const resume = within(row).getByRole('link', { name: /^resume\b/i })
+    expect(resume.getAttribute('href')).toBe('/conversation/aaa')
   })
 
   // AC#18's "No messages yet" peek was originally validated against a
@@ -149,7 +161,7 @@ describe('Home conversation list (FEAT-012 AC#18 / #20 / #21 / #26)', () => {
     const longBody = 'x'.repeat(120)
     await appendMessage('aaa', { id: 'm1', from: 'me', text: longBody, at: Date.now() })
 
-    render(<Home onStart={() => {}} />)
+    renderWithProviders(<Home />)
     const row = await screen.findByTestId('conversation-row-aaa')
     // Truncation is "first 47 + ellipsis" for bodies over 50 chars per AC#18.
     const peek = await within(row).findByText(/^x+…$/u)
@@ -158,7 +170,7 @@ describe('Home conversation list (FEAT-012 AC#18 / #20 / #21 / #26)', () => {
 
   it('Delete with confirm removes the row and the underlying record (AC#20)', async () => {
     await seed('aaa', { label: 'Goodbye' })
-    render(<Home onStart={() => {}} />)
+    renderWithProviders(<Home />)
 
     const row = await screen.findByTestId('conversation-row-aaa')
     fireEvent.click(within(row).getByRole('button', { name: /more actions/i }))
@@ -176,7 +188,7 @@ describe('Home conversation list (FEAT-012 AC#18 / #20 / #21 / #26)', () => {
 
   it('Delete cancel leaves the row in place (AC#20)', async () => {
     await seed('aaa', { label: 'Stays' })
-    render(<Home onStart={() => {}} />)
+    renderWithProviders(<Home />)
 
     const row = await screen.findByTestId('conversation-row-aaa')
     fireEvent.click(within(row).getByRole('button', { name: /more actions/i }))
@@ -203,7 +215,7 @@ describe('Home conversation list (FEAT-012 AC#18 / #20 / #21 / #26)', () => {
   // the ⋯ trigger on the row that opened it.
   it('Delete menuitem opens an alertdialog and Cancel returns focus to the ⋯ trigger (A11Y-033)', async () => {
     await seed('aaa', { label: 'Stays' })
-    render(<Home onStart={() => {}} />)
+    renderWithProviders(<Home />)
 
     const row = await screen.findByTestId('conversation-row-aaa')
     const trigger = within(row).getByRole('button', { name: /more actions/i })
@@ -225,7 +237,7 @@ describe('Home conversation list (FEAT-012 AC#18 / #20 / #21 / #26)', () => {
 
   it('Rename inline edits the row`s label (AC#21)', async () => {
     await seed('aaa', { label: 'Old name' })
-    render(<Home onStart={() => {}} />)
+    renderWithProviders(<Home />)
 
     const row = await screen.findByTestId('conversation-row-aaa')
     fireEvent.click(within(row).getByRole('button', { name: /more actions/i }))
@@ -247,15 +259,16 @@ describe('Home conversation list (FEAT-012 AC#18 / #20 / #21 / #26)', () => {
   it('Resume and More-actions buttons carry row-specific accessible names (A11Y-030)', async () => {
     await seed('aaa', { label: 'Lunch chat' })
     await seed('bbb', { label: 'Project sync' })
-    render(<Home onStart={() => {}} />)
+    renderWithProviders(<Home />)
 
     const rowA = await screen.findByTestId('conversation-row-aaa')
     const rowB = await screen.findByTestId('conversation-row-bbb')
 
-    // Resume buttons: visible text "Resume" preserved (WCAG 2.5.3 Label in
-    // Name); accessible name starts with "Resume" and appends the label.
-    expect(within(rowA).getByRole('button', { name: 'Resume Lunch chat' })).toBeInTheDocument()
-    expect(within(rowB).getByRole('button', { name: 'Resume Project sync' })).toBeInTheDocument()
+    // ARCH-001: Resume is now a real link; visible text "Resume" preserved
+    // (WCAG 2.5.3 Label in Name); accessible name starts with "Resume" and
+    // appends the row label, same as before — only the role changed.
+    expect(within(rowA).getByRole('link', { name: 'Resume Lunch chat' })).toBeInTheDocument()
+    expect(within(rowB).getByRole('link', { name: 'Resume Project sync' })).toBeInTheDocument()
 
     // The trigger has only a glyph (⋯), so the aria-label is its full name.
     expect(within(rowA).getByRole('button', { name: 'More actions for Lunch chat' })).toBeInTheDocument()
@@ -268,7 +281,7 @@ describe('Home conversation list (FEAT-012 AC#18 / #20 / #21 / #26)', () => {
   // <input> inline in ConversationRow rather than the Textarea primitive.
   it('Rename input border uses the A11Y-016 stone-400/500 tokens (A11Y-026)', async () => {
     await seed('aaa', { label: 'Old name' })
-    render(<Home onStart={() => {}} />)
+    renderWithProviders(<Home />)
 
     const row = await screen.findByTestId('conversation-row-aaa')
     fireEvent.click(within(row).getByRole('button', { name: /more actions/i }))
@@ -296,7 +309,7 @@ describe('Home row menu dismissal (CR-008)', () => {
 
   it('closes the open menu on pointerdown outside the row', async () => {
     await seedRow('aaa', 'Row A')
-    render(<Home onStart={() => {}} />)
+    renderWithProviders(<Home />)
 
     const row = await screen.findByTestId('conversation-row-aaa')
     fireEvent.click(within(row).getByRole('button', { name: /more actions/i }))
@@ -313,7 +326,7 @@ describe('Home row menu dismissal (CR-008)', () => {
 
   it('closes the open menu on Escape and restores focus to the ⋯ trigger', async () => {
     await seedRow('aaa', 'Row A')
-    render(<Home onStart={() => {}} />)
+    renderWithProviders(<Home />)
 
     const row = await screen.findByTestId('conversation-row-aaa')
     const trigger = within(row).getByRole('button', { name: /more actions/i })
@@ -331,7 +344,7 @@ describe('Home row menu dismissal (CR-008)', () => {
   it('opening row B`s menu closes row A`s (single-open invariant)', async () => {
     await seedRow('aaa', 'Row A')
     await seedRow('bbb', 'Row B')
-    render(<Home onStart={() => {}} />)
+    renderWithProviders(<Home />)
 
     const rowA = await screen.findByTestId('conversation-row-aaa')
     const rowB = await screen.findByTestId('conversation-row-bbb')
@@ -350,7 +363,7 @@ describe('Home row menu dismissal (CR-008)', () => {
 
   it('toggles closed when the same ⋯ trigger is clicked again (no re-open race)', async () => {
     await seedRow('aaa', 'Row A')
-    render(<Home onStart={() => {}} />)
+    renderWithProviders(<Home />)
 
     const row = await screen.findByTestId('conversation-row-aaa')
     const trigger = within(row).getByRole('button', { name: /more actions/i })
@@ -401,7 +414,7 @@ describe('Home row menu Copy transcript (CR-009)', () => {
 
   it('renders Copy transcript between Rename and Delete in the row menu', async () => {
     await seedWithMessages('aaa', 1)
-    render(<Home onStart={() => {}} />)
+    renderWithProviders(<Home />)
 
     const row = await screen.findByTestId('conversation-row-aaa')
     // Wait for the preview-load to settle so the disabled/enabled state of
@@ -417,7 +430,7 @@ describe('Home row menu Copy transcript (CR-009)', () => {
     await seedWithMessages('aaa', 2)
     const writeText = vi.fn().mockResolvedValue(undefined)
     setClipboardWriteText(writeText)
-    render(<Home onStart={() => {}} />)
+    renderWithProviders(<Home />)
 
     const row = await screen.findByTestId('conversation-row-aaa')
     await within(row).findByText(/message 1/i)
@@ -438,7 +451,7 @@ describe('Home row menu Copy transcript (CR-009)', () => {
   it('Copy transcript closes the menu after a successful copy', async () => {
     await seedWithMessages('aaa', 1)
     setClipboardWriteText(vi.fn().mockResolvedValue(undefined))
-    render(<Home onStart={() => {}} />)
+    renderWithProviders(<Home />)
 
     const row = await screen.findByTestId('conversation-row-aaa')
     await within(row).findByText(/message 0/i)
@@ -454,7 +467,7 @@ describe('Home row menu Copy transcript (CR-009)', () => {
     setClipboardWriteText(vi.fn().mockRejectedValue(new Error('blocked')))
     const execCommand = vi.fn().mockReturnValue(true)
     setExecCommand(execCommand)
-    render(<Home onStart={() => {}} />)
+    renderWithProviders(<Home />)
 
     const row = await screen.findByTestId('conversation-row-aaa')
     await within(row).findByText(/message 0/i)
@@ -468,7 +481,7 @@ describe('Home row menu Copy transcript (CR-009)', () => {
     await seedWithMessages('aaa', 1)
     setClipboardWriteText(vi.fn().mockRejectedValue(new Error('blocked')))
     setExecCommand(vi.fn().mockReturnValue(false))
-    render(<Home onStart={() => {}} />)
+    renderWithProviders(<Home />)
 
     const row = await screen.findByTestId('conversation-row-aaa')
     await within(row).findByText(/message 0/i)
@@ -486,7 +499,7 @@ describe('Home row menu Copy transcript (CR-009)', () => {
   it('Copy transcript announces success via the live region', async () => {
     await seedWithMessages('aaa', 1)
     setClipboardWriteText(vi.fn().mockResolvedValue(undefined))
-    render(<Home onStart={() => {}} />)
+    renderWithProviders(<Home />)
 
     const row = await screen.findByTestId('conversation-row-aaa')
     await within(row).findByText(/message 0/i)
@@ -513,7 +526,7 @@ describe('Home row menu Copy transcript (CR-009)', () => {
     })
     const writeText = vi.fn().mockResolvedValue(undefined)
     setClipboardWriteText(writeText)
-    render(<Home onStart={() => {}} />)
+    renderWithProviders(<Home />)
 
     const row = await screen.findByTestId('conversation-row-aaa')
     await within(row).findByText(/no messages yet/i)
@@ -553,7 +566,7 @@ describe('Home row menu APG keyboard navigation (A11Y-025)', () => {
 
   it('auto-focuses the first non-disabled menuitem on open (Rename)', async () => {
     await seedRow('aaa', 'Row A')
-    render(<Home onStart={() => {}} />)
+    renderWithProviders(<Home />)
     const row = await openMenuRow('aaa')
 
     const rename = within(row).getByRole('menuitem', { name: /^rename$/i })
@@ -564,7 +577,7 @@ describe('Home row menu APG keyboard navigation (A11Y-025)', () => {
 
   it('ArrowDown cycles forward and wraps at the end', async () => {
     await seedRow('aaa', 'Row A')
-    render(<Home onStart={() => {}} />)
+    renderWithProviders(<Home />)
     const row = await openMenuRow('aaa')
     const menu = within(row).getByRole('menu')
     const rename = within(row).getByRole('menuitem', { name: /^rename$/i })
@@ -583,7 +596,7 @@ describe('Home row menu APG keyboard navigation (A11Y-025)', () => {
 
   it('ArrowUp cycles backward and wraps at the start', async () => {
     await seedRow('aaa', 'Row A')
-    render(<Home onStart={() => {}} />)
+    renderWithProviders(<Home />)
     const row = await openMenuRow('aaa')
     const menu = within(row).getByRole('menu')
     const rename = within(row).getByRole('menuitem', { name: /^rename$/i })
@@ -602,7 +615,7 @@ describe('Home row menu APG keyboard navigation (A11Y-025)', () => {
 
   it('Home jumps to the first item; End jumps to the last', async () => {
     await seedRow('aaa', 'Row A')
-    render(<Home onStart={() => {}} />)
+    renderWithProviders(<Home />)
     const row = await openMenuRow('aaa')
     const menu = within(row).getByRole('menu')
     const rename = within(row).getByRole('menuitem', { name: /^rename$/i })
@@ -618,7 +631,7 @@ describe('Home row menu APG keyboard navigation (A11Y-025)', () => {
 
   it('Type-ahead focuses items by first letter (case-insensitive)', async () => {
     await seedRow('aaa', 'Row A')
-    render(<Home onStart={() => {}} />)
+    renderWithProviders(<Home />)
     const row = await openMenuRow('aaa')
     const menu = within(row).getByRole('menu')
     const rename = within(row).getByRole('menuitem', { name: /^rename$/i })
@@ -648,7 +661,7 @@ describe('Home row menu APG keyboard navigation (A11Y-025)', () => {
 
   it('Tab closes the menu (does not preventDefault so the browser moves focus naturally)', async () => {
     await seedRow('aaa', 'Row A')
-    render(<Home onStart={() => {}} />)
+    renderWithProviders(<Home />)
     const row = await openMenuRow('aaa')
     const menu = within(row).getByRole('menu')
 
@@ -661,7 +674,7 @@ describe('Home row menu APG keyboard navigation (A11Y-025)', () => {
 
   it('Shift+Tab closes the menu', async () => {
     await seedRow('aaa', 'Row A')
-    render(<Home onStart={() => {}} />)
+    renderWithProviders(<Home />)
     const row = await openMenuRow('aaa')
     const menu = within(row).getByRole('menu')
 
@@ -677,7 +690,7 @@ describe('Home row menu APG keyboard navigation (A11Y-025)', () => {
     await seedRow('aaa', 'Empty', false)
     const writeText = vi.fn().mockResolvedValue(undefined)
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
-    render(<Home onStart={() => {}} />)
+    renderWithProviders(<Home />)
 
     const row = await screen.findByTestId('conversation-row-aaa')
     await within(row).findByText(/no messages yet/i)
@@ -701,7 +714,7 @@ describe('Home row menu APG keyboard navigation (A11Y-025)', () => {
 
   it('Roving tabindex: exactly one menuitem has tabIndex 0 at a time, tracking the active item', async () => {
     await seedRow('aaa', 'Row A')
-    render(<Home onStart={() => {}} />)
+    renderWithProviders(<Home />)
     const row = await openMenuRow('aaa')
     const menu = within(row).getByRole('menu')
     const rename = within(row).getByRole('menuitem', { name: /^rename$/i })
@@ -739,7 +752,7 @@ describe('Home culls empty conversations on mount (CR-011)', () => {
       label: 'Polite-defer leftover',
     })
 
-    render(<Home onStart={() => {}} />)
+    renderWithProviders(<Home />)
 
     // The kept row appears; the abandoned stub never does.
     await screen.findByTestId('conversation-row-inviter')
@@ -747,16 +760,39 @@ describe('Home culls empty conversations on mount (CR-011)', () => {
   })
 })
 
-describe('Home "Start a chat" (FEAT-012 AC#25)', () => {
-  it('calls onStart with a fresh UUID', () => {
-    const onStart = vi.fn()
-    render(<Home onStart={onStart} />)
+describe('Home "Start a chat" (FEAT-012 AC#25 / ARCH-001)', () => {
+  it('pre-binds the session to a fresh UUID and navigates to /conversation/<id>', async () => {
+    // ARCH-001: Home no longer routes via an `onStart` prop — it owns both
+    // sides of the transition: bind the session to a freshly-minted conv id
+    // (so ConversationRoute doesn't see "unknown id, render NotFound") and
+    // then navigate to the canonical URL. We assert both halves: the spy on
+    // the session captures the bind; the rendered location captures the nav.
+    const startAsOfferer = vi.fn().mockResolvedValue(undefined)
+    const session = makeStubSession({ startAsOfferer })
+
+    // Render Home alongside a tiny "current URL" probe so we can observe the
+    // navigation without depending on jsdom's address bar.
+    function LocationProbe() {
+      const loc = useLocation()
+      return <div data-testid="location-pathname">{loc.pathname}</div>
+    }
+    renderWithProviders(
+      <>
+        <Home />
+        <LocationProbe />
+      </>,
+      { session },
+    )
+
     fireEvent.click(screen.getByRole('button', { name: /start a chat/i }))
-    expect(onStart).toHaveBeenCalledTimes(1)
-    const arg = onStart.mock.calls[0][0]
-    // Loose UUID check — we don't need to assert the v4 layout, just that
-    // a non-empty string was passed (Home uses crypto.randomUUID()).
-    expect(typeof arg).toBe('string')
-    expect(arg.length).toBeGreaterThan(0)
+
+    expect(startAsOfferer).toHaveBeenCalledTimes(1)
+    const newId = startAsOfferer.mock.calls[0][0]
+    expect(typeof newId).toBe('string')
+    expect(newId.length).toBeGreaterThan(0)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('location-pathname')).toHaveTextContent(`/conversation/${newId}`)
+    })
   })
 })

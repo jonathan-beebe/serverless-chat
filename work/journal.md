@@ -20,6 +20,21 @@ id.
 
 ## Log
 
+- 2026-05-25:07:44:03 — ARCH-001 — done: replaced hash router with react-router
+  BrowserRouter at path-based URLs (/, /conversation/:id, /design-system,
+  /network); session lifted into AppShell via new SessionContext so navigating
+  between routes preserves the live PeerConnection (BUG-008 invariant); invite
+  URL is now /conversation/&lt;id&gt;#offer=&lt;encoded&gt; (SDP still in
+  fragment for privacy); ConversationRoute keeps a sticky-per-id offer so Joiner
+  stays mounted while the URL settles to the canonical path; Home Resume is a
+  real &lt;Link&gt; with a Live badge for the active session; Network's header +
+  EmptyState Backs are real &lt;Link&gt;s (absorbs A11Y-031 + A11Y-036);
+  pre-bind in Home.startNew prevents NotFound flash on freshly-minted conv ids;
+  SPA fallback via public/\_redirects (Cloudflare) and a rewritten
+  public/404.html + main.tsx restore (GitHub Pages); 14 routing tests + 9 new
+  ones around joiner canonicalization, privacy, and ResumeOrNotFound; CI green
+  (format/typecheck/lint/test + build)
+- 2026-05-24:20:44:25 — ARCH-001 — started
 - 2026-05-24:20:34:48 — A11Y-034 — done: hid the chat copy toolbar when
   `messages.length === 0` so SR users no longer hear an unexplained "Copy,
   button, dimmed" (the empty-state placeholder already conveys the surface

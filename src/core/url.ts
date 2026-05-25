@@ -1,6 +1,8 @@
-// Hash fragments (`#offer=...`) are never sent to the server, which is exactly
-// what we want for signaling payloads — Cloudflare Pages / GitHub Pages will
-// never see them in their access logs.
+// ARCH-001: invite URLs are now path-based. The conversation id lives in the
+// path (`/conversation/<id>`) and the encoded SDP stays in the fragment
+// (`#offer=<encoded>`). Fragments still never reach the static host, so the
+// privacy property the README calls out is preserved — the path identifies
+// the conversation; the SDP that bootstraps it stays client-side.
 
 export function readHashParam(hash: string, key: string): string | null {
   const cleaned = hash.startsWith('#') ? hash.slice(1) : hash
@@ -9,26 +11,16 @@ export function readHashParam(hash: string, key: string): string | null {
   return value && value.length > 0 ? value : null
 }
 
-// FEAT-012: invite URLs now optionally carry a `conv=<uuid>` param so the
-// receiving peer can mirror the conversation locally. The encoded SDP stays
-// in `offer=` exactly as before; the conversation ID is its own param so
-// the URL parser doesn't have to decode the SDP to read it.
-export function buildOfferUrl(
-  origin: string,
-  basePath: string,
-  encodedOffer: string,
-  conversationId?: string | null,
-): string {
+export function buildOfferUrl(origin: string, basePath: string, encodedOffer: string, conversationId: string): string {
   const normalizedBase = basePath.endsWith('/') ? basePath : `${basePath}/`
-  const suffix = conversationId ? `&conv=${conversationId}` : ''
-  return `${origin}${normalizedBase}#offer=${encodedOffer}${suffix}`
+  return `${origin}${normalizedBase}conversation/${conversationId}#offer=${encodedOffer}`
 }
 
 // Thin imperative shell over `buildOfferUrl`: reads the two ambient inputs
 // (browser origin + Vite's configured base path) so view components don't
 // have to touch `location` or `import.meta.env` themselves. The pure builder
 // stays separately testable.
-export function currentOfferUrl(encodedOffer: string, conversationId?: string | null): string {
+export function currentOfferUrl(encodedOffer: string, conversationId: string): string {
   return buildOfferUrl(location.origin, import.meta.env.BASE_URL, encodedOffer, conversationId)
 }
 

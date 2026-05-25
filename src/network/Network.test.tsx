@@ -1,7 +1,16 @@
+import type { ReactElement } from 'react'
 import { render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
+import { MemoryRouter } from 'react-router-dom'
 import { Network } from './Network'
 import type { ChatSession, NetworkTelemetry, TelemetrySample } from '../hooks/useChatSession'
+
+// ARCH-001: Network now renders its Back affordance as a real `<Link>` (header
+// nav and EmptyState alike). Wrap every render in a MemoryRouter so the link
+// has a router context to read its basename from.
+function renderInRouter(ui: ReactElement) {
+  return render(<MemoryRouter initialEntries={['/network']}>{ui}</MemoryRouter>)
+}
 
 // FEAT-010: the Network page is a pure projection of `session.telemetry`. We
 // stub the session and pass it different telemetry shapes to drive each
@@ -39,19 +48,21 @@ function emptyTelemetry(): NetworkTelemetry {
 
 describe('Network empty state', () => {
   it('renders the "No active session" callout when no session has connected', () => {
-    render(<Network session={stubSession(emptyTelemetry())} />)
+    renderInRouter(<Network session={stubSession(emptyTelemetry())} />)
     expect(screen.getByRole('heading', { name: /network telemetry/i })).toBeInTheDocument()
     expect(screen.getByText(/no active session/i)).toBeInTheDocument()
   })
 
   it('exposes a link back to home', () => {
-    render(<Network session={stubSession(emptyTelemetry())} />)
+    // ARCH-001: was href="#" (hash-router treated empty fragment as home);
+    // now a real react-router Link pointing at the canonical home path.
+    renderInRouter(<Network session={stubSession(emptyTelemetry())} />)
     const home = screen.getByRole('link', { name: /back to home/i })
-    expect(home.getAttribute('href')).toBe('#')
+    expect(home.getAttribute('href')).toBe('/')
   })
 
   it('sets document.title to "Network telemetry · P2P Chat"', () => {
-    render(<Network session={stubSession(emptyTelemetry())} />)
+    renderInRouter(<Network session={stubSession(emptyTelemetry())} />)
     expect(document.title).toBe('Network telemetry · P2P Chat')
   })
 })
@@ -76,13 +87,13 @@ describe('Network with active telemetry', () => {
   }
 
   it('renders the heading and summary section', () => {
-    render(<Network session={stubSession(activeTelemetry())} />)
+    renderInRouter(<Network session={stubSession(activeTelemetry())} />)
     expect(screen.getByRole('heading', { name: /network telemetry/i })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: /^summary$/i })).toBeInTheDocument()
   })
 
   it('renders Current/Median/p95 RTT from summary', () => {
-    render(<Network session={stubSession(activeTelemetry())} />)
+    renderInRouter(<Network session={stubSession(activeTelemetry())} />)
     // The summary stats live inside a <dl>; assert the rendered text shows
     // up exactly once per stat (sanity check that we're reading from
     // telemetry.summary and not hardcoded zeros).
@@ -95,7 +106,7 @@ describe('Network with active telemetry', () => {
   })
 
   it('renders the four NTP timestamps and the derived rtt/offset when sync is present', () => {
-    render(<Network session={stubSession(activeTelemetry())} />)
+    renderInRouter(<Network session={stubSession(activeTelemetry())} />)
     expect(screen.getByText(/t1 \(probe sent\)/i)).toBeInTheDocument()
     expect(screen.getByText(/t2 \(probe received\)/i)).toBeInTheDocument()
     expect(screen.getByText(/t3 \(ack sent\)/i)).toBeInTheDocument()
@@ -104,7 +115,7 @@ describe('Network with active telemetry', () => {
   })
 
   it('renders the state-change timeline with connection lifecycle events', () => {
-    render(<Network session={stubSession(activeTelemetry())} />)
+    renderInRouter(<Network session={stubSession(activeTelemetry())} />)
     expect(screen.getByRole('heading', { name: /connection state timeline/i })).toBeInTheDocument()
     expect(screen.getByText('gathering')).toBeInTheDocument()
     expect(screen.getByText('awaiting-answer')).toBeInTheDocument()
@@ -112,7 +123,7 @@ describe('Network with active telemetry', () => {
   })
 
   it('renders the per-message timeline with sent and received rows', () => {
-    render(<Network session={stubSession(activeTelemetry())} />)
+    renderInRouter(<Network session={stubSession(activeTelemetry())} />)
     expect(screen.getByRole('heading', { name: /per-message timeline/i })).toBeInTheDocument()
     // Truncated message IDs (first 8 chars) appear in the table.
     expect(screen.getByText('abcdef12')).toBeInTheDocument()
@@ -124,7 +135,7 @@ describe('Network with active telemetry', () => {
   })
 
   it('describes the clock offset in a readable sentence', () => {
-    render(<Network session={stubSession(activeTelemetry())} />)
+    renderInRouter(<Network session={stubSession(activeTelemetry())} />)
     // Offset is 105 ms; the readable label is "Peer's clock is +105 ms ahead of yours".
     expect(screen.getByText(/peer's clock is \+105 ms ahead of yours/i)).toBeInTheDocument()
   })
@@ -135,7 +146,7 @@ describe('Network with active telemetry', () => {
   // labelled `role="region"`, keyboard-only / screen-magnifier / switch users
   // on those engines cannot reach the off-screen columns.
   it('per-message timeline wrapper is a focusable labelled scroll region (A11Y-028)', () => {
-    render(<Network session={stubSession(activeTelemetry())} />)
+    renderInRouter(<Network session={stubSession(activeTelemetry())} />)
     const wrapper = screen.getByRole('region', { name: /per-message timeline \(scrollable\)/i })
     expect(wrapper).toHaveAttribute('tabindex', '0')
     expect(wrapper.className).toMatch(/overflow-x-auto/)
@@ -148,7 +159,7 @@ describe('Network with active telemetry', () => {
   // existing <h2 id>). And explicit scope="col" on each <th> is the canonical
   // signal that column headers govern body cells — without it, AT must guess.
   it('per-message timeline table carries aria-labelledby and column-scoped headers (A11Y-027)', () => {
-    render(<Network session={stubSession(activeTelemetry())} />)
+    renderInRouter(<Network session={stubSession(activeTelemetry())} />)
     const table = screen.getByRole('table')
     expect(table).toHaveAttribute('aria-labelledby', 'net-timeline-heading')
 
@@ -172,14 +183,14 @@ describe('Network with sync absent', () => {
   }
 
   it('renders the "sync not completed" callout when sync is null but the session is live', () => {
-    render(<Network session={stubSession(telemetryNoSync())} />)
+    renderInRouter(<Network session={stubSession(telemetryNoSync())} />)
     // Page still renders (we have a connectedAt), but the sync block falls back.
     expect(screen.getByRole('heading', { name: /network telemetry/i })).toBeInTheDocument()
     expect(screen.getByText(/sync handshake not completed/i)).toBeInTheDocument()
   })
 
   it('still renders the per-message timeline empty state when no messages have flowed', () => {
-    render(<Network session={stubSession(telemetryNoSync())} />)
+    renderInRouter(<Network session={stubSession(telemetryNoSync())} />)
     expect(screen.getByText(/no messages yet/i)).toBeInTheDocument()
   })
 })

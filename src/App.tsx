@@ -1,86 +1,58 @@
-import { useEffect, useState } from 'react'
+import { BrowserRouter, Outlet, Route, Routes } from 'react-router-dom'
 import { DesignSystem } from './design-system/DesignSystem'
 import { Home } from './screens/Home'
-import { Offerer } from './screens/Offerer'
-import { Joiner } from './screens/Joiner'
+import { NotFound } from './screens/NotFound'
 import { Network } from './network/Network'
-import { clearHash, readHashParam } from './core/url'
+import { ConversationRoute } from './routes/ConversationRoute'
+import { SessionContext, useSession } from './SessionContext'
 import { useChatSession } from './hooks/useChatSession'
 
-type Route =
-  | { kind: 'home' }
-  // FEAT-012: the Offerer route now carries the conversation id Home
-  // generated (new chat) or selected (Resume). Stable across the screen's
-  // lifetime — Home re-mounts on each navigation, so a new UUID would
-  // otherwise be allocated every render.
-  | { kind: 'offerer'; conversationId: string }
-  | { kind: 'joiner'; offerCode: string; conversationId: string | null }
-  | { kind: 'design-system' }
-  | { kind: 'network' }
+// ARCH-001: the chat session lives one layer above the routes so a
+// `useChatSession()` instance survives navigation between /conversation/:id,
+// /network, and /. The previous hash-router model owned routing in App and
+// passed the session as props; the BrowserRouter does the routing, and
+// SessionContext makes the session reachable from any nested route.
+function AppShell() {
+  const session = useChatSession()
+  return (
+    <SessionContext.Provider value={session}>
+      <Outlet />
+    </SessionContext.Provider>
+  )
+}
 
-function routeFromHash(): Route {
-  const hash = location.hash.startsWith('#') ? location.hash.slice(1) : location.hash
-  if (hash === 'design-system') return { kind: 'design-system' }
-  if (hash === 'network') return { kind: 'network' }
-  const offer = readHashParam(location.hash, 'offer')
-  if (offer) {
-    // FEAT-012: the conv param may or may not be present (back-compat for
-    // pre-FEAT-012 invites). Joiner generates a fresh id if it's missing.
-    const conv = readHashParam(location.hash, 'conv')
-    return { kind: 'joiner', offerCode: offer, conversationId: conv }
-  }
-  return { kind: 'home' }
+// Thin wrapper so /network reads the session from context the same way the
+// other routes do, instead of being passed the session as a prop.
+function NetworkRoute() {
+  const session = useSession()
+  return <Network session={session} />
+}
+
+// Exported separately from `App` so tests can mount the routes under a
+// MemoryRouter (initial-entry control, no real history mutation) while
+// production wraps them in BrowserRouter.
+export function AppRoutes() {
+  return (
+    <Routes>
+      <Route element={<AppShell />}>
+        <Route path="/" element={<Home />} />
+        <Route path="/conversation/:id" element={<ConversationRoute />} />
+        <Route path="/design-system" element={<DesignSystem />} />
+        <Route path="/network" element={<NetworkRoute />} />
+        <Route path="*" element={<NotFound />} />
+      </Route>
+    </Routes>
+  )
 }
 
 export function App() {
-  const [route, setRoute] = useState<Route>(() => routeFromHash())
-  const session = useChatSession()
-
-  // If Bob already had the app open and the OS opens the invite URL into the
-  // same tab, only the hash changes — no reload. Without this listener we'd
-  // sit on the Home screen and never route into Joiner. Same need applies to
-  // the #design-system entrypoint and to clearing the hash back to home.
-  useEffect(() => {
-    const onHashChange = () => {
-      const next = routeFromHash()
-      if (next.kind === 'joiner' || next.kind === 'design-system' || next.kind === 'network' || next.kind === 'home') {
-        setRoute(next)
-      }
-    }
-    window.addEventListener('hashchange', onHashChange)
-    return () => window.removeEventListener('hashchange', onHashChange)
-  }, [])
-
-  // Scrub the fragment once we've captured the offer in component state, so a
-  // refresh doesn't try to re-enter the joiner flow with a now-stale offer.
-  // Depend on `route` (not just `route.kind`) so a same-tab joiner→joiner
-  // hashchange — which keeps `kind` constant but swaps `offerCode` — still
-  // re-runs the scrub. The design-system branch is intentionally bookmark-able,
-  // so the guard short-circuits on any non-joiner route.
-  useEffect(() => {
-    if (route.kind === 'joiner') clearHash()
-  }, [route])
-
-  const goHome = () => {
-    session.reset()
-    setRoute({ kind: 'home' })
-  }
-
-  switch (route.kind) {
-    case 'home':
-      // Home owns conversation-ID generation: new chats get a fresh UUID,
-      // resumed chats reuse the row's existing id. Either way we forward
-      // into the Offerer route.
-      return <Home onStart={(conversationId) => setRoute({ kind: 'offerer', conversationId })} />
-    case 'offerer':
-      return <Offerer session={session} conversationId={route.conversationId} onCancel={goHome} />
-    case 'joiner':
-      return (
-        <Joiner session={session} offerCode={route.offerCode} conversationId={route.conversationId} onCancel={goHome} />
-      )
-    case 'design-system':
-      return <DesignSystem />
-    case 'network':
-      return <Network session={session} />
-  }
+  // Vite's BASE_URL becomes react-router's basename so deploys under a
+  // sub-path (e.g. GitHub Pages project sites) keep working. The leading
+  // slash is preserved; react-router strips any trailing slash internally.
+  const basename = (import.meta.env.BASE_URL || '/').replace(/\/$/, '') || '/'
+  return (
+    <BrowserRouter basename={basename}>
+      <AppRoutes />
+    </BrowserRouter>
+  )
 }

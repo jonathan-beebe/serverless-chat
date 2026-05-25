@@ -15,11 +15,18 @@ import type { ConnectionState } from '../core/rtc'
 interface Props {
   session: ChatSession
   offerCode: string
-  /** FEAT-012: conversation id extracted from the `conv` hash param. Null on
-   *  pre-FEAT-012 invites; Joiner falls back to a fresh UUID so the chat
-   *  still persists locally (just not under the inviter's id). */
+  /** ARCH-001: conversation id now lives in the URL path
+   *  (`/conversation/<id>`), so it's always present at the route boundary.
+   *  Showcase previews still pass `null` to render the invite-only stub
+   *  without binding to a real conversation. */
   conversationId: string | null
   onCancel: () => void
+  /** ARCH-001: fires once the offer has been captured into the session so
+   *  the route shell can scrub the `#offer` fragment from the URL — the
+   *  same "don't replay the joiner flow on refresh" invariant that
+   *  `clearHash()` carried under the previous hash-router. Optional so the
+   *  design-system previews can omit it. */
+  onOfferCaptured?: () => void
 }
 
 function joinerTitle(state: ChatSession['state'], accepted: boolean): string {
@@ -57,7 +64,7 @@ function statusMessage(state: ConnectionState, hasLocal: boolean, branch: 'invit
   }
 }
 
-export function Joiner({ session, offerCode, conversationId, onCancel }: Props) {
+export function Joiner({ session, offerCode, conversationId, onCancel, onOfferCaptured }: Props) {
   const [accepted, setAccepted] = useState(false)
   usePageTitle(joinerTitle(session.state, accepted))
 
@@ -80,6 +87,10 @@ export function Joiner({ session, offerCode, conversationId, onCancel }: Props) 
     } else if (session.state === 'awaiting-answer') {
       void session.politelyAcceptOffer(offerCode, effectiveConvId)
     }
+    // ARCH-001: the offer has been captured into the session — let the route
+    // shell scrub the URL fragment so the URL bar reads as the canonical
+    // /conversation/<id> and a refresh doesn't replay the joiner flow.
+    onOfferCaptured?.()
   }
 
   // Joiner has four branches (invite → reply-code → connected → closed).
