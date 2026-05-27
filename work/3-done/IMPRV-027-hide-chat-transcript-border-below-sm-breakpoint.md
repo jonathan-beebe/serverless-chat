@@ -1,8 +1,9 @@
 ---
 id: IMPRV-027
 type: improvement
-status: open
+status: resolved
 created: 2026-05-27
+resolved: 2026-05-27
 ---
 
 # IMPRV-027: hide chat transcript border below sm breakpoint

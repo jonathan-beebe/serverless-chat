@@ -20,6 +20,15 @@ id.
 
 ## Log
 
+- 2026-05-27:11:32:00 — IMPRV-027 — done: gated the transcript wrapper's
+  `border` / `border-stone-300` / `dark:border-stone-700` / `rounded-md`
+  utilities behind `sm:` in `src/components/ChatTranscript.tsx` so phone- width
+  viewports render edge-to-edge with no framing outline; the bg tint, padding,
+  focus ring, and scroll affordance remain unconditional; new behavior assertion
+  in `src/components/ChatTranscript.test.tsx` asserts the `sm:`-prefixed shape
+  with negative guards against the unconditional pre-IMPRV-027 utilities; suite
+  458 passing
+- 2026-05-27:11:31:00 — IMPRV-027 — started
 - 2026-05-27:11:30:00 — IMPRV-026 — done: added `sm:mb-4` to the composer
   `<form>` in `src/components/ChatComposer.tsx` so the composer sits with 1rem
   (~16px) of breathing room above the viewport bottom on viewports ≥640px;

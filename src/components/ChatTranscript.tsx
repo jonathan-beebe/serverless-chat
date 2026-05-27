@@ -134,7 +134,12 @@ export function ChatTranscript({ messages, hasResumed }: Props) {
       aria-relevant="additions"
       aria-atomic="false"
       tabIndex={0}
-      className="flex-1 overflow-y-auto overscroll-contain rounded-md border border-stone-300 bg-white/50 p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 dark:border-stone-700 dark:bg-stone-900/50">
+      // IMPRV-027: gate the border + rounded-corner card chrome behind `sm:`
+      // so phone-width viewports render edge-to-edge with no framing outline.
+      // The bg tint, padding, focus ring, and scroll affordance stay
+      // unconditional; the focus ring is a `ring`, not a `border-color`
+      // swap, so keyboard focus still paints correctly on mobile.
+      className="flex-1 overflow-y-auto overscroll-contain bg-white/50 p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 sm:rounded-md sm:border sm:border-stone-300 dark:bg-stone-900/50 dark:sm:border-stone-700">
       {messages.length === 0 ? (
         <p aria-hidden="true" className="text-sm text-stone-600 dark:text-stone-400">
           No messages yet. Say hello.

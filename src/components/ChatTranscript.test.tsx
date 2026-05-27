@@ -330,3 +330,28 @@ describe('ChatTranscript delivery indicator (FEAT-010)', () => {
     expect(bubble.querySelector('[data-testid="delivery-o1"]')).toBeTruthy()
   })
 })
+
+describe('ChatTranscript responsive border (IMPRV-027)', () => {
+  it('gates the border + rounded-corner card chrome behind `sm:` so phones get a clean edge-to-edge transcript while tablets/desktops keep the framed card', () => {
+    // Below 640px: no border, no rounded corners — the surface reads
+    // borderless against the surrounding chrome. The bg tint, padding,
+    // and focus ring stay unchanged.
+    render(<ChatTranscript messages={[]} />)
+    const log = getTranscript()
+    expect(log.className).toMatch(/\bsm:rounded-md\b/)
+    expect(log.className).toMatch(/\bsm:border\b/)
+    expect(log.className).toMatch(/\bsm:border-stone-300\b/)
+    expect(log.className).toMatch(/\bdark:sm:border-stone-700\b/)
+    // Negative guard: pre-IMPRV-027 unconditional border / rounded utilities
+    // would apply on phones too.
+    expect(log.className).not.toMatch(/(^|\s)border(\s|$)/)
+    expect(log.className).not.toMatch(/(^|\s)border-stone-300(\s|$)/)
+    expect(log.className).not.toMatch(/(^|\s)rounded-md(\s|$)/)
+    expect(log.className).not.toMatch(/(^|\s)dark:border-stone-700(\s|$)/)
+    // Preserved utilities — bg tint, padding, focus ring, scroll affordance.
+    expect(log.className).toMatch(/\bbg-white\/50\b/)
+    expect(log.className).toMatch(/\bp-3\b/)
+    expect(log.className).toMatch(/\bfocus-visible:ring-2\b/)
+    expect(log.className).toMatch(/\boverflow-y-auto\b/)
+  })
+})
