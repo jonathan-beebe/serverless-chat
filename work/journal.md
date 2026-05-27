@@ -20,6 +20,9 @@ id.
 
 ## Log
 
+- 2026-05-27:12:49:43 — RSRCH-003 — done: published
+  docs/webrtc-recovery-options.md covering 3 disconnect classes, 4 recovery
+  techniques, 4 signaling shapes, browser+NAT caveats, and code attach points
 - 2026-05-27:12:43:58 — RSRCH-003 — started
 - 2026-05-27:12:43:38 — IMPRV-029 — done: count-bearing pill sibling of the
   role=log scroll surface, increments per scrolled-back arrival, click scrolls
