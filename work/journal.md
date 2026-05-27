@@ -8,18 +8,24 @@ id.
 
 ## Next ticket numbers
 
-- RSRCH: 2
+- RSRCH: 3
 - DSGN: 1
 - ARCH: 2
 - FEAT: 16
 - IMPRV: 26
 - MAINT: 1
 - A11Y: 37
-- RFCTR: 3
+- RFCTR: 4
 - BUG: 9
 
 ## Log
 
+- 2026-05-27:09:52:00 — RFCTR-003 — done: split Chat.tsx (454→42 lines) into
+  ChatCopyToolbar, ChatComposer, ChatTranscript with colocated tests
+- 2026-05-27:09:43:47 — RFCTR-003 — started
+- 2026-05-27:09:43:37 — RSRCH-002 — defined: usechatsession seam map
+- 2026-05-27:09:43:37 — RFCTR-003 — defined: extract chat into colocated
+  components
 - 2026-05-27:09:29:43 — RFCTR-002 — done: converted the file-content
   `readFileSync(...).toMatch(/className/)` assertions in
   `src/mobile-responsive.test.tsx` (14 of 17) and `src/dark-mode.test.tsx` (1
