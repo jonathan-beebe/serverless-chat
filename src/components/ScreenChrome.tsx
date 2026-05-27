@@ -52,50 +52,27 @@ interface ScreenContainerProps {
   children?: ReactNode
 }
 
-// IMPRV-024: every screen's outermost element must honor the device safe-area
-// insets so that — in iOS standalone mode — the status-bar/notch (top) and the
-// rounded landscape edges (left/right) never clip content. Baking the inset
-// into `ScreenContainer` lets every existing call site (Home, Offerer, Joiner,
-// NotFound, Network) inherit the fix without changing each `className`.
-//
-// The inset is expressed as MARGIN, not padding. The reason is Tailwind v4's
-// emitted property order: `padding-top` / `padding-bottom` longhand utilities
-// come AFTER `padding-block` (which is what `py-*` compiles to), so a
-// `pt-[env(safe-area-inset-top)]` utility would WIN the cascade against every
-// consumer's existing `py-12` and clobber it to `0px` in browser tabs (where
-// `env(...)` is `0px`). Margin sidesteps that conflict entirely — it sits
-// outside the padding box, doesn't fight the cascade, and the consumer's
-// existing padding stays intact. `env(...)` is `0px` in browser tabs and on
-// non-notched hardware, so the rules are inert outside the standalone-iPhone
-// case (no `display-mode: standalone` gating needed).
-//
-// The bottom inset is intentionally OMITTED here. For most screens the
-// existing `py-12` already keeps content well above the home indicator (48px
-// padding vs ~34px home indicator); for the connected chat (where the
-// composer is pinned to the bottom of the visual viewport) the Offerer/Joiner
-// connected wrappers apply their own `pb-[max(env(safe-area-inset-bottom),0.25rem)]`.
-// Doing it in both places would double-count the inset (ticket "pick one" rule).
-const SAFE_AREA_CLASSES = 'mt-[env(safe-area-inset-top)] ml-[env(safe-area-inset-left)] mr-[env(safe-area-inset-right)]'
+// BUG-010: the safe-area-inset treatment lives in `src/index.css` on `body`
+// (top/left/right padding). Putting `ml-[env(...)]` / `mr-[env(...)]` on
+// ScreenContainer (IMPRV-024) collided with each consumer's `mx-auto` —
+// Tailwind emits `margin-left` / `margin-right` longhand AFTER `margin-inline`,
+// so the inset utilities won the cascade and clamped every screen flush-left
+// in browser tabs (where `env(...)` is `0px`). Body-level padding sidesteps the
+// cascade entirely and `#root` sizes against body's content box, so every
+// screen still clears the notch / curved edges. The bottom inset is owned by
+// the connected wrapper (Offerer/Joiner) and by UpdatePrompt — keeping it off
+// body preserves the IMPRV-024 "pick one" rule.
 
 // Primitive replacement for the raw `<main>` tag inside Home / Offerer /
 // Joiner. Renders <main> by default; renders a labelled region when the
 // surrounding context says we're in a showcase that already owns the page's
 // <main>.
 export function ScreenContainer({ label, className, children }: ScreenContainerProps) {
-  const { landmark } = useScreenChrome()
-  const rootClassName = className ? `${SAFE_AREA_CLASSES} ${className}` : SAFE_AREA_CLASSES
-  // In default mode we render a plain <main>. We deliberately don't add
-  // aria-label to <main> — there's only one per page, the document <h1> is
-  // the meaningful name, and adding a label here would change long-standing
-  // behavior on every screen. The `label` argument is only used by the
-  // region branch, where a labelled region is required for landmark
-  // navigation (and to disambiguate the seven previews stacked in the
-  // showcase).
-  if (landmark === 'main') {
-    return <main className={rootClassName}>{children}</main>
+  if (useScreenChrome().landmark === 'main') {
+    return <main className={className}>{children}</main>
   }
   return (
-    <div role="region" aria-label={label} className={rootClassName}>
+    <div role="region" aria-label={label} className={className}>
       {children}
     </div>
   )

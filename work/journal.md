@@ -12,14 +12,34 @@ id.
 - DSGN: 1
 - ARCH: 2
 - FEAT: 16
-- IMPRV: 26
+- IMPRV: 28
 - MAINT: 1
 - A11Y: 37
 - RFCTR: 4
-- BUG: 10
+- BUG: 13
 
 ## Log
 
+- 2026-05-27:11:21:00 — BUG-010 — done: moved safe-area-inset from
+  `ScreenContainer` margin utilities to
+  `body { padding-top/left/right: env(...) }` in `src/index.css`; removed
+  `SAFE_AREA_CLASSES` from `ScreenChrome.tsx`; flipped the four IMPRV-024
+  className assertions in `src/components/ScreenChrome.test.tsx` to assert "no
+  `safe-area-inset` utility on the screen root" plus three new postcss-AST
+  checks for the body padding rules; wide-screen `mx-auto` centering restored
+  without regressing iOS standalone notch / landscape edge clearance; suite 450
+  passing
+- 2026-05-27:11:19:00 — BUG-010 — started
+- 2026-05-27:10:51:24 — IMPRV-027 — defined: hide chat transcript border below
+  sm breakpoint
+- 2026-05-27:10:51:24 — IMPRV-026 — defined: float connected chat on wide
+  screens
+- 2026-05-27:10:51:24 — BUG-012 — defined: cancel from offerer leaves session
+  bound second start renders notfound
+- 2026-05-27:10:51:24 — BUG-011 — defined: end chat does not close channel so
+  peer stays connected
+- 2026-05-27:10:42:28 — BUG-010 — defined: restore wide-screen centering broken
+  by imprv-024 margin insets
 - 2026-05-27:10:20:33 — BUG-009 — done: stubbed `window.scrollTo` for the
   IMPRV-017 mount-side-effect test in `src/mobile-responsive.test.tsx` so the
   hook's pan-cancellation call no longer fires through jsdom's unimplemented
