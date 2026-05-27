@@ -20,6 +20,9 @@ id.
 
 ## Log
 
+- 2026-05-27:13:33:02 — IMPRV-030 — done: lastReadMessageId on
+  ConversationRecord, hook markRead + persist via a single-tx storage helper,
+  Last-read divider in transcript, IMPRV-029 pill scrolls to marker
 - 2026-05-27:13:12:38 — IMPRV-030 — started
 - 2026-05-27:13:09:29 — IMPRV-030 — defined: Read cursor with "Last read"
   divider; new-messages pill scrolls to the marker
