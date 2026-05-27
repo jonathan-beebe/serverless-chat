@@ -81,6 +81,28 @@ describe('storage conversations CRUD (FEAT-012 AC#1)', () => {
   })
 })
 
+describe('storage conversation lastReadMessageId (IMPRV-030)', () => {
+  it('round-trips a record carrying lastReadMessageId', async () => {
+    await upsertConversation(conv('a', { lastReadMessageId: 'm-7' }))
+    const got = await getConversation('a')
+    expect(got?.lastReadMessageId).toBe('m-7')
+  })
+
+  it('treats lastReadMessageId as optional — a record without it round-trips unchanged', async () => {
+    await upsertConversation(conv('a'))
+    const got = await getConversation('a')
+    expect(got).toBeTruthy()
+    expect(got?.lastReadMessageId).toBeUndefined()
+  })
+
+  it('upsertConversation overwrites lastReadMessageId in place', async () => {
+    await upsertConversation(conv('a', { lastReadMessageId: 'm-1' }))
+    await upsertConversation(conv('a', { lastReadMessageId: 'm-9' }))
+    const got = await getConversation('a')
+    expect(got?.lastReadMessageId).toBe('m-9')
+  })
+})
+
 describe('storage messages CRUD (FEAT-012 AC#1)', () => {
   it('appendMessage round-trips through listMessages', async () => {
     await upsertConversation(conv('a'))

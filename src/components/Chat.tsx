@@ -13,9 +13,16 @@ interface Props {
    *  message of this session (below). Driven by the hook's `hasResumed`
    *  latch — see `useChatSession.hasResumed`. */
   hasResumed?: boolean
+  /** IMPRV-030: id of the most-recent message this device has observed.
+   *  Forwarded to ChatTranscript to render the "Last read" divider and
+   *  to target the IMPRV-029 pill's scroll. */
+  lastReadMessageId?: string | null
+  /** IMPRV-030: invoked when a message bubble enters the viewport so the
+   *  session hook can advance the persisted cursor. */
+  onMarkRead?: (messageId: string) => void
 }
 
-export function Chat({ messages, onSend, disabled, hasResumed }: Props) {
+export function Chat({ messages, onSend, disabled, hasResumed, lastReadMessageId, onMarkRead }: Props) {
   const composerRef = useRef<ChatComposerHandle | null>(null)
 
   return (
@@ -35,7 +42,12 @@ export function Chat({ messages, onSend, disabled, hasResumed }: Props) {
         // doesn't yank the transcript.
         onCopySuccess={() => composerRef.current?.focus({ preventScroll: true })}
       />
-      <ChatTranscript messages={messages} hasResumed={hasResumed} />
+      <ChatTranscript
+        messages={messages}
+        hasResumed={hasResumed}
+        lastReadMessageId={lastReadMessageId}
+        onMarkRead={onMarkRead}
+      />
       <ChatComposer ref={composerRef} onSend={onSend} disabled={disabled} />
     </div>
   )

@@ -12,7 +12,7 @@ id.
 - DSGN: 1
 - ARCH: 2
 - FEAT: 16
-- IMPRV: 30
+- IMPRV: 31
 - MAINT: 1
 - A11Y: 37
 - RFCTR: 4
@@ -20,6 +20,9 @@ id.
 
 ## Log
 
+- 2026-05-27:13:12:38 — IMPRV-030 — started
+- 2026-05-27:13:09:29 — IMPRV-030 — defined: Read cursor with "Last read"
+  divider; new-messages pill scrolls to the marker
 - 2026-05-27:12:49:43 — RSRCH-003 — done: published
   docs/webrtc-recovery-options.md covering 3 disconnect classes, 4 recovery
   techniques, 4 signaling shapes, browser+NAT caveats, and code attach points

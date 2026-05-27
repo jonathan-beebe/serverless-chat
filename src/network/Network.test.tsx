@@ -34,6 +34,8 @@ function stubSession(telemetry: NetworkTelemetry): ChatSession {
     politelyAcceptOffer: async () => {},
     send: () => {},
     reset: () => {},
+    lastReadMessageId: null,
+    markRead: () => {},
   }
 }
 

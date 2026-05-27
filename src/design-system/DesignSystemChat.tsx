@@ -29,6 +29,11 @@ function buildChatFixture(): ChatMessage[] {
 export function DesignSystemChat() {
   const navigate = useNavigate()
   const [messages, setMessages] = useState<ChatMessage[]>(buildChatFixture)
+  // IMPRV-030: design-system route exercises the read-cursor visual + the
+  // re-routed IMPRV-029 pill. Pre-seed the cursor at the second-to-last
+  // fixture message so reviewers see the "Last read" divider above the
+  // newest message on first paint.
+  const [lastReadMessageId, setLastReadMessageId] = useState<string | null>('ds-4')
   const session: ChatSession = {
     state: 'connected',
     error: null,
@@ -54,6 +59,20 @@ export function DesignSystemChat() {
       ])
     },
     reset: () => {},
+    lastReadMessageId,
+    markRead: (messageId: string) => {
+      // Forward-only stub: mirrors the hook's contract so the design-system
+      // route exercises the same advancement semantics as production.
+      setLastReadMessageId((prev) => {
+        if (prev === messageId) return prev
+        const newIdx = messages.findIndex((m) => m.id === messageId)
+        if (newIdx === -1) return prev
+        if (prev === null) return messageId
+        const prevIdx = messages.findIndex((m) => m.id === prev)
+        if (prevIdx === -1) return messageId
+        return newIdx > prevIdx ? messageId : prev
+      })
+    },
   }
   return <Offerer session={session} conversationId={DS_PREVIEW_CONV_ID} onCancel={() => navigate('/design-system')} />
 }

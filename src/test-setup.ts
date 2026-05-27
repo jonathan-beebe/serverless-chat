@@ -5,6 +5,23 @@ import '@testing-library/jest-dom/vitest'
 // guard then short-circuits to "available" in tests.
 import 'fake-indexeddb/auto'
 
+// IMPRV-030: jsdom doesn't implement IntersectionObserver, but ChatTranscript
+// (and anything that renders Chat) now constructs one on mount. Install a
+// no-op global polyfill so components don't crash on `new IntersectionObserver`.
+// Tests that need to drive intersection entries (ChatTranscript.test.tsx) install
+// a richer per-file mock via `vi.stubGlobal` which transparently overrides this.
+if (typeof globalThis.IntersectionObserver === 'undefined') {
+  class NoopIntersectionObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    takeRecords(): IntersectionObserverEntry[] {
+      return []
+    }
+  }
+  ;(globalThis as { IntersectionObserver: unknown }).IntersectionObserver = NoopIntersectionObserver
+}
+
 // CR-014: with `test.isolate: false`, the JS env (and module graph) is
 // reused across test files in a worker, so `@testing-library/react`'s
 // import-time `afterEach(cleanup)` only registers against the first file

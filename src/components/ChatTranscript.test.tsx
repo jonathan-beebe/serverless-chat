@@ -1,7 +1,59 @@
 import { fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ChatTranscript } from './ChatTranscript'
 import type { ChatMessage } from '../core/rtc'
+
+// IMPRV-030: JSDOM doesn't implement IntersectionObserver. Tests that exercise
+// the read-cursor advancement need to (a) construct the component without
+// crashing on `new IntersectionObserver(...)`, and (b) drive intersection
+// entries imperatively to simulate bubbles entering the viewport. The mock
+// records every constructed observer instance and lets a test fire entries
+// targeted at the elements the component handed to `observe()`.
+class MockIntersectionObserver {
+  static instances: MockIntersectionObserver[] = []
+  callback: IntersectionObserverCallback
+  options: IntersectionObserverInit | undefined
+  observed: Element[] = []
+  constructor(cb: IntersectionObserverCallback, opts?: IntersectionObserverInit) {
+    this.callback = cb
+    this.options = opts
+    MockIntersectionObserver.instances.push(this)
+  }
+  observe(el: Element) {
+    this.observed.push(el)
+  }
+  unobserve(el: Element) {
+    this.observed = this.observed.filter((o) => o !== el)
+  }
+  disconnect() {
+    this.observed = []
+  }
+  takeRecords(): IntersectionObserverEntry[] {
+    return []
+  }
+  // Test helper: fire a callback as if the named elements crossed the
+  // intersection threshold (or fell back out). Only the fields the component
+  // reads need to be present.
+  fire(entries: Array<{ target: Element; isIntersecting?: boolean; intersectionRatio?: number }>) {
+    const full = entries.map(
+      (e) =>
+        ({
+          target: e.target,
+          isIntersecting: e.isIntersecting ?? true,
+          intersectionRatio: e.intersectionRatio ?? 1,
+        }) as unknown as IntersectionObserverEntry,
+    )
+    this.callback(full, this as unknown as IntersectionObserver)
+  }
+}
+
+beforeEach(() => {
+  MockIntersectionObserver.instances = []
+  vi.stubGlobal('IntersectionObserver', MockIntersectionObserver)
+})
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 // JSDOM doesn't actually lay out scrollable elements. `scrollHeight` /
 // `clientHeight` are always 0, and writes to `scrollTop` are real but
@@ -478,6 +530,131 @@ describe('ChatTranscript new-messages button (IMPRV-029)', () => {
     // is a sibling, not a child, of the scroll surface (so the live region
     // doesn't include it).
     expect(btn.closest('[role="log"]')).toBeNull()
+  })
+})
+
+describe('ChatTranscript read cursor + Last read divider (IMPRV-030)', () => {
+  function getMarker(): HTMLElement | null {
+    return document.querySelector('[data-testid="last-read-marker"]') as HTMLElement | null
+  }
+
+  it('renders a "Last read" divider just after the message at the cursor when there is at least one unread', () => {
+    const messages: ChatMessage[] = [msg('a', 'one'), msg('b', 'two'), msg('c', 'three')]
+    render(<ChatTranscript messages={messages} lastReadMessageId="b" />)
+    const marker = getMarker()
+    expect(marker).toBeTruthy()
+    expect(marker?.textContent).toMatch(/last read/i)
+  })
+
+  it('does NOT render the divider when lastReadMessageId is null', () => {
+    const messages: ChatMessage[] = [msg('a', 'one'), msg('b', 'two')]
+    render(<ChatTranscript messages={messages} lastReadMessageId={null} />)
+    expect(getMarker()).toBeNull()
+  })
+
+  it('does NOT render the divider when the cursor is at the newest message (nothing unread)', () => {
+    const messages: ChatMessage[] = [msg('a', 'one'), msg('b', 'two')]
+    render(<ChatTranscript messages={messages} lastReadMessageId="b" />)
+    expect(getMarker()).toBeNull()
+  })
+
+  it('does NOT render the divider when the cursor refers to a message that is not in the list (deleted / stale)', () => {
+    const messages: ChatMessage[] = [msg('a', 'one'), msg('b', 'two')]
+    render(<ChatTranscript messages={messages} lastReadMessageId="missing-id" />)
+    expect(getMarker()).toBeNull()
+  })
+
+  it('renders the divider with role="presentation" + aria-hidden so it stays out of the role=log live region (A11Y-018)', () => {
+    const messages: ChatMessage[] = [msg('a', 'one'), msg('b', 'two')]
+    render(<ChatTranscript messages={messages} lastReadMessageId="a" />)
+    const marker = getMarker()
+    expect(marker).toBeTruthy()
+    expect(marker?.getAttribute('role')).toBe('presentation')
+    expect(marker?.getAttribute('aria-hidden')).toBe('true')
+  })
+
+  it('attaches an IntersectionObserver entry per message bubble so cursor advancement can ride viewport entries', () => {
+    const messages: ChatMessage[] = [msg('a', 'one'), msg('b', 'two'), msg('c', 'three')]
+    render(<ChatTranscript messages={messages} />)
+    const [observer] = MockIntersectionObserver.instances
+    expect(observer).toBeTruthy()
+    // Each bubble should be observed. The exact element type doesn't matter
+    // for advancement (the component can pick li or the inner bubble div),
+    // but the count must match the message count.
+    expect(observer.observed).toHaveLength(3)
+  })
+
+  it('calls onMarkRead with a bubble`s message id when that bubble enters the viewport', () => {
+    const onMarkRead = vi.fn()
+    const messages: ChatMessage[] = [msg('a', 'one'), msg('b', 'two'), msg('c', 'three')]
+    render(<ChatTranscript messages={messages} onMarkRead={onMarkRead} />)
+    const [observer] = MockIntersectionObserver.instances
+    // Fire a single entry against bubble "b" (the middle message) — the
+    // forward-only semantics live in the hook's markRead, not the component;
+    // the component just forwards every observed entry.
+    observer.fire([{ target: observer.observed[1] }])
+    expect(onMarkRead).toHaveBeenCalledWith('b')
+  })
+
+  it('does NOT call onMarkRead for entries that are not intersecting (bubble scrolled away)', () => {
+    const onMarkRead = vi.fn()
+    const messages: ChatMessage[] = [msg('a', 'one'), msg('b', 'two')]
+    render(<ChatTranscript messages={messages} onMarkRead={onMarkRead} />)
+    const [observer] = MockIntersectionObserver.instances
+    observer.fire([{ target: observer.observed[0], isIntersecting: false, intersectionRatio: 0 }])
+    expect(onMarkRead).not.toHaveBeenCalled()
+  })
+
+  it('activating the IMPRV-029 pill scrolls the transcript so the Last-read marker sits at the bottom of the viewport', () => {
+    const initial: ChatMessage[] = [msg('a', 'one'), msg('b', 'two')]
+    const { rerender } = render(<ChatTranscript messages={initial} lastReadMessageId="a" />)
+    const transcript = getTranscript()
+
+    // Simulate user scrolled up so the IMPRV-029 pill surfaces.
+    stubScroll(transcript, { scrollHeight: 400, clientHeight: 200 })
+    transcript.scrollTop = 0
+    fireEvent.scroll(transcript)
+
+    // New message arrives — pill appears.
+    stubScroll(transcript, { scrollHeight: 460, clientHeight: 200 })
+    rerender(<ChatTranscript messages={[...initial, msg('c', 'three')]} lastReadMessageId="a" />)
+
+    // Stub the marker's geometry so the click handler can read offsetTop /
+    // offsetHeight. The marker sits between message "a" (read) and message
+    // "b" (first unread) — place it at 100px down with 24px height; the
+    // expected scrollTop puts the marker's bottom edge at the bottom of
+    // the 200px-tall viewport: markerOffsetTop + markerHeight - clientHeight
+    // = 100 + 24 - 200 = -76.
+    const marker = getMarker() as HTMLElement
+    Object.defineProperty(marker, 'offsetTop', { configurable: true, value: 100 })
+    Object.defineProperty(marker, 'offsetHeight', { configurable: true, value: 24 })
+
+    fireEvent.click(screen.getByRole('button', { name: /new message/i }))
+
+    // Marker's bottom edge at viewport's bottom edge: scrollTop is whatever
+    // puts that pixel-row visible. With offsetTop=100, offsetHeight=24,
+    // clientHeight=200 → scrollTop = 100 + 24 - 200 = -76. Browsers clamp
+    // to 0, but jsdom doesn't — the assertion guards the formula, not the
+    // clamping. For a deeper transcript the value is positive.
+    expect(transcript.scrollTop).toBe(-76)
+  })
+
+  it('IMPRV-029 pill falls back to scrollHeight when no Last-read marker is rendered (caught-up case)', () => {
+    const initial: ChatMessage[] = [msg('a', 'one')]
+    const { rerender } = render(<ChatTranscript messages={initial} lastReadMessageId="a" />)
+    const transcript = getTranscript()
+    stubScroll(transcript, { scrollHeight: 400, clientHeight: 200 })
+    transcript.scrollTop = 0
+    fireEvent.scroll(transcript)
+    // Cursor is at "a"; new message "b" arrives — marker would render after
+    // the new message commit? No — cursor stays at "a"; "b" is unread; the
+    // marker renders. This case isn't a fallback case. Re-shape: use a
+    // null cursor so no marker exists.
+    stubScroll(transcript, { scrollHeight: 460, clientHeight: 200 })
+    rerender(<ChatTranscript messages={[...initial, msg('b', 'two')]} lastReadMessageId={null} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /new message/i }))
+    expect(transcript.scrollTop).toBe(460) // scrollHeight
   })
 })
 

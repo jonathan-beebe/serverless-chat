@@ -28,6 +28,9 @@ function makeSession(overrides: Partial<ChatSession> = {}): ChatSession {
     politelyAcceptOffer: vi.fn().mockResolvedValue(undefined),
     send: vi.fn(),
     reset: vi.fn(),
+    // IMPRV-030: read-cursor pair.
+    lastReadMessageId: null,
+    markRead: vi.fn(),
     ...overrides,
   }
 }

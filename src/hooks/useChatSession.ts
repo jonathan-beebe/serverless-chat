@@ -52,6 +52,20 @@ export interface ChatSession {
   politelyAcceptOffer: (offerCode: string, conversationId?: string) => Promise<void>
   send: (text: string) => void
   reset: () => void
+  /**
+   * IMPRV-030: id of the most-recent message this device has observed in
+   * the viewport. Null on a fresh hook and after `reset()`. Loaded from
+   * the persisted ConversationRecord on `bindConversation`. Advanced via
+   * `markRead` (forward-only, no-op for unknown ids).
+   */
+  lastReadMessageId: string | null
+  /**
+   * IMPRV-030: ask the hook to advance the read cursor to `messageId`.
+   * Forward-only — the cursor never regresses. No-op if `messageId` is
+   * not in the current messages list, or already behind the cursor.
+   * Side effect: the new cursor is persisted to the ConversationRecord.
+   */
+  markRead: (messageId: string) => void
 }
 
 /**
@@ -147,6 +161,10 @@ export function useChatSession(): ChatSession {
   const [telemetry, setTelemetry] = useState<NetworkTelemetry>(emptyTelemetry)
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [hasResumed, setHasResumed] = useState(false)
+  // IMPRV-030: read cursor. Null on a fresh hook and after reset(); loaded
+  // from the persisted ConversationRecord on bind; advanced by markRead in
+  // a forward-only manner; persisted via the effect below.
+  const [lastReadMessageId, setLastReadMessageId] = useState<string | null>(null)
   // BUG-007: monotonic counter that `transition()` bumps from inside its
   // `setState` updater to *request* a telemetry commit without calling
   // `setTelemetry` from within another setter's updater. A `useEffect` below
@@ -207,6 +225,18 @@ export function useChatSession(): ChatSession {
   // FEAT-010: differentiates which side of the handshake we are. Offerers
   // initiate the sync probe on `open`; answerers wait passively for one.
   const roleRef = useRef<'offerer' | 'answerer' | null>(null)
+  // IMPRV-030: ref-shadow of `messages` so markRead's forward-only index
+  // comparison can read the latest array without recreating the callback
+  // on every messages update. Same pattern conversationIdRef uses.
+  const messagesRef = useRef<ChatMessage[]>([])
+  useEffect(() => {
+    messagesRef.current = messages
+  }, [messages])
+  // IMPRV-030: ref-shadow of `lastReadMessageId` so the persist effect can
+  // skip the load-time reflection (initial bind loads the persisted cursor
+  // into state; without this gate the effect would immediately write the
+  // same value back).
+  const lastReadLoadedRef = useRef(false)
 
   const pushSample = useCallback((sample: TelemetrySample) => {
     const buf = samplesRef.current
@@ -264,6 +294,44 @@ export function useChatSession(): ChatSession {
     if (telemetryCommitVersion === 0) return
     commitTelemetry()
   }, [telemetryCommitVersion, commitTelemetry])
+
+  // IMPRV-030: forward-only cursor setter. Reads the current messages via
+  // `messagesRef` so the callback identity stays stable across renders (and
+  // the ChatTranscript's IntersectionObserver effect doesn't churn on every
+  // message arrival). Compare-and-set: only advance if the new id sits at
+  // a higher index than the current cursor. Silently no-ops on:
+  //   - the new id not being in the list (stale observation, deleted message)
+  //   - the new id being behind the cursor (scrollback re-firing)
+  //   - the new id equaling the cursor (idempotent re-observation)
+  const markRead = useCallback((messageId: string) => {
+    setLastReadMessageId((prev) => {
+      if (prev === messageId) return prev
+      const arr = messagesRef.current
+      const newIdx = arr.findIndex((m) => m.id === messageId)
+      if (newIdx === -1) return prev
+      if (prev === null) return messageId
+      const prevIdx = arr.findIndex((m) => m.id === prev)
+      // If the previous cursor refers to a message that's no longer in the
+      // list (deleted, or pre-bind stale), adopt the new id rather than
+      // silently dropping the observation.
+      if (prevIdx === -1) return messageId
+      return newIdx > prevIdx ? messageId : prev
+    })
+  }, [])
+
+  // IMPRV-030: persist the cursor whenever it changes. Skips the load-time
+  // reflection — `bindConversation` reads the persisted cursor and writes it
+  // into state, which would otherwise fire this effect with the same value
+  // we just read. The gate flips inside `bindConversation` after the load
+  // completes (or on the first user-driven markRead).
+  useEffect(() => {
+    if (!lastReadLoadedRef.current) return
+    if (conversationId === null) return
+    if (lastReadMessageId === null) return
+    storage.setLastReadMessageId(conversationId, lastReadMessageId).catch((err) => {
+      console.warn('[storage] persisting lastReadMessageId failed', err)
+    })
+  }, [lastReadMessageId, conversationId])
 
   const teardown = useCallback(() => {
     channelRef.current?.close()
@@ -720,6 +788,14 @@ export function useChatSession(): ChatSession {
         } else {
           selfPeerIdRef.current = existing.selfPeerId
         }
+        // IMPRV-030: hydrate the read cursor from the persisted conversation
+        // row. Always sets state (including to null for fresh / pre-fix
+        // records) so re-binding from a different conversation doesn't
+        // strand the prior conversation's cursor in state. The gate flips
+        // AFTER the setState so the persist-effect either short-circuits on
+        // null OR catches the equal-value no-op on the next pass.
+        setLastReadMessageId(existing?.lastReadMessageId ?? null)
+        lastReadLoadedRef.current = true
         const records = await storage.listMessages(id)
         // Snapshot for the outgoing `history` envelope reflects the persisted
         // store at bind time — live entries that arrived mid-bind are already
@@ -944,6 +1020,13 @@ export function useChatSession(): ChatSession {
     bindPromiseRef.current = null
     hasResumedRef.current = false
     setHasResumed(false)
+    // IMPRV-030: drop the in-memory cursor without touching the persisted
+    // row (parity with `messages` / `selfPeerId` — reset is a rollback of
+    // the live session, NOT a delete of history). The next bind reloads
+    // it from IDB; the gate goes back to false so the load doesn't re-fire
+    // the persist effect.
+    setLastReadMessageId(null)
+    lastReadLoadedRef.current = false
     setTelemetry(emptyTelemetry())
     transition('idle')
   }, [teardown, transition])
@@ -963,5 +1046,7 @@ export function useChatSession(): ChatSession {
     politelyAcceptOffer,
     send,
     reset,
+    lastReadMessageId,
+    markRead,
   }
 }

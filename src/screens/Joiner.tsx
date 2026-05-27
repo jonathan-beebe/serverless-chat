@@ -142,7 +142,13 @@ export function Joiner({ session, offerCode, conversationId, onCancel, onOfferCa
             End chat
           </Button>
         </header>
-        <Chat messages={session.messages} onSend={session.send} hasResumed={session.hasResumed} />
+        <Chat
+          messages={session.messages}
+          onSend={session.send}
+          hasResumed={session.hasResumed}
+          lastReadMessageId={session.lastReadMessageId}
+          onMarkRead={session.markRead}
+        />
       </ScreenContainer>
     )
   }

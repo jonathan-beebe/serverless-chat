@@ -36,6 +36,15 @@ export interface ConversationRecord {
    * records — readers fall back to the legacy `from` field on each message.
    */
   selfPeerId?: string
+  /**
+   * IMPRV-030: id of the most-recent message this device has observed in
+   * the viewport. The transcript renders a "Last read" divider just below
+   * the message with this id, and the IMPRV-029 new-messages pill scrolls
+   * to that divider. Absent on records written before this field shipped —
+   * those conversations show no marker until the user reads something
+   * (same forward-only advancement as new records).
+   */
+  lastReadMessageId?: string
 }
 
 export interface MessageRecord {
@@ -115,6 +124,7 @@ function isConversationRecord(value: unknown): value is ConversationRecord {
   if (typeof v.lastActivityAt !== 'number') return false
   if (v.label !== undefined && typeof v.label !== 'string') return false
   if (v.selfPeerId !== undefined && typeof v.selfPeerId !== 'string') return false
+  if (v.lastReadMessageId !== undefined && typeof v.lastReadMessageId !== 'string') return false
   return true
 }
 
@@ -326,6 +336,31 @@ export async function cullEmptyConversations(): Promise<string[]> {
     console.info('[storage] culled empty conversation', id)
   }
   return removed
+}
+
+/**
+ * IMPRV-030: persist the read cursor for a conversation in a SINGLE
+ * readwrite transaction. A naive caller-side load + `upsertConversation`
+ * would race with `appendMessage` (which also touches the row to refresh
+ * `lastActivityAt`); pairing the read and the write inside one tx avoids
+ * the stale-read / lost-update window. No-op when the conversation row is
+ * missing (caller likely bound the conv but reset before the seed
+ * upsert landed; persisting a phantom cursor would resurrect a deleted
+ * conversation).
+ */
+export async function setLastReadMessageId(id: string, messageId: string): Promise<void> {
+  const db = await openDb()
+  const tx = db.transaction(STORE_CONVERSATIONS, 'readwrite')
+  const store = tx.objectStore(STORE_CONVERSATIONS)
+  const existing = await wrap(store.get(id))
+  if (!existing || !isConversationRecord(existing)) return
+  if (existing.lastReadMessageId === messageId) return
+  store.put({ ...existing, lastReadMessageId: messageId })
+  await new Promise<void>((resolve, reject) => {
+    tx.oncomplete = () => resolve()
+    tx.onerror = () => reject(tx.error)
+    tx.onabort = () => reject(tx.error)
+  })
 }
 
 export async function renameConversation(id: string, label: string): Promise<void> {

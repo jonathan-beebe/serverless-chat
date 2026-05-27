@@ -70,6 +70,10 @@ function stubSession(overrides: Partial<ChatSession> = {}): ChatSession {
     politelyAcceptOffer: async () => {},
     send: () => {},
     reset: () => {},
+    // IMPRV-030: showcase stubs declare the cursor pair explicitly so the
+    // ChatSession type narrows without `undefined`.
+    lastReadMessageId: null,
+    markRead: () => {},
     ...overrides,
   }
 }

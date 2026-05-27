@@ -2,7 +2,7 @@ import { act, renderHook } from '@testing-library/react'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { IDBFactory } from 'fake-indexeddb'
 import { useChatSession } from './useChatSession'
-import { __resetForTests as resetStorage } from '../core/storage'
+import { __resetForTests as resetStorage, getConversation, upsertConversation } from '../core/storage'
 
 // Minimal stubs for the slice of WebRTC the hook touches. We don't exercise
 // real ICE here — these tests pin down the controller's state machine,
@@ -1878,5 +1878,136 @@ describe('useChatSession FEAT-012 resume', () => {
     expect(stored.find((m) => m.id === 'leg-1')?.senderId).toBeUndefined()
     expect(stored.find((m) => m.id === 'leg-2')?.from).toBe('me')
     expect(stored.find((m) => m.id === 'leg-2')?.senderId).toBeUndefined()
+  })
+})
+
+describe('useChatSession read cursor (IMPRV-030)', () => {
+  // Helper: produce a JSON-encoded chat envelope as it would arrive over the
+  // wire. Same shape the messages-tests use; duplicated here to keep the
+  // describe block self-contained.
+  function chatEnvelope(id: string, text: string, at = 1000) {
+    return JSON.stringify({ v: 1, t: 'chat', id, sentAt: at, text })
+  }
+
+  it('exposes lastReadMessageId (null on a fresh hook) and a markRead callback', () => {
+    const { result } = renderHook(() => useChatSession())
+    expect(result.current.lastReadMessageId).toBeNull()
+    expect(typeof result.current.markRead).toBe('function')
+  })
+
+  it('markRead(id) advances lastReadMessageId to the id of an in-list message', async () => {
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsOfferer('test-conv')
+    })
+    act(() => lastChannel!.open())
+    act(() => lastChannel!.onmessage?.({ data: chatEnvelope('m-1', 'hi', 1000) }))
+    act(() => lastChannel!.onmessage?.({ data: chatEnvelope('m-2', 'hey', 2000) }))
+
+    act(() => result.current.markRead('m-1'))
+    expect(result.current.lastReadMessageId).toBe('m-1')
+  })
+
+  it('markRead is forward-only — calling with an older message id is a no-op', async () => {
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsOfferer('test-conv')
+    })
+    act(() => lastChannel!.open())
+    act(() => lastChannel!.onmessage?.({ data: chatEnvelope('m-1', 'hi', 1000) }))
+    act(() => lastChannel!.onmessage?.({ data: chatEnvelope('m-2', 'hey', 2000) }))
+    act(() => lastChannel!.onmessage?.({ data: chatEnvelope('m-3', 'yo', 3000) }))
+
+    // Advance to m-3, then attempt to regress to m-1.
+    act(() => result.current.markRead('m-3'))
+    expect(result.current.lastReadMessageId).toBe('m-3')
+    act(() => result.current.markRead('m-1'))
+    expect(result.current.lastReadMessageId).toBe('m-3')
+  })
+
+  it('markRead no-ops when given an id not in the current messages list', async () => {
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsOfferer('test-conv')
+    })
+    act(() => lastChannel!.open())
+    act(() => lastChannel!.onmessage?.({ data: chatEnvelope('m-1', 'hi') }))
+
+    act(() => result.current.markRead('does-not-exist'))
+    expect(result.current.lastReadMessageId).toBeNull()
+  })
+
+  it('bindConversation loads an existing lastReadMessageId from persisted storage', async () => {
+    // Plant a conversation row with a pre-existing cursor — simulates the
+    // resume case where the user closed the tab mid-read and came back.
+    await upsertConversation({
+      id: 'persisted',
+      createdAt: 1_700_000_000_000,
+      lastActivityAt: 1_700_000_000_000,
+      selfPeerId: 'peer-x',
+      lastReadMessageId: 'm-resumed',
+    })
+
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.bindConversation('persisted')
+    })
+
+    expect(result.current.lastReadMessageId).toBe('m-resumed')
+  })
+
+  it('markRead persists the new cursor to the conversation record', async () => {
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsOfferer('persist-conv')
+      // startAsOfferer fires the IDB bind without awaiting (per its own
+      // comment at useChatSession.ts:780). Park on a real macrotask so the
+      // bind's `lastReadLoadedRef.current = true` flip settles before we
+      // attempt the markRead — otherwise the persist effect short-circuits
+      // because it can't tell the cursor was meaningfully advanced.
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+    act(() => lastChannel!.open())
+    act(() => lastChannel!.onmessage?.({ data: chatEnvelope('m-1', 'hi', 1000) }))
+    act(() => lastChannel!.onmessage?.({ data: chatEnvelope('m-2', 'hey', 2000) }))
+
+    await act(async () => {
+      result.current.markRead('m-2')
+      // The persist effect schedules an async IDB round-trip (get → upsert);
+      // fake-indexeddb uses setImmediate-style scheduling internally, so we
+      // park on a real macrotask boundary before reading the stored row.
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+
+    // Pre-flight: confirm the in-memory cursor advanced. If this assertion
+    // fails, the bug is in markRead's forward-only path; if it passes and
+    // the next one fails, the bug is in the persist effect or its gate.
+    expect(result.current.lastReadMessageId).toBe('m-2')
+    const stored = await getConversation('persist-conv')
+    expect(stored?.lastReadMessageId).toBe('m-2')
+  })
+
+  it('reset() clears in-memory lastReadMessageId without deleting the persisted cursor', async () => {
+    await upsertConversation({
+      id: 'survives-reset',
+      createdAt: 1_700_000_000_000,
+      lastActivityAt: 1_700_000_000_000,
+      selfPeerId: 'peer-x',
+      lastReadMessageId: 'm-keep',
+    })
+
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.bindConversation('survives-reset')
+    })
+    expect(result.current.lastReadMessageId).toBe('m-keep')
+
+    act(() => result.current.reset())
+
+    expect(result.current.lastReadMessageId).toBeNull()
+    // The persisted row keeps the cursor — reset() is the in-memory rollback,
+    // not a delete of stored history (same contract as messages/selfPeerId).
+    const stored = await getConversation('survives-reset')
+    expect(stored?.lastReadMessageId).toBe('m-keep')
   })
 })

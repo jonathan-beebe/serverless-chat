@@ -38,6 +38,8 @@ export function makeStubSession(overrides: Partial<ChatSession> = {}): ChatSessi
     politelyAcceptOffer: async () => {},
     send: () => {},
     reset: () => {},
+    lastReadMessageId: null,
+    markRead: () => {},
     ...overrides,
   }
 }

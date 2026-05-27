@@ -9,6 +9,16 @@ interface Props {
    *  message of this session (below). Driven by the hook's `hasResumed`
    *  latch — see `useChatSession.hasResumed`. */
   hasResumed?: boolean
+  /** IMPRV-030: id of the most-recent message this device has observed in
+   *  the viewport. The transcript renders a "Last read" divider just after
+   *  the message with this id when at least one newer message exists.
+   *  Null / unknown id / cursor-at-newest hides the marker. */
+  lastReadMessageId?: string | null
+  /** IMPRV-030: invoked whenever a message bubble enters the viewport.
+   *  The hook's forward-only `markRead` filters out scrollback re-entries
+   *  and unknown ids; the transcript fires unconditionally on every
+   *  intersection. */
+  onMarkRead?: (messageId: string) => void
 }
 
 // Distance (in px) from the bottom within which we still consider the user
@@ -25,8 +35,13 @@ type TranscriptItem =
   | { kind: 'date'; key: string; date: Date }
   | { kind: 'message'; message: ChatMessage }
   | { kind: 'resume'; key: string }
+  | { kind: 'last-read'; key: string }
 
-function buildItems(messages: ChatMessage[], resumeIndex: number | null): TranscriptItem[] {
+function buildItems(
+  messages: ChatMessage[],
+  resumeIndex: number | null,
+  lastReadIndex: number | null,
+): TranscriptItem[] {
   const out: TranscriptItem[] = []
   let lastDay: string | null = null
   for (let i = 0; i < messages.length; i += 1) {
@@ -46,11 +61,19 @@ function buildItems(messages: ChatMessage[], resumeIndex: number | null): Transc
       lastDay = day
     }
     out.push({ kind: 'message', message: m })
+    // IMPRV-030: drop the "Last read" divider AFTER the cursor message and
+    // only when there's at least one newer message in the list. lastReadIndex
+    // is null when the cursor is unknown / refers to a deleted message;
+    // lastReadIndex === messages.length - 1 means the user is caught up.
+    // Either case suppresses the marker.
+    if (lastReadIndex !== null && i === lastReadIndex && i < messages.length - 1) {
+      out.push({ kind: 'last-read', key: 'last-read-marker' })
+    }
   }
   return out
 }
 
-export function ChatTranscript({ messages, hasResumed }: Props) {
+export function ChatTranscript({ messages, hasResumed, lastReadMessageId, onMarkRead }: Props) {
   // Scroll surface + log live region are the same wrapper <div> (A11Y-018):
   // putting `role="log"` on a wrapper (instead of swapping the <ol>'s implicit
   // list role) lets the empty-state placeholder sit *outside* the live region
@@ -88,7 +111,79 @@ export function ChatTranscript({ messages, hasResumed }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasResumed])
 
-  const items = useMemo(() => buildItems(messages, resumeBoundary), [messages, resumeBoundary])
+  // IMPRV-030: resolve the cursor message id to its index in the current
+  // list. -1 (returned by findIndex when the id isn't present, or when the
+  // cursor is null) becomes a sentinel `null` for buildItems so the marker
+  // simply isn't pushed — handles the "cursor refers to a deleted message"
+  // edge case the ticket flagged.
+  const lastReadIndex = useMemo(() => {
+    if (!lastReadMessageId) return null
+    const idx = messages.findIndex((m) => m.id === lastReadMessageId)
+    return idx === -1 ? null : idx
+  }, [messages, lastReadMessageId])
+
+  const items = useMemo(
+    () => buildItems(messages, resumeBoundary, lastReadIndex),
+    [messages, resumeBoundary, lastReadIndex],
+  )
+
+  // IMPRV-030: ref-shadow of `onMarkRead` so the observer's callback (created
+  // once in an effect with empty deps) reads the latest version without
+  // forcing the effect to re-run on every parent re-render.
+  const onMarkReadRef = useRef(onMarkRead)
+  useEffect(() => {
+    onMarkReadRef.current = onMarkRead
+  }, [onMarkRead])
+
+  // IMPRV-030: per-bubble registration into a single IntersectionObserver.
+  // The component renders message bubbles inside an <ol>; we capture each
+  // bubble's <li> via the ref-callback below and observe()/unobserve() it
+  // as it enters/leaves the React tree. The observer fires
+  // `onMarkRead(messageId)` whenever a bubble crosses the threshold; the
+  // hook's `markRead` filters re-entries (forward-only).
+  const observerRef = useRef<IntersectionObserver | null>(null)
+  const bubbleRefs = useRef<Map<string, Element>>(new Map())
+  useEffect(() => {
+    const obs = new IntersectionObserver(
+      (entries) => {
+        const cb = onMarkReadRef.current
+        if (!cb) return
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue
+          const id = (entry.target as HTMLElement).dataset.messageId
+          if (id) cb(id)
+        }
+      },
+      // root null → observe against the viewport. The transcript itself is a
+      // scroll container, but IntersectionObserver tests scroll roots via
+      // `root: <Element>`. We can't read transcriptRef.current at effect
+      // setup time reliably (it commits in the same phase), and the
+      // viewport-default is correct for the "marker tracks reading position"
+      // outcome on bottom-anchored scroll where bubbles render bottom-up.
+      undefined,
+    )
+    observerRef.current = obs
+    // Observe any bubbles that were captured before this effect ran (initial
+    // mount: the ref callbacks fire during render, BEFORE the useEffect).
+    for (const el of bubbleRefs.current.values()) obs.observe(el)
+    return () => {
+      obs.disconnect()
+      observerRef.current = null
+    }
+  }, [])
+
+  const registerBubble = (id: string) => (el: HTMLLIElement | null) => {
+    const map = bubbleRefs.current
+    const prev = map.get(id)
+    if (el === prev) return
+    if (prev) observerRef.current?.unobserve(prev)
+    if (el) {
+      map.set(id, el)
+      observerRef.current?.observe(el)
+    } else {
+      map.delete(id)
+    }
+  }
 
   // IMPRV-029: counter of messages that arrived while the user was scrolled
   // back beyond the anti-yank threshold. Drives the "N new messages" pill —
@@ -137,10 +232,21 @@ export function ChatTranscript({ messages, hasResumed }: Props) {
   // reset the counter. Updates `wasNearBottomRef` synchronously so the very
   // next arrival doesn't increment the counter again before `onScroll`
   // fires from the programmatic scroll.
+  // IMPRV-030: when a "Last read" marker is rendered, the scroll target is
+  // the marker (not the bottom). The marker's *bottom* edge lands at the
+  // viewport's bottom edge — the last-read tail of messages is visible
+  // above the marker, the first unread sits just below it (off-screen,
+  // requiring further scroll). Falls back to scrollHeight when no marker
+  // is rendered (caught-up case).
   const onNewMessagesClick = () => {
     const el = transcriptRef.current
     if (el) {
-      el.scrollTop = el.scrollHeight
+      const marker = el.querySelector('[data-testid="last-read-marker"]') as HTMLElement | null
+      if (marker) {
+        el.scrollTop = marker.offsetTop + marker.offsetHeight - el.clientHeight
+      } else {
+        el.scrollTop = el.scrollHeight
+      }
       wasNearBottomRef.current = true
     }
     setNewMessagesCount(0)
@@ -231,6 +337,25 @@ export function ChatTranscript({ messages, hasResumed }: Props) {
                   </li>
                 )
               }
+              if (item.kind === 'last-read') {
+                // IMPRV-030: boundary between the cohort the user has
+                // already seen (above) and the unread tail (below). Same
+                // presentation/aria-hidden treatment as the FEAT-012 resume
+                // divider so the log live region doesn't announce "Last
+                // read" on every messages-state commit. The IMPRV-029 pill's
+                // scroll handler keys on `data-testid="last-read-marker"`
+                // to find this node's offset.
+                return (
+                  <li
+                    key={item.key}
+                    role="presentation"
+                    aria-hidden="true"
+                    data-testid="last-read-marker"
+                    className="py-1">
+                    <Divider>Last read</Divider>
+                  </li>
+                )
+              }
               const m = item.message
               const isMe = m.from === 'me'
               // FEAT-010: outgoing bubbles render a delivery indicator next
@@ -241,7 +366,11 @@ export function ChatTranscript({ messages, hasResumed }: Props) {
               // the receiver side fire automatically without rendering).
               const delivered = m.delivery === 'delivered'
               return (
-                <li key={m.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                <li
+                  key={m.id}
+                  ref={registerBubble(m.id)}
+                  data-message-id={m.id}
+                  className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
                   {/* Visually-hidden prefix so the log announcement includes the speaker (A11Y-004). */}
                   <span className="sr-only">{isMe ? 'You said: ' : 'They said: '}</span>
                   <div
