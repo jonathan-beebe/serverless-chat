@@ -20,6 +20,16 @@ id.
 
 ## Log
 
+- 2026-05-27:08:49:30 — IMPRV-023 — done: generated `pwa-192x192.png`,
+  `pwa-512x512.png`, `pwa-maskable-512x512.png` (10% safe-zone inset), and
+  `apple-touch-icon.png` from `public/favicon.svg` via
+  `@vite-pwa/assets-generator` (config: `pwa-assets.config.ts`, script:
+  `npm run generate:icons`); split the maskable entry in `vite.config.js` to its
+  own `src`; added `<link rel="apple-touch-icon">` plus the two
+  `apple-mobile-web-app-*` meta lines to `index.html`; new
+  `src/pwa-icons.test.ts` asserts the iOS meta and that every manifest icon
+  `src` resolves to a file in `public/`
+- 2026-05-27:08:44:54 — IMPRV-023 — started
 - 2026-05-27:08:44:00 — FEAT-015 — done: added `useInstallPrompt` hook (captures
   `beforeinstallprompt`, holds the event after `preventDefault()`, exposes
   `promptInstall()`, clears on `appinstalled` or after `userChoice` resolves)
