@@ -331,6 +331,49 @@ describe('ChatTranscript delivery indicator (FEAT-010)', () => {
   })
 })
 
+describe('ChatTranscript bottom anchoring (IMPRV-028)', () => {
+  it('makes the scroll container a flex column so flex auto-margins can anchor content to the bottom', () => {
+    render(<ChatTranscript messages={[msg('a', 'hi', 'them')]} />)
+    const log = getTranscript()
+    expect(log.className).toMatch(/\bflex\b/)
+    expect(log.className).toMatch(/\bflex-col\b/)
+    // Negative guard: option 2 (`flex-col-reverse`) was explicitly rejected
+    // in the ticket recommendation because it desyncs DOM order from visual
+    // order and complicates the A11Y-018 live-region contract.
+    expect(log.className).not.toMatch(/\bflex-col-reverse\b/)
+  })
+
+  it('pushes the message <ol> to the bottom of the transcript via mt-auto', () => {
+    render(<ChatTranscript messages={[msg('a', 'one'), msg('b', 'two')]} />)
+    const list = screen.getByRole('list')
+    expect(list.className).toMatch(/\bmt-auto\b/)
+  })
+
+  it('pushes the empty-state placeholder to the bottom of the transcript via mt-auto', () => {
+    render(<ChatTranscript messages={[]} />)
+    const log = getTranscript()
+    const placeholder = log.querySelector('p') as HTMLParagraphElement
+    expect(placeholder).toBeTruthy()
+    expect(placeholder.className).toMatch(/\bmt-auto\b/)
+  })
+
+  it('preserves chronological DOM order (oldest first, newest last) so A11Y-018 live-region additions remain correct', () => {
+    const t1 = DEFAULT_AT
+    const t2 = DEFAULT_AT + 60_000
+    const t3 = DEFAULT_AT + 120_000
+    const messages: ChatMessage[] = [
+      msg('a', 'first', 'them', t1),
+      msg('b', 'second', 'me', t2),
+      msg('c', 'third', 'them', t3),
+    ]
+    render(<ChatTranscript messages={messages} />)
+
+    const list = screen.getByRole('list')
+    const bubbleTexts = Array.from(list.querySelectorAll('[data-testid^="message-text-"]')).map((el) => el.textContent)
+    expect(bubbleTexts).toEqual(['first', 'second', 'third'])
+  })
+})
+
 describe('ChatTranscript responsive border (IMPRV-027)', () => {
   it('gates the border + rounded-corner card chrome behind `sm:` so phones get a clean edge-to-edge transcript while tablets/desktops keep the framed card', () => {
     // Below 640px: no border, no rounded corners — the surface reads

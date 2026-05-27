@@ -139,13 +139,21 @@ export function ChatTranscript({ messages, hasResumed }: Props) {
       // The bg tint, padding, focus ring, and scroll affordance stay
       // unconditional; the focus ring is a `ring`, not a `border-color`
       // swap, so keyboard focus still paints correctly on mobile.
-      className="flex-1 overflow-y-auto overscroll-contain bg-white/50 p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 sm:rounded-md sm:border sm:border-stone-300 dark:bg-stone-900/50 dark:sm:border-stone-700">
+      // IMPRV-028: the scroll surface is itself a flex column so a single
+      // `mt-auto` on its child can push the message list (or the empty-state
+      // placeholder) to the bottom edge — adjacent to the composer. When the
+      // content is shorter than the viewport, the auto top margin absorbs the
+      // remaining space; once content exceeds the viewport the margin
+      // collapses and normal scrolling resumes with the newest message
+      // pinned at the bottom. DOM order stays chronological (oldest first)
+      // so A11Y-018's `aria-live` additions still announce the newcomer.
+      className="flex flex-1 flex-col overflow-y-auto overscroll-contain bg-white/50 p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 sm:rounded-md sm:border sm:border-stone-300 dark:bg-stone-900/50 dark:sm:border-stone-700">
       {messages.length === 0 ? (
-        <p aria-hidden="true" className="text-sm text-stone-600 dark:text-stone-400">
+        <p aria-hidden="true" className="mt-auto text-sm text-stone-600 dark:text-stone-400">
           No messages yet. Say hello.
         </p>
       ) : (
-        <ol className="space-y-2">
+        <ol className="mt-auto space-y-2">
           {items.map((item) => {
             if (item.kind === 'date') {
               // Chrome, not content. `role="presentation"` neutralizes the

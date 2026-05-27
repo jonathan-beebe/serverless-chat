@@ -8,11 +8,11 @@ id.
 
 ## Next ticket numbers
 
-- RSRCH: 3
+- RSRCH: 4
 - DSGN: 1
 - ARCH: 2
 - FEAT: 16
-- IMPRV: 28
+- IMPRV: 30
 - MAINT: 1
 - A11Y: 37
 - RFCTR: 4
@@ -20,6 +20,13 @@ id.
 
 ## Log
 
+- 2026-05-27:12:34:53 — IMPRV-028 — started
+- 2026-05-27:12:32:57 — RSRCH-003 — defined: Survey WebRTC connection recovery
+  options under current and hypothetical signaling models
+- 2026-05-27:12:25:15 — IMPRV-029 — defined: New-messages button surfaces when
+  scrolled back and new messages arrive
+- 2026-05-27:12:21:08 — IMPRV-028 — defined: Anchor chat transcript to bottom so
+  newest message sits adjacent to composer
 - 2026-05-27:11:32:00 — IMPRV-027 — done: gated the transcript wrapper's
   `border` / `border-stone-300` / `dark:border-stone-700` / `rounded-md`
   utilities behind `sm:` in `src/components/ChatTranscript.tsx` so phone- width
