@@ -1,8 +1,9 @@
 ---
 id: BUG-012
 type: bug
-status: open
+status: resolved
 created: 2026-05-27
+resolved: 2026-05-27
 ---
 
 # BUG-012: cancel from offerer leaves session bound second start renders notfound

@@ -219,6 +219,45 @@ describe('App focus-on-mount (WCAG 2.4.3)', () => {
   })
 })
 
+describe('App cancel-restart sequence (BUG-012 / sibling of BUG-011)', () => {
+  // ARCH-001 dropped the pre-route `session.reset()` from `App.goHome`. The
+  // resulting "Cancel leaves session bound" stranded every subsequent
+  // "Start a chat" click on NotFound: Home.startNew calls
+  // session.startAsOfferer(newId2), the hook's `if (state !== 'idle') return`
+  // guard short-circuits (state is still 'awaiting-answer' from the canceled
+  // attempt), and ConversationRoute falls through to NotFound for the
+  // freshly-minted id.
+  //
+  // BUG-011's fix restores `session.reset()` in ConversationRoute's onCancel
+  // sites; this test pins that retry-after-cancel lands on Offerer, never on
+  // NotFound.
+
+  it('a second "Start a chat" after Cancel routes to the Offerer "Invite your friend" screen, not NotFound (BUG-012)', async () => {
+    renderAtWithNavigator('/')
+
+    // First Start.
+    fireEvent.click(screen.getByRole('button', { name: /start a chat/i }))
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /invite your friend/i })).toBeInTheDocument()
+    })
+
+    // Cancel.
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }))
+    })
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /serverless p2p chat/i })).toBeInTheDocument()
+    })
+
+    // Second Start — pre-fix this would land on "Conversation not found".
+    fireEvent.click(screen.getByRole('button', { name: /start a chat/i }))
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /invite your friend/i })).toBeInTheDocument()
+    })
+    expect(screen.queryByRole('heading', { name: /conversation not found/i })).not.toBeInTheDocument()
+  })
+})
+
 describe('App offerer→joiner same-tab swap (BUG-007)', () => {
   // Reproduces the user-reported flow that FEAT-008 missed: Bob clicks
   // "Start a chat" first (his session enters `awaiting-answer` with his own

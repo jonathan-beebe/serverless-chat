@@ -20,6 +20,14 @@ id.
 
 ## Log
 
+- 2026-05-27:11:28:00 — BUG-012 — done: verified BUG-011's `session.reset()`
+  restoration in `src/routes/ConversationRoute.tsx` onCancel sites also fixes
+  the cancel→restart→NotFound sequence (sibling symptom of the same ARCH-001
+  regression); added a behavior test in `src/App.test.tsx` that drives Start →
+  Cancel → Start and asserts the second start lands on Offerer "Invite your
+  friend", not "Conversation not found"; verified the test fails when the
+  BUG-011 fix is reverted; suite 456 passing
+- 2026-05-27:11:27:00 — BUG-012 — started
 - 2026-05-27:11:26:00 — BUG-011 — done: restored `session.reset()` before
   `navigate('/')` in all three `onCancel` sites in
   `src/routes/ConversationRoute.tsx` (joiner sticky-offer, live-session Offerer,
