@@ -50,20 +50,28 @@ describe('FEAT-013 mobile-responsive chat', () => {
     expect(joiner).not.toMatch(/calc\(100vh-3rem\)/)
   })
 
-  it('connected Offerer/Joiner branches use asymmetric vertical padding (`pt-6 pb-1`) so the composer sits ~4px above the visual-viewport bottom (IMPRV-020)', () => {
+  it('connected Offerer/Joiner branches use asymmetric vertical padding (`pt-6` + safe-area-aware bottom) so the composer sits above the visual-viewport bottom (IMPRV-020, updated by IMPRV-024)', () => {
     const offerer = readFileSync(resolve(projectRoot, 'src/screens/Offerer.tsx'), 'utf8') as string
     const joiner = readFileSync(resolve(projectRoot, 'src/screens/Joiner.tsx'), 'utf8') as string
-    // Match the connected `ScreenContainer` className block (multi-line tolerant)
-    // and assert both axes — `pt-6` keeps the header breathing room, `pb-1`
-    // collapses the dead space below the composer.
+    // Match the connected `ScreenContainer` className block (multi-line tolerant).
+    // `pt-6` keeps the header breathing room. The bottom is now safe-area-aware
+    // — `pb-[max(env(safe-area-inset-bottom),0.25rem)]` collapses to 0.25rem in
+    // browser tabs (matching the original `pb-1`) and lifts to ~34px in iOS
+    // standalone to clear the home indicator. IMPRV-024 covers this transition.
     expect(offerer).toMatch(/label="Connected"[\s\S]*?className="[^"]*\bpt-6\b[^"]*"/)
-    expect(offerer).toMatch(/label="Connected"[\s\S]*?className="[^"]*\bpb-1\b[^"]*"/)
+    expect(offerer).toMatch(
+      /label="Connected"[\s\S]*?className="[^"]*pb-\[max\(env\(safe-area-inset-bottom\),0\.25rem\)\][^"]*"/,
+    )
     expect(joiner).toMatch(/label="Connected"[\s\S]*?className="[^"]*\bpt-6\b[^"]*"/)
-    expect(joiner).toMatch(/label="Connected"[\s\S]*?className="[^"]*\bpb-1\b[^"]*"/)
-    // Negative guard: the symmetric `py-6` shape from FEAT-013 must be gone
-    // from the connected branches.
+    expect(joiner).toMatch(
+      /label="Connected"[\s\S]*?className="[^"]*pb-\[max\(env\(safe-area-inset-bottom\),0\.25rem\)\][^"]*"/,
+    )
+    // Negative guards: the symmetric `py-6` shape from FEAT-013 and the bare
+    // `pb-1` from IMPRV-020 must be gone — `pb-1` would shadow the inset.
     expect(offerer).not.toMatch(/label="Connected"[\s\S]*?className="[^"]*\bpy-6\b[^"]*"/)
     expect(joiner).not.toMatch(/label="Connected"[\s\S]*?className="[^"]*\bpy-6\b[^"]*"/)
+    expect(offerer).not.toMatch(/label="Connected"[\s\S]*?className="[^"]*\bpb-1\b[^"]*"/)
+    expect(joiner).not.toMatch(/label="Connected"[\s\S]*?className="[^"]*\bpb-1\b[^"]*"/)
   })
 
   it('index.css declares a `:root` fallback of `--vvh: 100dvh` so browsers without `window.visualViewport` keep the FEAT-013 behavior (IMPRV-017)', () => {
@@ -94,6 +102,44 @@ describe('FEAT-013 mobile-responsive chat', () => {
     )
     // Negative guard: the pre-IMPRV-021 unconditional `flex` shape must be gone.
     expect(chat).not.toMatch(/<div\s+className="flex items-center justify-end gap-3"/)
+  })
+
+  it('connected Offerer/Joiner wrappers use a `max(env(safe-area-inset-bottom),0.25rem)` bottom padding so the composer clears the iOS home indicator in standalone WITHOUT regressing the browser-tab breathing room (IMPRV-024)', () => {
+    const offerer = readFileSync(resolve(projectRoot, 'src/screens/Offerer.tsx'), 'utf8') as string
+    const joiner = readFileSync(resolve(projectRoot, 'src/screens/Joiner.tsx'), 'utf8') as string
+    // The wrapper-padding path was chosen over a `--vvh` calc subtraction so
+    // the hook stays simple and we don't double-count the inset. The `max()`
+    // form is what preserves the original `pb-1` (0.25rem) baseline in
+    // browser tabs where `env(...)` is `0px`.
+    expect(offerer).toMatch(
+      /label="Connected"[\s\S]*?className="[^"]*pb-\[max\(env\(safe-area-inset-bottom\),0\.25rem\)\][^"]*"/,
+    )
+    expect(joiner).toMatch(
+      /label="Connected"[\s\S]*?className="[^"]*pb-\[max\(env\(safe-area-inset-bottom\),0\.25rem\)\][^"]*"/,
+    )
+  })
+
+  it('`useVisualViewportHeight` writes a bare pixel value to `--vvh` (no `env(safe-area-inset-bottom)` calc) — the wrapper-padding path owns the bottom inset (IMPRV-024)', () => {
+    const hook = readFileSync(resolve(projectRoot, 'src/hooks/useVisualViewportHeight.ts'), 'utf8') as string
+    // Negative guard: if a future change adds the calc subtraction here as
+    // well as the wrapper padding, the bottom inset gets double-counted.
+    expect(hook).not.toMatch(/safe-area-inset-bottom/)
+  })
+
+  it('UpdatePrompt banner uses `pb-[max(env(safe-area-inset-bottom),0.75rem)]` so its tap targets clear the iOS home-indicator pill (IMPRV-024)', () => {
+    const banner = readFileSync(resolve(projectRoot, 'src/components/UpdatePrompt.tsx'), 'utf8') as string
+    // The `max()` keeps the banner's current visual padding in-browser
+    // (where `env(...)` is `0px`) and lifts it above the home indicator in
+    // standalone. Tailwind v4 inline arbitrary values are space-significant
+    // inside the brackets — the comma-separated form below works; spaces
+    // around the comma may not parse.
+    expect(banner).toMatch(/pb-\[max\(env\(safe-area-inset-bottom\),0\.75rem\)\]/)
+    // The top padding must be preserved so the banner doesn't visually
+    // collapse on its top edge.
+    expect(banner).toMatch(/\bpt-3\b/)
+    // Negative guard: the pre-IMPRV-024 symmetric `py-3` shape must be gone
+    // — `py-3` would re-impose a fixed 0.75rem bottom and shadow the inset.
+    expect(banner).not.toMatch(/\bpy-3\b/)
   })
 
   it('Home row-menu "Copy transcript" item is not viewport-gated, so small-screen users keep a one-click copy path (IMPRV-021)', () => {

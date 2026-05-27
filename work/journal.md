@@ -20,6 +20,21 @@ id.
 
 ## Log
 
+- 2026-05-27:09:02:00 — IMPRV-024 — done: `ScreenContainer` now emits
+  `mt-/ml-/mr-[env(safe-area-inset-*)]` on its root (margin, not padding —
+  Tailwind v4 emits `padding-top` longhand AFTER `padding-block`, so a
+  padding-based inset would clobber every consumer's `py-12` in browser tabs);
+  Offerer/Joiner connected wrappers swapped `pb-1` →
+  `pb-[max(env(safe-area-inset-bottom),0.25rem)]` so the composer clears the iOS
+  home indicator in standalone without losing browser-tab breathing room;
+  `UpdatePrompt`'s `py-3` split into
+  `pt-3 pb-[max(env(safe-area-inset-bottom),0.75rem)]` so the Update/Dismiss tap
+  targets sit above the home-indicator pill; added a regression note alongside
+  `--vvh` in `index.css` documenting the "wrapper-padding owns the bottom inset"
+  choice; new `components/ScreenChrome.test.tsx` (4 tests) plus three new
+  assertions and one updated assertion in `mobile-responsive.test.tsx`;
+  `npm run ci` green.
+- 2026-05-27:08:51:00 — IMPRV-024 — started
 - 2026-05-27:08:49:30 — IMPRV-023 — done: generated `pwa-192x192.png`,
   `pwa-512x512.png`, `pwa-maskable-512x512.png` (10% safe-zone inset), and
   `apple-touch-icon.png` from `public/favicon.svg` via

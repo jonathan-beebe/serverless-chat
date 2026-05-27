@@ -35,7 +35,16 @@ export function UpdatePrompt() {
       {visible && (
         <aside
           aria-label="App update available"
-          className="fixed inset-x-0 bottom-0 z-50 mx-auto flex max-w-xl items-center justify-between gap-3 border-t border-stone-300 bg-stone-50 px-4 py-3 shadow-md dark:border-stone-700 dark:bg-stone-900">
+          // IMPRV-024: the symmetric 0.75rem vertical padding splits into a
+          // fixed `pt-3` (top) and a safe-area-aware
+          // `pb-[max(env(safe-area-inset-bottom),0.75rem)]` (bottom), so the
+          // Update/Dismiss tap targets sit above the iOS home-indicator pill
+          // in PWA standalone while preserving the original 0.75rem bottom
+          // padding in browser tabs (where `env(safe-area-inset-bottom)` is
+          // `0px`). Comma-no-space form is required — Tailwind v4 parses
+          // arbitrary values as space-significant, and `max(env(...), 0.75rem)`
+          // with a space after the comma can fail to compile.
+          className="fixed inset-x-0 bottom-0 z-50 mx-auto flex max-w-xl items-center justify-between gap-3 border-t border-stone-300 bg-stone-50 px-4 pt-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] shadow-md dark:border-stone-700 dark:bg-stone-900">
           <Callout variant="info">A new version is available.</Callout>
           <div className="flex items-center gap-2">
             <Button variant="secondary" size="sm" onClick={() => setDismissed(true)}>

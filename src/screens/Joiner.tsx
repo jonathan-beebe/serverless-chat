@@ -123,7 +123,14 @@ export function Joiner({ session, offerCode, conversationId, onCancel, onOfferCa
     return (
       <ScreenContainer
         label="Connected"
-        className="mx-auto flex h-[var(--vvh)] max-w-xl flex-col gap-3 overflow-hidden px-4 pt-6 pb-1">
+        // IMPRV-024: `pb-[max(env(safe-area-inset-bottom),0.25rem)]` replaces
+        // the bare `pb-1` so the composer sits above the iOS home-indicator
+        // pill in standalone (where the inset is ~34px) while preserving the
+        // 0.25rem breathing room in browser tabs (where `env(...)` is `0px`).
+        // The `max()` form is what avoids the double-count the ticket warns
+        // about — `useVisualViewportHeight` writes a bare pixel value to
+        // `--vvh`, so the inset is owned here, not by the hook.
+        className="mx-auto flex h-[var(--vvh)] max-w-xl flex-col gap-3 overflow-hidden px-4 pt-6 pb-[max(env(safe-area-inset-bottom),0.25rem)]">
         {liveStatus}
         <header className="flex items-center justify-between">
           {/* No focus ref here — Chat owns focus via FEAT-002 (input is the

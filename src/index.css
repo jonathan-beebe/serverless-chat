@@ -31,7 +31,13 @@ body,
    container fills the visual viewport with no extra slack).
    This `:root` declaration is the unmounted / unsupported-browser fallback —
    `useVisualViewportHeight` overrides it with `visualViewport.height` (px)
-   as an inline style on `<html>` while the connected branch is mounted. */
+   as an inline style on `<html>` while the connected branch is mounted.
+   IMPRV-024 regression note: `--vvh` is a BARE pixel value and intentionally
+   does NOT subtract `env(safe-area-inset-bottom)`. The iOS home-indicator
+   clearance is owned by the connected wrapper's
+   `pb-[max(env(safe-area-inset-bottom),0.25rem)]` (Offerer.tsx / Joiner.tsx).
+   Don't add the inset to this calc as well — the ticket's "pick one" rule
+   exists because doing both double-counts the inset. */
 :root {
   --vvh: 100dvh;
 }
