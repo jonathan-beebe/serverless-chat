@@ -90,12 +90,38 @@ export function ChatTranscript({ messages, hasResumed }: Props) {
 
   const items = useMemo(() => buildItems(messages, resumeBoundary), [messages, resumeBoundary])
 
+  // IMPRV-029: counter of messages that arrived while the user was scrolled
+  // back beyond the anti-yank threshold. Drives the "N new messages" pill —
+  // visibility is `count > 0`; only the pill's own click handler resets it
+  // (manual scroll to the bottom is deliberately not a dismissal).
+  const [newMessagesCount, setNewMessagesCount] = useState(0)
+  // Track the message-count of the previous render so the messages-effect can
+  // detect a delta (one or more newcomers in a single commit) and increment
+  // the IMPRV-029 counter by that delta. A ref instead of state because the
+  // value is only consumed inside the effect — putting it in state would
+  // cause an extra render per message.
+  const prevMessagesLengthRef = useRef(messages.length)
+
   // Keep the latest message in view as new ones stream in — but only if the
   // user hasn't scrolled up to read history. Yanking them back to the bottom
   // is the well-known "chat scroll" antipattern.
   useEffect(() => {
     const el = transcriptRef.current
     if (!el) return
+
+    // IMPRV-029: detect "newcomer arrived while scrolled back" before the
+    // scroll write below — the auto-scroll branch short-circuits and would
+    // otherwise hide this bookkeeping. A negative delta means the session
+    // was reset (messages array shrank); drop the counter so the pill
+    // doesn't linger across a fresh session.
+    const prevLength = prevMessagesLengthRef.current
+    prevMessagesLengthRef.current = messages.length
+    if (messages.length < prevLength) {
+      setNewMessagesCount(0)
+    } else if (messages.length > prevLength && !wasNearBottomRef.current) {
+      setNewMessagesCount((c) => c + (messages.length - prevLength))
+    }
+
     if (!wasNearBottomRef.current) return
     el.scrollTop = el.scrollHeight
   }, [messages])
@@ -107,125 +133,171 @@ export function ChatTranscript({ messages, hasResumed }: Props) {
     wasNearBottomRef.current = distanceFromBottom < NEAR_BOTTOM_THRESHOLD_PX
   }
 
-  return (
-    /*
-      A11Y-018: the transcript is exposed as a log surface, not a plain list.
-      `role="log"` implies `aria-live="polite"`, `aria-relevant="additions"`,
-      and `aria-atomic="false"`; we keep them explicit for older AT that
-      doesn't resolve implicit role attributes. The wrapper is also the
-      scroll container (so auto-scroll math reads from the same element AT
-      navigates to as "Chat transcript"). The empty-state placeholder sits
-      as a sibling of the <ol> *inside* this wrapper but is marked
-      aria-hidden so AT doesn't read it on first paint or as it leaves when
-      the first message arrives.
+  // IMPRV-029: tap-to-dismiss handler — scroll to the newest message and
+  // reset the counter. Updates `wasNearBottomRef` synchronously so the very
+  // next arrival doesn't increment the counter again before `onScroll`
+  // fires from the programmatic scroll.
+  const onNewMessagesClick = () => {
+    const el = transcriptRef.current
+    if (el) {
+      el.scrollTop = el.scrollHeight
+      wasNearBottomRef.current = true
+    }
+    setNewMessagesCount(0)
+  }
 
-      A11Y-021: `tabIndex={0}` makes the scroll container reachable by
-      keyboard on Firefox and Safari (Chromium auto-promotes scroll
-      containers since M126, but Gecko and WebKit do not). Lets keyboard-only
-      / screen-magnifier / switch users scroll the transcript with Arrow /
-      PageUp / PageDown / Home / End.
-    */
-    <div
-      ref={transcriptRef}
-      onScroll={onScroll}
-      role="log"
-      aria-label="Chat transcript"
-      aria-live="polite"
-      aria-relevant="additions"
-      aria-atomic="false"
-      tabIndex={0}
-      // IMPRV-027: gate the border + rounded-corner card chrome behind `sm:`
-      // so phone-width viewports render edge-to-edge with no framing outline.
-      // The bg tint, padding, focus ring, and scroll affordance stay
-      // unconditional; the focus ring is a `ring`, not a `border-color`
-      // swap, so keyboard focus still paints correctly on mobile.
-      // IMPRV-028: the scroll surface is itself a flex column so a single
-      // `mt-auto` on its child can push the message list (or the empty-state
-      // placeholder) to the bottom edge — adjacent to the composer. When the
-      // content is shorter than the viewport, the auto top margin absorbs the
-      // remaining space; once content exceeds the viewport the margin
-      // collapses and normal scrolling resumes with the newest message
-      // pinned at the bottom. DOM order stays chronological (oldest first)
-      // so A11Y-018's `aria-live` additions still announce the newcomer.
-      className="flex flex-1 flex-col overflow-y-auto overscroll-contain bg-white/50 p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 sm:rounded-md sm:border sm:border-stone-300 dark:bg-stone-900/50 dark:sm:border-stone-700">
-      {messages.length === 0 ? (
-        <p aria-hidden="true" className="mt-auto text-sm text-stone-600 dark:text-stone-400">
-          No messages yet. Say hello.
-        </p>
-      ) : (
-        <ol className="mt-auto space-y-2">
-          {items.map((item) => {
-            if (item.kind === 'date') {
-              // Chrome, not content. `role="presentation"` neutralizes the
-              // list-item semantics so the <ol>'s item count doesn't include
-              // dividers; `aria-hidden` keeps the text out of any
-              // live-region announcement on day rollover.
+  const newMessagesLabel = newMessagesCount === 1 ? '1 new message' : `${newMessagesCount} new messages`
+
+  return (
+    // IMPRV-029: positioning wrapper. The "N new messages" pill is a sibling
+    // of the role="log" scroll container (so it isn't read as a live-region
+    // addition and doesn't scroll with the message list). Carries the flex
+    // sizing the scroll container used to carry directly, so the parent's
+    // flex column distributes height correctly.
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      {/*
+        A11Y-018: the transcript is exposed as a log surface, not a plain list.
+        `role="log"` implies `aria-live="polite"`, `aria-relevant="additions"`,
+        and `aria-atomic="false"`; we keep them explicit for older AT that
+        doesn't resolve implicit role attributes. The wrapper is also the
+        scroll container (so auto-scroll math reads from the same element AT
+        navigates to as "Chat transcript"). The empty-state placeholder sits
+        as a sibling of the <ol> *inside* this wrapper but is marked
+        aria-hidden so AT doesn't read it on first paint or as it leaves when
+        the first message arrives.
+
+        A11Y-021: `tabIndex={0}` makes the scroll container reachable by
+        keyboard on Firefox and Safari (Chromium auto-promotes scroll
+        containers since M126, but Gecko and WebKit do not). Lets keyboard-only
+        / screen-magnifier / switch users scroll the transcript with Arrow /
+        PageUp / PageDown / Home / End.
+      */}
+      <div
+        ref={transcriptRef}
+        onScroll={onScroll}
+        role="log"
+        aria-label="Chat transcript"
+        aria-live="polite"
+        aria-relevant="additions"
+        aria-atomic="false"
+        tabIndex={0}
+        // IMPRV-027: gate the border + rounded-corner card chrome behind `sm:`
+        // so phone-width viewports render edge-to-edge with no framing outline.
+        // The bg tint, padding, focus ring, and scroll affordance stay
+        // unconditional; the focus ring is a `ring`, not a `border-color`
+        // swap, so keyboard focus still paints correctly on mobile.
+        // IMPRV-028: the scroll surface is itself a flex column so a single
+        // `mt-auto` on its child can push the message list (or the empty-state
+        // placeholder) to the bottom edge — adjacent to the composer. When the
+        // content is shorter than the viewport, the auto top margin absorbs the
+        // remaining space; once content exceeds the viewport the margin
+        // collapses and normal scrolling resumes with the newest message
+        // pinned at the bottom. DOM order stays chronological (oldest first)
+        // so A11Y-018's `aria-live` additions still announce the newcomer.
+        className="flex flex-1 flex-col overflow-y-auto overscroll-contain bg-white/50 p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 sm:rounded-md sm:border sm:border-stone-300 dark:bg-stone-900/50 dark:sm:border-stone-700">
+        {messages.length === 0 ? (
+          <p aria-hidden="true" className="mt-auto text-sm text-stone-600 dark:text-stone-400">
+            No messages yet. Say hello.
+          </p>
+        ) : (
+          <ol className="mt-auto space-y-2">
+            {items.map((item) => {
+              if (item.kind === 'date') {
+                // Chrome, not content. `role="presentation"` neutralizes the
+                // list-item semantics so the <ol>'s item count doesn't include
+                // dividers; `aria-hidden` keeps the text out of any
+                // live-region announcement on day rollover.
+                return (
+                  <li key={item.key} role="presentation" aria-hidden="true" data-testid="date-header" className="py-1">
+                    <Divider>
+                      <time dateTime={item.date.toISOString().slice(0, 10)}>{dateFmt.format(item.date)}</time>
+                    </Divider>
+                  </li>
+                )
+              }
+              if (item.kind === 'resume') {
+                // FEAT-012: marker between the persisted-history cohort
+                // (above) and the live-session cohort (below). Same
+                // presentation/aria-hidden treatment as date headers so AT
+                // doesn't double-announce the cohort split on every render.
+                return (
+                  <li
+                    key={item.key}
+                    role="presentation"
+                    aria-hidden="true"
+                    data-testid="resume-divider"
+                    className="py-1">
+                    <Divider>Resumed here</Divider>
+                  </li>
+                )
+              }
+              const m = item.message
+              const isMe = m.from === 'me'
+              // FEAT-010: outgoing bubbles render a delivery indicator next
+              // to the time. Pending = hollow/dim check (the message is
+              // "sent locally" — handed to the transport); Delivered =
+              // filled check (peer's receipt envelope arrived). Incoming
+              // bubbles render no check (parity with WhatsApp — receipts on
+              // the receiver side fire automatically without rendering).
+              const delivered = m.delivery === 'delivered'
               return (
-                <li key={item.key} role="presentation" aria-hidden="true" data-testid="date-header" className="py-1">
-                  <Divider>
-                    <time dateTime={item.date.toISOString().slice(0, 10)}>{dateFmt.format(item.date)}</time>
-                  </Divider>
-                </li>
-              )
-            }
-            if (item.kind === 'resume') {
-              // FEAT-012: marker between the persisted-history cohort
-              // (above) and the live-session cohort (below). Same
-              // presentation/aria-hidden treatment as date headers so AT
-              // doesn't double-announce the cohort split on every render.
-              return (
-                <li key={item.key} role="presentation" aria-hidden="true" data-testid="resume-divider" className="py-1">
-                  <Divider>Resumed here</Divider>
-                </li>
-              )
-            }
-            const m = item.message
-            const isMe = m.from === 'me'
-            // FEAT-010: outgoing bubbles render a delivery indicator next
-            // to the time. Pending = hollow/dim check (the message is
-            // "sent locally" — handed to the transport); Delivered =
-            // filled check (peer's receipt envelope arrived). Incoming
-            // bubbles render no check (parity with WhatsApp — receipts on
-            // the receiver side fire automatically without rendering).
-            const delivered = m.delivery === 'delivered'
-            return (
-              <li key={m.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
-                {/* Visually-hidden prefix so the log announcement includes the speaker (A11Y-004). */}
-                <span className="sr-only">{isMe ? 'You said: ' : 'They said: '}</span>
-                <div
-                  data-testid="message-bubble"
-                  className={`flex max-w-[80%] flex-col gap-0.5 rounded-lg px-3 py-1 text-sm ${
-                    isMe ? 'bg-sky-700 text-white' : 'bg-stone-200 text-stone-900 dark:bg-stone-700 dark:text-stone-100'
-                  }`}>
-                  <span data-testid={`message-text-${m.id}`} className="select-text whitespace-pre-wrap break-words">
-                    {m.text}
-                  </span>
-                  <span
-                    className={`flex select-none items-center gap-1 self-end text-xs ${
-                      isMe ? 'text-white' : 'text-stone-600 dark:text-stone-400'
+                <li key={m.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                  {/* Visually-hidden prefix so the log announcement includes the speaker (A11Y-004). */}
+                  <span className="sr-only">{isMe ? 'You said: ' : 'They said: '}</span>
+                  <div
+                    data-testid="message-bubble"
+                    className={`flex max-w-[80%] flex-col gap-0.5 rounded-lg px-3 py-1 text-sm ${
+                      isMe
+                        ? 'bg-sky-700 text-white'
+                        : 'bg-stone-200 text-stone-900 dark:bg-stone-700 dark:text-stone-100'
                     }`}>
-                    <time aria-hidden="true" dateTime={new Date(m.at).toISOString()}>
-                      {timeFmt.format(new Date(m.at))}
-                    </time>
-                    {isMe && (
-                      <span
-                        data-testid={`delivery-${m.id}`}
-                        aria-label={delivered ? 'Delivered' : 'Pending'}
-                        role="img"
-                        // Hollow check until delivered (faint sky tint over
-                        // the sky-700 bubble); filled white on delivery.
-                        // Same glyph either way so the bubble doesn't shift
-                        // when the receipt lands.
-                        className={`inline-block leading-none ${delivered ? 'text-white' : 'text-sky-100/60'}`}>
-                        {'✓'}
-                      </span>
-                    )}
-                  </span>
-                </div>
-              </li>
-            )
-          })}
-        </ol>
+                    <span data-testid={`message-text-${m.id}`} className="select-text whitespace-pre-wrap break-words">
+                      {m.text}
+                    </span>
+                    <span
+                      className={`flex select-none items-center gap-1 self-end text-xs ${
+                        isMe ? 'text-white' : 'text-stone-600 dark:text-stone-400'
+                      }`}>
+                      <time aria-hidden="true" dateTime={new Date(m.at).toISOString()}>
+                        {timeFmt.format(new Date(m.at))}
+                      </time>
+                      {isMe && (
+                        <span
+                          data-testid={`delivery-${m.id}`}
+                          aria-label={delivered ? 'Delivered' : 'Pending'}
+                          role="img"
+                          // Hollow check until delivered (faint sky tint over
+                          // the sky-700 bubble); filled white on delivery.
+                          // Same glyph either way so the bubble doesn't shift
+                          // when the receipt lands.
+                          className={`inline-block leading-none ${delivered ? 'text-white' : 'text-sky-100/60'}`}>
+                          {'✓'}
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                </li>
+              )
+            })}
+          </ol>
+        )}
+      </div>
+      {newMessagesCount > 0 && (
+        // IMPRV-029: count-bearing pill anchored to the bottom-center of the
+        // transcript area, layered above the scroll content. Activating it
+        // jumps the user to the newest message and dismisses the pill;
+        // manual scroll does NOT dismiss it (per the ticket's chosen
+        // dismissal policy — the user explicitly opted out of auto-hide).
+        // The accessible name reflects the running count, so AT users hear
+        // "3 new messages, button" instead of an opaque "Show new". Not a
+        // child of the role="log" surface so live-region additions don't
+        // include it.
+        <button
+          type="button"
+          onClick={onNewMessagesClick}
+          className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-sky-700 px-3 py-1 text-xs font-medium text-white shadow-md hover:bg-sky-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50 dark:focus-visible:ring-offset-stone-900">
+          {newMessagesLabel}
+        </button>
       )}
     </div>
   )

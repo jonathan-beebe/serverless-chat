@@ -20,6 +20,10 @@ id.
 
 ## Log
 
+- 2026-05-27:12:38:14 — IMPRV-029 — started
+- 2026-05-27:12:38:01 — IMPRV-028 — done: flipped transcript wrapper to flex
+  flex-col and added mt-auto to its child so messages bottom-anchor adjacent to
+  composer; DOM order + A11Y-018 + IMPRV-005 anti-yank preserved
 - 2026-05-27:12:34:53 — IMPRV-028 — started
 - 2026-05-27:12:32:57 — RSRCH-003 — defined: Survey WebRTC connection recovery
   options under current and hypothetical signaling models

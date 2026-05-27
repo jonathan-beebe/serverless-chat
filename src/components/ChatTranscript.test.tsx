@@ -374,6 +374,113 @@ describe('ChatTranscript bottom anchoring (IMPRV-028)', () => {
   })
 })
 
+describe('ChatTranscript new-messages button (IMPRV-029)', () => {
+  // Helper: mount, drop the user well above the bottom threshold so the
+  // anti-yank state holds, and return the transcript element + a rerender
+  // function so each test can simulate further message arrivals.
+  function setupScrolledBack(initial: ChatMessage[]) {
+    const { rerender } = render(<ChatTranscript messages={initial} />)
+    const transcript = getTranscript()
+    stubScroll(transcript, { scrollHeight: 400, clientHeight: 200 })
+    transcript.scrollTop = 0 // 400px from bottom — clearly reading history
+    fireEvent.scroll(transcript)
+    return { transcript, rerender }
+  }
+
+  it('does not render the button on initial mount when no scrolled-back arrivals have occurred', () => {
+    render(<ChatTranscript messages={[msg('a', 'hi', 'them')]} />)
+    expect(screen.queryByRole('button', { name: /new message/i })).toBeNull()
+  })
+
+  it('does NOT render the button when a new message arrives while the user is pinned at the bottom', () => {
+    const initial: ChatMessage[] = [msg('a', 'one'), msg('b', 'two')]
+    const { rerender } = render(<ChatTranscript messages={initial} />)
+    const transcript = getTranscript()
+
+    // Simulate "user is at the bottom".
+    stubScroll(transcript, { scrollHeight: 400, clientHeight: 200 })
+    transcript.scrollTop = 200 // 0px from bottom
+    fireEvent.scroll(transcript)
+
+    stubScroll(transcript, { scrollHeight: 460, clientHeight: 200 })
+    rerender(<ChatTranscript messages={[...initial, msg('c', 'three')]} />)
+
+    expect(screen.queryByRole('button', { name: /new message/i })).toBeNull()
+  })
+
+  it('renders a singular "1 new message" button when one message arrives while scrolled back', () => {
+    const initial: ChatMessage[] = [msg('a', 'one')]
+    const { rerender } = setupScrolledBack(initial)
+
+    rerender(<ChatTranscript messages={[...initial, msg('b', 'two')]} />)
+
+    const btn = screen.getByRole('button', { name: /1 new message/i })
+    expect(btn.tagName).toBe('BUTTON')
+    expect(btn.getAttribute('type')).toBe('button')
+    // Visible text reflects the count + singular noun.
+    expect(btn.textContent).toMatch(/^\s*1 new message\s*$/)
+  })
+
+  it('pluralizes the label to "N new messages" when multiple messages arrive while scrolled back', () => {
+    const initial: ChatMessage[] = [msg('a', 'one')]
+    const { rerender } = setupScrolledBack(initial)
+
+    rerender(<ChatTranscript messages={[...initial, msg('b', 'two')]} />)
+    rerender(<ChatTranscript messages={[...initial, msg('b', 'two'), msg('c', 'three')]} />)
+    rerender(<ChatTranscript messages={[...initial, msg('b', 'two'), msg('c', 'three'), msg('d', 'four')]} />)
+
+    const btn = screen.getByRole('button', { name: /3 new messages/i })
+    expect(btn.textContent).toMatch(/^\s*3 new messages\s*$/)
+  })
+
+  it('activating the button scrolls the transcript to the bottom AND dismisses itself', () => {
+    const initial: ChatMessage[] = [msg('a', 'one')]
+    const { transcript, rerender } = setupScrolledBack(initial)
+
+    stubScroll(transcript, { scrollHeight: 460, clientHeight: 200 })
+    rerender(<ChatTranscript messages={[...initial, msg('b', 'two')]} />)
+
+    const btn = screen.getByRole('button', { name: /1 new message/i })
+    fireEvent.click(btn)
+
+    // Click jumps the transcript to the newest message (adjacent to composer).
+    expect(transcript.scrollTop).toBe(460)
+    // …and the button vanishes (count reset).
+    expect(screen.queryByRole('button', { name: /new message/i })).toBeNull()
+  })
+
+  it('does NOT dismiss the button when the user manually scrolls to the bottom without tapping it', () => {
+    const initial: ChatMessage[] = [msg('a', 'one')]
+    const { transcript, rerender } = setupScrolledBack(initial)
+
+    stubScroll(transcript, { scrollHeight: 460, clientHeight: 200 })
+    rerender(<ChatTranscript messages={[...initial, msg('b', 'two')]} />)
+    expect(screen.getByRole('button', { name: /1 new message/i })).toBeTruthy()
+
+    // Simulate the user manually scrolling all the way to the newest message
+    // (without clicking the button).
+    transcript.scrollTop = 260 // 460 - 200 - 260 = 0px from bottom
+    fireEvent.scroll(transcript)
+
+    // The chosen dismissal policy: only the button itself dismisses it.
+    expect(screen.queryByRole('button', { name: /1 new message/i })).toBeTruthy()
+  })
+
+  it('renders the button OUTSIDE the message <ol> so it stays pinned visually and not inside the scroll content', () => {
+    const initial: ChatMessage[] = [msg('a', 'one')]
+    const { rerender } = setupScrolledBack(initial)
+    rerender(<ChatTranscript messages={[...initial, msg('b', 'two')]} />)
+
+    const btn = screen.getByRole('button', { name: /1 new message/i })
+    // Not a descendant of the <ol>: the button must not scroll with messages.
+    expect(btn.closest('ol')).toBeNull()
+    // Not a descendant of the role="log" scroll container either — the button
+    // is a sibling, not a child, of the scroll surface (so the live region
+    // doesn't include it).
+    expect(btn.closest('[role="log"]')).toBeNull()
+  })
+})
+
 describe('ChatTranscript responsive border (IMPRV-027)', () => {
   it('gates the border + rounded-corner card chrome behind `sm:` so phones get a clean edge-to-edge transcript while tablets/desktops keep the framed card', () => {
     // Below 640px: no border, no rounded corners — the surface reads
