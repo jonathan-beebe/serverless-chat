@@ -11,8 +11,8 @@ id.
 - RSRCH: 2
 - DSGN: 1
 - ARCH: 2
-- FEAT: 14
-- IMPRV: 23
+- FEAT: 16
+- IMPRV: 26
 - MAINT: 1
 - A11Y: 37
 - RFCTR: 1
@@ -20,6 +20,21 @@ id.
 
 ## Log
 
+- 2026-05-27:08:37:47 — FEAT-014 — done: CopyBox grew an optional `share` prop
+  that renders an OS-share-sheet button alongside Copy when `navigator.share` +
+  `canShare(payload)` both report support; Offerer's invite-URL CopyBox opts in,
+  all other CopyBox call sites (Offerer polite-defer reply, Joiner reply) and
+  unsupported browsers see the unchanged Copy-only affordance; `AbortError`
+  (user dismissed the sheet) is swallowed silently so no error UI surfaces
+- 2026-05-27:08:33:05 — FEAT-014 — started
+- 2026-05-27:08:30:18 — FEAT-015 — defined: install pwa cta and standalone
+  detection
+- 2026-05-27:08:30:18 — FEAT-014 — defined: web share api for invite url
+- 2026-05-27:08:30:18 — IMPRV-025 — defined: mobile native touch css polish
+- 2026-05-27:08:30:18 — IMPRV-024 — defined: respect ios safe area insets in
+  standalone mode
+- 2026-05-27:08:30:18 — IMPRV-023 — defined: generate pwa icons and add ios
+  install meta
 - 2026-05-25:16:50:53 — IMPRV-022 — done: UpdatePrompt component reads
   `useRegisterSW`'s `needRefresh`, renders a bottom-fixed "new version
   available" banner on Home only, and calls `updateServiceWorker(true)` on
