@@ -12,7 +12,7 @@ id.
 - DSGN: 1
 - ARCH: 2
 - FEAT: 16
-- IMPRV: 31
+- IMPRV: 32
 - MAINT: 1
 - A11Y: 37
 - RFCTR: 4
@@ -20,6 +20,9 @@ id.
 
 ## Log
 
+- 2026-05-27:13:57:30 — IMPRV-031 — started
+- 2026-05-27:13:56:33 — IMPRV-031 — defined: 3-second viewport dwell before the
+  read cursor advances
 - 2026-05-27:13:33:02 — IMPRV-030 — done: lastReadMessageId on
   ConversationRecord, hook markRead + persist via a single-tx storage helper,
   Last-read divider in transcript, IMPRV-029 pill scrolls to marker

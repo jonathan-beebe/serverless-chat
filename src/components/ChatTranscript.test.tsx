@@ -584,25 +584,112 @@ describe('ChatTranscript read cursor + Last read divider (IMPRV-030)', () => {
     expect(observer.observed).toHaveLength(3)
   })
 
-  it('calls onMarkRead with a bubble`s message id when that bubble enters the viewport', () => {
-    const onMarkRead = vi.fn()
-    const messages: ChatMessage[] = [msg('a', 'one'), msg('b', 'two'), msg('c', 'three')]
-    render(<ChatTranscript messages={messages} onMarkRead={onMarkRead} />)
-    const [observer] = MockIntersectionObserver.instances
-    // Fire a single entry against bubble "b" (the middle message) — the
-    // forward-only semantics live in the hook's markRead, not the component;
-    // the component just forwards every observed entry.
-    observer.fire([{ target: observer.observed[1] }])
-    expect(onMarkRead).toHaveBeenCalledWith('b')
+  it('calls onMarkRead with a bubble`s message id ONLY after the 3-second dwell completes (IMPRV-031)', () => {
+    vi.useFakeTimers()
+    try {
+      const onMarkRead = vi.fn()
+      const messages: ChatMessage[] = [msg('a', 'one'), msg('b', 'two'), msg('c', 'three')]
+      render(<ChatTranscript messages={messages} onMarkRead={onMarkRead} />)
+      const [observer] = MockIntersectionObserver.instances
+      // Fire intersection for bubble "b" — schedules the dwell timer.
+      observer.fire([{ target: observer.observed[1] }])
+      // Pre-dwell: no markRead yet. IMPRV-031's whole point.
+      expect(onMarkRead).not.toHaveBeenCalled()
+      // Advance just under 3 seconds — still no fire.
+      vi.advanceTimersByTime(2999)
+      expect(onMarkRead).not.toHaveBeenCalled()
+      // Cross the 3-second boundary — the dwell timer fires markRead.
+      vi.advanceTimersByTime(1)
+      expect(onMarkRead).toHaveBeenCalledWith('b')
+      expect(onMarkRead).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('does NOT call onMarkRead for entries that are not intersecting (bubble scrolled away)', () => {
-    const onMarkRead = vi.fn()
-    const messages: ChatMessage[] = [msg('a', 'one'), msg('b', 'two')]
-    render(<ChatTranscript messages={messages} onMarkRead={onMarkRead} />)
-    const [observer] = MockIntersectionObserver.instances
-    observer.fire([{ target: observer.observed[0], isIntersecting: false, intersectionRatio: 0 }])
-    expect(onMarkRead).not.toHaveBeenCalled()
+    vi.useFakeTimers()
+    try {
+      const onMarkRead = vi.fn()
+      const messages: ChatMessage[] = [msg('a', 'one'), msg('b', 'two')]
+      render(<ChatTranscript messages={messages} onMarkRead={onMarkRead} />)
+      const [observer] = MockIntersectionObserver.instances
+      observer.fire([{ target: observer.observed[0], isIntersecting: false, intersectionRatio: 0 }])
+      // Even if a wall-clock 3 seconds elapses, no markRead — the dwell was
+      // never scheduled because the entry didn't satisfy isIntersecting.
+      vi.advanceTimersByTime(5000)
+      expect(onMarkRead).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('cancels a pending dwell timer when the bubble exits the viewport before 3s (IMPRV-031)', () => {
+    vi.useFakeTimers()
+    try {
+      const onMarkRead = vi.fn()
+      const messages: ChatMessage[] = [msg('a', 'one'), msg('b', 'two')]
+      render(<ChatTranscript messages={messages} onMarkRead={onMarkRead} />)
+      const [observer] = MockIntersectionObserver.instances
+      // Bubble enters viewport — dwell starts.
+      observer.fire([{ target: observer.observed[1] }])
+      // Two seconds in — still on screen — no fire yet.
+      vi.advanceTimersByTime(2000)
+      // User scrolls; bubble exits the viewport BEFORE 3s elapses.
+      observer.fire([{ target: observer.observed[1], isIntersecting: false, intersectionRatio: 0 }])
+      // Run wall-clock past where the original 3s would have completed.
+      vi.advanceTimersByTime(5000)
+      expect(onMarkRead).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('resets the dwell on re-entry: 2s visible, exits, re-enters, 2s visible again → no markRead (IMPRV-031)', () => {
+    vi.useFakeTimers()
+    try {
+      const onMarkRead = vi.fn()
+      const messages: ChatMessage[] = [msg('a', 'one'), msg('b', 'two')]
+      render(<ChatTranscript messages={messages} onMarkRead={onMarkRead} />)
+      const [observer] = MockIntersectionObserver.instances
+      // First visit: 2 seconds in the viewport.
+      observer.fire([{ target: observer.observed[1] }])
+      vi.advanceTimersByTime(2000)
+      // Exits before satisfying dwell.
+      observer.fire([{ target: observer.observed[1], isIntersecting: false, intersectionRatio: 0 }])
+      // Re-enters and stays another 2 seconds (cumulative 4s but the gap
+      // resets the dwell — the user did not have a continuous look).
+      observer.fire([{ target: observer.observed[1] }])
+      vi.advanceTimersByTime(2000)
+      expect(onMarkRead).not.toHaveBeenCalled()
+      // Cross the second visit's 3s mark — NOW the dwell satisfies.
+      vi.advanceTimersByTime(1000)
+      expect(onMarkRead).toHaveBeenCalledWith('b')
+      expect(onMarkRead).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('clears pending dwell timers on unmount so no spurious markRead fires after the component is gone (IMPRV-031)', () => {
+    vi.useFakeTimers()
+    try {
+      const onMarkRead = vi.fn()
+      const messages: ChatMessage[] = [msg('a', 'one'), msg('b', 'two')]
+      const { unmount } = render(<ChatTranscript messages={messages} onMarkRead={onMarkRead} />)
+      const [observer] = MockIntersectionObserver.instances
+      // Schedule a dwell timer mid-flight.
+      observer.fire([{ target: observer.observed[1] }])
+      vi.advanceTimersByTime(1000)
+      // Component leaves — pending timer must be cancelled, not fire later
+      // into a dead component (would call a stale onMarkReadRef and could
+      // race with a fresh observer on the next mount).
+      unmount()
+      vi.advanceTimersByTime(5000)
+      expect(onMarkRead).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('activating the IMPRV-029 pill scrolls the transcript so the Last-read marker sits at the bottom of the viewport', () => {

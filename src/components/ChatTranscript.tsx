@@ -26,6 +26,14 @@ interface Props {
 // hijacking an intentional scroll-up to read history.
 const NEAR_BOTTOM_THRESHOLD_PX = 32
 
+// IMPRV-031: a message bubble must remain continuously in the viewport for
+// this long before its id is forwarded to `onMarkRead`. Encodes the "the
+// user actually looked at this" semantic without eye-tracking. Anything
+// shorter (mount-time flash, fast scrollback) does NOT advance the read
+// cursor. The dwell resets on viewport exit; a 2s look + exit + 2s look is
+// not 4 seconds of dwell — it's two 2-second visits, neither qualifying.
+const READ_DWELL_MS = 3000
+
 // Items that flow through the transcript list. Date items are visual chrome
 // rendered above the first message and at every local-day rollover.
 // FEAT-012 adds a `resume` item — a single divider drawn between the last
@@ -143,15 +151,40 @@ export function ChatTranscript({ messages, hasResumed, lastReadMessageId, onMark
   // hook's `markRead` filters re-entries (forward-only).
   const observerRef = useRef<IntersectionObserver | null>(null)
   const bubbleRefs = useRef<Map<string, Element>>(new Map())
+  // IMPRV-031: pending dwell timers keyed by messageId. An entry exists from
+  // the moment a bubble starts intersecting until it either (a) reaches the
+  // READ_DWELL_MS threshold and fires onMarkRead, or (b) exits the viewport
+  // before the threshold, at which point the timer is cleared. The Map lives
+  // in a ref so it survives renders without re-creating the observer.
+  const dwellTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
   useEffect(() => {
+    const timers = dwellTimersRef.current
     const obs = new IntersectionObserver(
       (entries) => {
-        const cb = onMarkReadRef.current
-        if (!cb) return
         for (const entry of entries) {
-          if (!entry.isIntersecting) continue
           const id = (entry.target as HTMLElement).dataset.messageId
-          if (id) cb(id)
+          if (!id) continue
+          if (entry.isIntersecting) {
+            // IMPRV-031: schedule the dwell timer if this bubble isn't
+            // already counting. A re-entry after a brief exit lands here
+            // with no existing timer (we cleared it on exit), so the
+            // dwell resets — non-cumulative, per the IMPRV-031 contract.
+            if (timers.has(id)) continue
+            const timer = setTimeout(() => {
+              timers.delete(id)
+              onMarkReadRef.current?.(id)
+            }, READ_DWELL_MS)
+            timers.set(id, timer)
+          } else {
+            // IMPRV-031: exited the viewport before READ_DWELL_MS. Clear
+            // the pending timer so it never fires; the next entry will
+            // schedule a fresh one.
+            const pending = timers.get(id)
+            if (pending !== undefined) {
+              clearTimeout(pending)
+              timers.delete(id)
+            }
+          }
         }
       },
       // root null → observe against the viewport. The transcript itself is a
@@ -169,6 +202,13 @@ export function ChatTranscript({ messages, hasResumed, lastReadMessageId, onMark
     return () => {
       obs.disconnect()
       observerRef.current = null
+      // IMPRV-031: cancel every pending dwell timer on unmount. `disconnect()`
+      // stops further observer callbacks but does NOT cancel scheduled
+      // timeouts — a fired timer on a dead component would call into a
+      // stale onMarkReadRef and could race a fresh observer on the next
+      // mount.
+      for (const t of timers.values()) clearTimeout(t)
+      timers.clear()
     }
   }, [])
 
