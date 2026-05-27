@@ -29,11 +29,16 @@ function buildChatFixture(): ChatMessage[] {
 export function DesignSystemChat() {
   const navigate = useNavigate()
   const [messages, setMessages] = useState<ChatMessage[]>(buildChatFixture)
-  // IMPRV-030: design-system route exercises the read-cursor visual + the
-  // re-routed IMPRV-029 pill. Pre-seed the cursor at the second-to-last
-  // fixture message so reviewers see the "Last read" divider above the
-  // newest message on first paint.
-  const [lastReadMessageId, setLastReadMessageId] = useState<string | null>('ds-4')
+  // IMPRV-030: design-system route is for visual review. Pre-seed the cursor
+  // at the second-to-last fixture message so reviewers see the "Last read"
+  // divider above the newest message on first paint. `markRead` is a no-op
+  // in this stub — every fixture bubble is visible on mount, so the
+  // IntersectionObserver in ChatTranscript would otherwise fire forward
+  // advancement immediately and the marker would disappear before any
+  // human could see it. Production exercises advancement via the real
+  // hook; this surface is for the divider shape + the IMPRV-029 pill's
+  // re-routed scroll target.
+  const [lastReadMessageId] = useState<string | null>('ds-4')
   const session: ChatSession = {
     state: 'connected',
     error: null,
@@ -60,18 +65,11 @@ export function DesignSystemChat() {
     },
     reset: () => {},
     lastReadMessageId,
-    markRead: (messageId: string) => {
-      // Forward-only stub: mirrors the hook's contract so the design-system
-      // route exercises the same advancement semantics as production.
-      setLastReadMessageId((prev) => {
-        if (prev === messageId) return prev
-        const newIdx = messages.findIndex((m) => m.id === messageId)
-        if (newIdx === -1) return prev
-        if (prev === null) return messageId
-        const prevIdx = messages.findIndex((m) => m.id === prev)
-        if (prevIdx === -1) return messageId
-        return newIdx > prevIdx ? messageId : prev
-      })
+    markRead: () => {
+      // No-op: see the comment on the `lastReadMessageId` state above. The
+      // viewport contains every fixture bubble on mount, so any forward
+      // advancement would immediately hide the divider this route exists
+      // to demonstrate.
     },
   }
   return <Offerer session={session} conversationId={DS_PREVIEW_CONV_ID} onCancel={() => navigate('/design-system')} />
