@@ -142,6 +142,60 @@ describe('FEAT-013 mobile-responsive chat', () => {
     expect(banner).not.toMatch(/\bpy-3\b/)
   })
 
+  it('index.css declares `body { overscroll-behavior-y: contain }` so a top-edge pull gesture cannot reload the document and tear down the live RTCPeerConnection (IMPRV-025)', () => {
+    const css = readFileSync(resolve(projectRoot, 'src/index.css'), 'utf8') as string
+    const declarations = css.replace(/\/\*[\s\S]*?\*\//g, '')
+    // Match a `body { ... overscroll-behavior-y: contain ... }` rule.
+    // `body` may also appear in a comma-separated selector list (e.g.
+    // `html, body, #root`), so the regex tolerates additional selectors.
+    expect(declarations).toMatch(/body[^{}]*\{[^}]*overscroll-behavior-y\s*:\s*contain/)
+  })
+
+  it('index.css declares `html { -webkit-tap-highlight-color: transparent }` so the iOS grey overlay never shadows design-system hover/active states (IMPRV-025)', () => {
+    const css = readFileSync(resolve(projectRoot, 'src/index.css'), 'utf8') as string
+    const declarations = css.replace(/\/\*[\s\S]*?\*\//g, '')
+    expect(declarations).toMatch(/html[^{}]*\{[^}]*-webkit-tap-highlight-color\s*:\s*transparent/)
+  })
+
+  it('index.css declares `touch-action: manipulation` on interactive primitives so iOS Safari skips the 300ms double-tap window (IMPRV-025)', () => {
+    const css = readFileSync(resolve(projectRoot, 'src/index.css'), 'utf8') as string
+    const declarations = css.replace(/\/\*[\s\S]*?\*\//g, '')
+    // The recommended selector list covers Button, Textarea, anchors, and
+    // any `role="button"` shim. Match the property in a rule whose selector
+    // includes at least `button` and `[role="button"]` — the smallest set
+    // that guarantees coverage of the Button primitive and its forwarded
+    // peers.
+    expect(declarations).toMatch(/button[\s\S]*?\[role=["']button["']\][^{}]*\{[^}]*touch-action\s*:\s*manipulation/)
+  })
+
+  it('Chat transcript wrapper sets `overscroll-contain` so scroll-chaining from its top edge cannot bubble to `#root` / `body` (IMPRV-025)', () => {
+    const chat = readFileSync(resolve(projectRoot, 'src/components/Chat.tsx'), 'utf8') as string
+    // The transcript wrapper is the `role="log"` element with the
+    // `flex-1 overflow-y-auto` className. Match the className block that
+    // immediately precedes the messages list and assert `overscroll-contain`
+    // sits in it. Multi-line-tolerant.
+    expect(chat).toMatch(
+      /role="log"[\s\S]*?className="[^"]*\bflex-1\b[^"]*\boverflow-y-auto\b[^"]*\boverscroll-contain\b/,
+    )
+  })
+
+  it('Chat message-text span uses `select-text` and the time/delivery span uses `select-none` so long-press selection captures the message body but excludes timestamps/delivery glyphs (IMPRV-025)', () => {
+    const chat = readFileSync(resolve(projectRoot, 'src/components/Chat.tsx'), 'utf8') as string
+    // Message-text span: `data-testid={`message-text-${m.id}`}` immediately
+    // followed by its className. Must contain `select-text`.
+    expect(chat).toMatch(/data-testid=\{`message-text-\$\{m\.id\}`\}[\s\S]*?className="[^"]*\bselect-text\b/)
+    // Time/delivery span: the sibling span containing the <time> element.
+    // Its className is a template literal that includes `self-end text-xs` and
+    // the isMe-conditional text colors. Match a `<span className={\`...\`}>`
+    // that carries BOTH `self-end` (the load-bearing identifier for this
+    // particular span) and `select-none`. Token order inside the literal is
+    // not load-bearing — Prettier may reorder Tailwind utilities.
+    const timeSpanMatch = chat.match(/<span\s+className=\{`([^`]*)`\}/g) ?? []
+    const timeSpanClass = timeSpanMatch.find((s) => /\bself-end\b/.test(s))
+    expect(timeSpanClass, 'time/delivery span (carrying `self-end`) must exist in Chat.tsx').toBeTruthy()
+    expect(timeSpanClass!).toMatch(/\bselect-none\b/)
+  })
+
   it('Home row-menu "Copy transcript" item is not viewport-gated, so small-screen users keep a one-click copy path (IMPRV-021)', () => {
     const home = readFileSync(resolve(projectRoot, 'src/screens/Home.tsx'), 'utf8') as string
     // Locate the menuitem button by its label, walk back to capture its

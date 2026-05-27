@@ -20,6 +20,20 @@ id.
 
 ## Log
 
+- 2026-05-27:09:05:46 — IMPRV-025 — done: added
+  `html { -webkit-tap-highlight-color: transparent }`,
+  `body { overscroll-behavior-y: contain }`, and a global
+  `touch-action: manipulation` rule on
+  `button, a, input, textarea, select, [role="button"]` to `src/index.css` (raw
+  rules outside `@layer`, matching the existing file posture — `touch-action`
+  doesn't collide with any Tailwind utility so the IMPRV-024
+  longhand-after-shorthand gotcha isn't in play); added `overscroll-contain` to
+  the Chat transcript wrapper, `select-text` to the message-text span (line
+  396), and `select-none` to the time/delivery span (line 400) in
+  `src/components/Chat.tsx`; five new file-content assertions in
+  `src/mobile-responsive.test.tsx` covering each CSS rule and both className
+  changes; `npm run ci` green.
+- 2026-05-27:09:02:15 — IMPRV-025 — started
 - 2026-05-27:09:02:00 — IMPRV-024 — done: `ScreenContainer` now emits
   `mt-/ml-/mr-[env(safe-area-inset-*)]` on its root (margin, not padding —
   Tailwind v4 emits `padding-top` longhand AFTER `padding-block`, so a

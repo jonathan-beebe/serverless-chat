@@ -336,7 +336,7 @@ export function Chat({ messages, onSend, disabled, hasResumed }: Props) {
         aria-relevant="additions"
         aria-atomic="false"
         tabIndex={0}
-        className="flex-1 overflow-y-auto rounded-md border border-stone-300 bg-white/50 p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 dark:border-stone-700 dark:bg-stone-900/50">
+        className="flex-1 overflow-y-auto overscroll-contain rounded-md border border-stone-300 bg-white/50 p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 dark:border-stone-700 dark:bg-stone-900/50">
         {messages.length === 0 ? (
           <p aria-hidden="true" className="text-sm text-stone-600 dark:text-stone-400">
             No messages yet. Say hello.
@@ -393,11 +393,11 @@ export function Chat({ messages, onSend, disabled, hasResumed }: Props) {
                         ? 'bg-sky-700 text-white'
                         : 'bg-stone-200 text-stone-900 dark:bg-stone-700 dark:text-stone-100'
                     }`}>
-                    <span data-testid={`message-text-${m.id}`} className="whitespace-pre-wrap break-words">
+                    <span data-testid={`message-text-${m.id}`} className="select-text whitespace-pre-wrap break-words">
                       {m.text}
                     </span>
                     <span
-                      className={`flex items-center gap-1 self-end text-xs ${
+                      className={`flex select-none items-center gap-1 self-end text-xs ${
                         isMe ? 'text-white' : 'text-stone-600 dark:text-stone-400'
                       }`}>
                       <time aria-hidden="true" dateTime={new Date(m.at).toISOString()}>

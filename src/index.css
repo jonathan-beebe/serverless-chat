@@ -52,9 +52,17 @@ body,
 }
 
 /* Let the UA render native form controls, scrollbars, and selection colors in
-   the matching theme so they don't look out-of-place. */
+   the matching theme so they don't look out-of-place.
+
+   IMPRV-025: `-webkit-tap-highlight-color: transparent` suppresses the iOS
+   default translucent grey overlay that flashes on every tap. The design
+   system already paints hover/active/focus-visible states on Button, the
+   chat controls, etc. — the UA overlay only ever conflicts with those, so
+   killing it globally on `html` (inherits everywhere) is the right scope.
+   Universal, no spec conflict, no impact on focus rings or :active fills. */
 html {
   color-scheme: light dark;
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* font-family is intentionally inherited from Tailwind v4 preflight
@@ -63,10 +71,38 @@ html {
    Roboto on Android, the user's configured font on Linux). Don't reintroduce
    an explicit override here; it'd just shadow the platform-native font and
    re-open the door to webfont requests. (FEAT-005) */
+/* IMPRV-025: `overscroll-behavior-y: contain` on `body` prevents the iOS
+   pull-to-refresh gesture from reloading the document. On the connected
+   chat route a reload silently destroys the live `RTCPeerConnection` mid-
+   conversation; setup/Home routes survive reloads but a global scope is
+   the simplest correct treatment (the cost is that pull-to-refresh becomes
+   unavailable on Home too — acceptable for a PWA shell). The transcript
+   wrapper in `Chat.tsx` also carries `overscroll-contain` for belt-and-
+   suspenders against scroll-chaining from inside the transcript. */
 body {
   background-color: #fafaf9; /* stone-50 */
   color: #1c1917; /* stone-900 */
   overflow: hidden;
+  overscroll-behavior-y: contain;
+}
+
+/* IMPRV-025: `touch-action: manipulation` opts interactive primitives out
+   of the iOS Safari 300ms double-tap-to-zoom delay. The selector covers
+   every focusable primitive the app paints — Button, Textarea, anchors,
+   the menuitem buttons in Home's row menu, the copy controls in
+   CopyBox/Chat, and any `role="button"` shim — with one rule, so the
+   Button/Textarea components don't need per-component overrides.
+   Outside `@layer` to match this file's existing posture (loose rules
+   coexist with `@import "tailwindcss"`); does not interact with the
+   Tailwind v4 longhand-after-shorthand ordering gotcha that bit
+   IMPRV-024 because no Tailwind utility emits `touch-action`. */
+button,
+a,
+input,
+textarea,
+select,
+[role="button"] {
+  touch-action: manipulation;
 }
 
 @media (prefers-color-scheme: dark) {
