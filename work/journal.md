@@ -20,6 +20,19 @@ id.
 
 ## Log
 
+- 2026-05-27:09:29:43 — RFCTR-002 — done: converted the file-content
+  `readFileSync(...).toMatch(/className/)` assertions in
+  `src/mobile-responsive.test.tsx` (14 of 17) and `src/dark-mode.test.tsx` (1
+  of 3) to behavior assertions via `renderWithProviders` + `screen` queries;
+  added `src/__helpers__/cssRules.ts` (postcss-AST walker) for the six
+  `index.css` rule assertions plus the dark-mode `color-scheme` / dark-body
+  rules so Prettier-reordered declarations no longer false-positive; kept three
+  documented file-content holdouts (typography absence tests + the
+  `useVisualViewportHeight` no-`safe-area-inset-bottom` hook-internal invariant
+  - `UpdatePrompt.tsx` className + `index.html` `<meta>` scans); no new direct
+    dev deps (postcss already transitive via tailwindcss);
+    `npx prettier --write src/` no-op then `npm run ci` green (447 tests).
+- 2026-05-27:09:22:29 — RFCTR-002 — started
 - 2026-05-27:09:21:34 — RFCTR-001 — done: moved `ConversationRow` + its helpers
   (`formatRelative`, `autoLabel`, `COPY_FLASH_MS`, `TYPEAHEAD_RESET_MS`,
   `MENU_ITEM_LABELS`, `RowProps`) from `src/screens/Home.tsx` to

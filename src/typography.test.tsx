@@ -25,6 +25,11 @@ function walk(dir: string): string[] {
 
 describe('FEAT-005 system-only fonts', () => {
   it('src/index.css does not hardcode a font-family stack on body (relies on Tailwind v4 preflight)', () => {
+    // RFCTR-002 keeps this as file-content: the assertion is an absence test
+    // over the entire stylesheet — "no `font-family:` declaration anywhere".
+    // Behavior-shape would require asserting computed style on a rendered
+    // element, which can't catch a stray declaration on, say, `.preview-card`.
+    // Source scan is the right shape.
     const css = readFileSync(resolve(projectRoot, 'src/index.css'), 'utf8') as string
     // Strip /* … */ blocks so we only inspect declarations, not the comment
     // that explains *why* we don't declare a font-family here.
@@ -37,6 +42,11 @@ describe('FEAT-005 system-only fonts', () => {
   })
 
   it('index.html does not link to any font CDN', () => {
+    // RFCTR-002 keeps this as file-content: absence test against three
+    // specific hostnames in the HTML head. No rendered surface exposes
+    // `<link rel="stylesheet" href="https://fonts.googleapis.com/...">` as a
+    // behavior, and the meaningful failure is "a future PR added it back" —
+    // exactly what a substring scan catches.
     const html = readFileSync(resolve(projectRoot, 'index.html'), 'utf8') as string
     expect(html).not.toMatch(/fonts\.googleapis\.com/)
     expect(html).not.toMatch(/fonts\.gstatic\.com/)
@@ -44,6 +54,10 @@ describe('FEAT-005 system-only fonts', () => {
   })
 
   it('no @font-face declarations exist under src/ or public/', () => {
+    // RFCTR-002 keeps this as file-content: absence test over the whole src/
+    // + public/ tree. The assertion is "this declaration appears in zero
+    // files" — there is no rendered surface that exposes "did any stylesheet
+    // anywhere in the repo declare @font-face?".
     // Scan stylesheet sources only — `@font-face` is a CSS rule, and bringing
     // .tsx into scope would false-positive on this very test file's regex.
     const files = [...walk(resolve(projectRoot, 'src')), ...walk(resolve(projectRoot, 'public'))]
