@@ -16,10 +16,19 @@ id.
 - MAINT: 1
 - A11Y: 37
 - RFCTR: 4
-- BUG: 9
+- BUG: 10
 
 ## Log
 
+- 2026-05-27:10:20:33 — BUG-009 — done: stubbed `window.scrollTo` for the
+  IMPRV-017 mount-side-effect test in `src/mobile-responsive.test.tsx` so the
+  hook's pan-cancellation call no longer fires through jsdom's unimplemented
+  `scrollTo` and leaks two "Not implemented" lines per test run; mirrors the
+  stub pattern already in `useVisualViewportHeight.test.ts:27-34`; suite still
+  449 passing
+- 2026-05-27:10:19:17 — BUG-009 — started
+- 2026-05-27:10:19:17 — BUG-009 — defined: jsdom scrollTo stderr noise in
+  mobile-responsive test
 - 2026-05-27:09:58:00 — RSRCH-002 — done: usechatsession seam map published to
   docs/usechatsession-seam-map.md
 - 2026-05-27:09:52:09 — RSRCH-002 — started

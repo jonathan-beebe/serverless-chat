@@ -167,6 +167,13 @@ describe('FEAT-013 mobile-responsive chat', () => {
     }
     const originalVV = (window as unknown as { visualViewport?: unknown }).visualViewport
     Object.defineProperty(window, 'visualViewport', { configurable: true, value: fake })
+    // BUG-009: the hook calls `window.scrollTo(0, 0)` on every apply (iOS
+    // pan-cancellation). jsdom doesn't implement it and emits a
+    // "Not implemented" line through its virtualConsole — bypassing BUG-007's
+    // `console.error` guard, so the noise leaks to stderr. Match the stub
+    // pattern in `useVisualViewportHeight.test.ts`.
+    const originalScrollTo = window.scrollTo
+    window.scrollTo = (() => {}) as typeof window.scrollTo
     try {
       const { unmount: unmountOfferer } = renderWithProviders(
         <Offerer session={connectedSession()} conversationId={TEST_CONV_ID} onCancel={() => {}} />,
@@ -187,6 +194,7 @@ describe('FEAT-013 mobile-responsive chat', () => {
       unmountJoiner()
       expect(document.documentElement.style.getPropertyValue('--vvh')).toBe('')
     } finally {
+      window.scrollTo = originalScrollTo
       if (originalVV === undefined) {
         delete (window as unknown as { visualViewport?: unknown }).visualViewport
       } else {
