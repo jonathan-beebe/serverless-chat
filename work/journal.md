@@ -20,6 +20,9 @@ id.
 
 ## Log
 
+- 2026-05-27:14:01:03 — IMPRV-031 — done: per-bubble setTimeout(3000) gates
+  onMarkRead; isIntersecting schedules, !isIntersecting cancels, unmount clears
+  all pending timers
 - 2026-05-27:13:57:30 — IMPRV-031 — started
 - 2026-05-27:13:56:33 — IMPRV-031 — defined: 3-second viewport dwell before the
   read cursor advances
