@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Button } from './Button'
 import { Callout } from './Callout'
 import { LiveRegion } from './LiveRegion'
@@ -13,19 +13,43 @@ interface Props {
   helpText?: string
   /** Compact monospace style for short URLs; default flows multi-line for long codes. */
   variant?: 'url' | 'code'
-  /** When true, focus the Copy button on mount — used by screens where Copy is
-   * the screen's primary action. Off by default so showcase / preview contexts
-   * and any future inline usage don't steal focus. */
+  /** When true, focus the primary affordance on mount (Share if rendered, else
+   * Copy) — used by screens where this is the screen's primary action. Off by
+   * default so showcase / preview contexts and any future inline usage don't
+   * steal focus. */
   autoFocus?: boolean
+  /** FEAT-014: opt-in Web Share API payload. When set AND `navigator.share` /
+   * `canShare(data)` are both available, a Share button renders alongside Copy
+   * and forwards `data` to `navigator.share` on click. Omit the prop (or
+   * render in an unsupported browser) and the component behaves exactly as
+   * before — Copy is the only affordance, no surface area change. */
+  share?: ShareData
 }
 
-export function CopyBox({ value, label, helpText, variant = 'code', autoFocus = false }: Props) {
+export function CopyBox({ value, label, helpText, variant = 'code', autoFocus = false, share }: Props) {
   const [copied, setCopied] = useState(false)
   const [needsManualCopy, setNeedsManualCopy] = useState(false)
   const textareaId = useId()
   const manualCopyHintId = `${textareaId}-manual-copy`
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const copyButtonRef = useFocusOnMount<HTMLButtonElement>([], { skip: !autoFocus })
+  // FEAT-014: render-time feature detection. SSR/test environments and browsers
+  // without Web Share (desktop Firefox, some embedded webviews) miss either
+  // `navigator.share` or have `canShare` return false for the payload — both
+  // signals matter per the Web Share spec. Memoised against `share` so we don't
+  // re-probe `navigator` every render.
+  const shareSupported = useMemo(() => {
+    if (!share) return false
+    if (typeof navigator === 'undefined') return false
+    if (typeof navigator.share !== 'function') return false
+    // canShare is optional in the spec but ubiquitous where share exists; if
+    // absent, default to true so we don't suppress a working share path.
+    if (typeof navigator.canShare === 'function' && !navigator.canShare(share)) return false
+    return true
+  }, [share])
+  // When Share is rendered it's the primary affordance on mobile, so it
+  // receives `autoFocus`; Copy gets focus only when Share is absent.
+  const shareButtonRef = useFocusOnMount<HTMLButtonElement>([], { skip: !autoFocus || !shareSupported })
+  const copyButtonRef = useFocusOnMount<HTMLButtonElement>([], { skip: !autoFocus || shareSupported })
 
   // Marks a successful copy. The confirmation persists until the user starts a
   // new copy attempt, the underlying `value` changes, or the component
@@ -83,6 +107,21 @@ export function CopyBox({ value, label, helpText, variant = 'code', autoFocus = 
     setNeedsManualCopy(true)
   }
 
+  // FEAT-014: invoke `navigator.share` synchronously from the click handler —
+  // any awaited work between click and call drops the transient user
+  // activation on Safari/iOS. `AbortError` (user dismissed the sheet) is the
+  // documented happy-path cancel signal, not a failure: swallow silently.
+  // Other rejections are also swallowed visually — Copy remains the durable
+  // fallback affordance, so we don't compound a share failure with an error
+  // banner the user can't act on.
+  const onShare = () => {
+    if (!share) return
+    navigator.share(share).catch((err: unknown) => {
+      if (err instanceof Error && err.name === 'AbortError') return
+      // Non-Abort failures: keep the UI quiet. Copy is right next to Share.
+    })
+  }
+
   return (
     <div className="flex flex-col gap-2">
       <label htmlFor={textareaId} className="text-sm font-medium text-stone-800 dark:text-stone-200">
@@ -106,7 +145,16 @@ export function CopyBox({ value, label, helpText, variant = 'code', autoFocus = 
               Copied!
             </Callout>
           )}
-          <Button ref={copyButtonRef} variant="primary" size="md" onClick={onCopy}>
+          {/* FEAT-014: Share renders before Copy so on a mobile share-supported
+              browser it's the leftmost (primary) affordance in the row. When
+              Share is hidden (unsupported / no `share` prop) the row collapses
+              back to a single Copy button — identical to pre-FEAT-014. */}
+          {shareSupported && (
+            <Button ref={shareButtonRef} variant="primary" size="md" onClick={onShare}>
+              Share
+            </Button>
+          )}
+          <Button ref={copyButtonRef} variant={shareSupported ? 'secondary' : 'primary'} size="md" onClick={onCopy}>
             Copy
           </Button>
         </div>

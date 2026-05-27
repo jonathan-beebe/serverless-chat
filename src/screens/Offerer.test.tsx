@@ -168,6 +168,53 @@ describe('Offerer focus-on-mount (A11Y-005 + A11Y-022)', () => {
   })
 })
 
+describe('Offerer invite share (FEAT-014)', () => {
+  const originalShare = (navigator as { share?: unknown }).share
+  const originalCanShare = (navigator as { canShare?: unknown }).canShare
+
+  function restoreShare() {
+    if (originalShare === undefined) delete (navigator as { share?: unknown }).share
+    else Object.defineProperty(navigator, 'share', { configurable: true, value: originalShare })
+    if (originalCanShare === undefined) delete (navigator as { canShare?: unknown }).canShare
+    else Object.defineProperty(navigator, 'canShare', { configurable: true, value: originalCanShare })
+  }
+
+  it('renders a Share button on the invite branch when navigator.share is supported, and calls share with the invite URL', () => {
+    const share = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'share', { configurable: true, value: share })
+    Object.defineProperty(navigator, 'canShare', { configurable: true, value: () => true })
+    try {
+      const session = makeSession({ state: 'awaiting-answer', encodedLocal: 'OFFER-PAYLOAD' })
+      render(<Offerer session={session} conversationId={TEST_CONV_ID} onCancel={() => {}} />)
+
+      const shareBtn = screen.getByRole('button', { name: /^share$/i })
+      fireEvent.click(shareBtn)
+
+      expect(share).toHaveBeenCalledTimes(1)
+      const payload = share.mock.calls[0][0] as ShareData
+      // The invite URL is what the OS share sheet must receive; the rest are
+      // platform-pretty fields (title/text) that are not load-bearing here.
+      expect(payload.url).toMatch(/#offer=OFFER-PAYLOAD/)
+    } finally {
+      restoreShare()
+    }
+  })
+
+  it('falls back to Copy-only on the invite branch when navigator.share is unsupported', () => {
+    delete (navigator as { share?: unknown }).share
+    delete (navigator as { canShare?: unknown }).canShare
+    try {
+      const session = makeSession({ state: 'awaiting-answer', encodedLocal: 'OFFER-PAYLOAD' })
+      render(<Offerer session={session} conversationId={TEST_CONV_ID} onCancel={() => {}} />)
+
+      expect(screen.queryByRole('button', { name: /^share$/i })).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /^copy$/i })).toBeInTheDocument()
+    } finally {
+      restoreShare()
+    }
+  })
+})
+
 describe('Offerer post-connect drop (BUG-005)', () => {
   it('renders a "Connection lost" view when state === "closed"', () => {
     // Encode any opaque payload — the closed view must NOT show this.

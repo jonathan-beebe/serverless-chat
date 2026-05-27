@@ -325,6 +325,17 @@ export function Offerer({ session, conversationId, onCancel }: Props) {
           helpText="Send this link to your friend in Teams, SMS, email — any channel works."
           variant="url"
           autoFocus={!suppressInitialFocus}
+          // FEAT-014: on mobile browsers with Web Share support, CopyBox
+          // renders a Share button that opens the OS share sheet pre-filled
+          // with the invite URL — collapsing the multi-app context switch
+          // (copy → leave tab → open Teams/SMS → paste → send) to one tap. On
+          // unsupported browsers the prop is silently inert; Copy remains
+          // the only affordance, exactly as before FEAT-014.
+          share={{
+            title: 'Invite to chat',
+            text: 'Join my P2P chat:',
+            url: offerUrl,
+          }}
         />
       )}
 
