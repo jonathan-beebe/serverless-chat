@@ -20,6 +20,9 @@ id.
 
 ## Log
 
+- 2026-05-27:09:58:00 — RSRCH-002 — done: usechatsession seam map published to
+  docs/usechatsession-seam-map.md
+- 2026-05-27:09:52:09 — RSRCH-002 — started
 - 2026-05-27:09:52:00 — RFCTR-003 — done: split Chat.tsx (454→42 lines) into
   ChatCopyToolbar, ChatComposer, ChatTranscript with colocated tests
 - 2026-05-27:09:43:47 — RFCTR-003 — started
