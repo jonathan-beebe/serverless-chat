@@ -20,6 +20,19 @@ id.
 
 ## Log
 
+- 2026-05-27:11:26:00 — BUG-011 — done: restored `session.reset()` before
+  `navigate('/')` in all three `onCancel` sites in
+  `src/routes/ConversationRoute.tsx` (joiner sticky-offer, live-session Offerer,
+  resume Offerer) so the local hook tears down `RTCPeerConnection` /
+  `RTCDataChannel` on user cancel — remote peer now observes `channel.onclose`
+  and transitions `connected → 'closed'`; added a `pagehide` window listener in
+  `src/hooks/useChatSession.ts` so closing the tab also tears down the channel
+  before the browser kills the process; updated the Joiner closed-branch stale
+  comment (`App.goHome` → ConversationRoute callback); new behavior tests
+  `src/routes/ConversationRoute.test.tsx` (4 cases: invite Cancel, connected End
+  chat, closed Return home, joiner Decline) and a `pagehide` teardown test added
+  to `src/hooks/useChatSession.test.ts`; suite 455 passing
+- 2026-05-27:11:22:00 — BUG-011 — started
 - 2026-05-27:11:21:00 — BUG-010 — done: moved safe-area-inset from
   `ScreenContainer` margin utilities to
   `body { padding-top/left/right: env(...) }` in `src/index.css`; removed

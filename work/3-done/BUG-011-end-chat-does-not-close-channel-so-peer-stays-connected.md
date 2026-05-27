@@ -1,8 +1,9 @@
 ---
 id: BUG-011
 type: bug
-status: open
+status: resolved
 created: 2026-05-27
+resolved: 2026-05-27
 ---
 
 # BUG-011: end chat does not close channel so peer stays connected

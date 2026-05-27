@@ -55,7 +55,10 @@ export function ConversationRoute() {
         session={session}
         offerCode={stickyOffer}
         conversationId={id}
-        onCancel={() => navigate('/')}
+        onCancel={() => {
+          session.reset()
+          navigate('/')
+        }}
         onOfferCaptured={() => {
           // ARCH-001: drop the fragment from the URL bar so the canonical
           // /conversation/<id> URL is what the user sees and can share. The
@@ -74,7 +77,21 @@ export function ConversationRoute() {
   // async lookup so navigating back from /network into a live chat doesn't
   // flash a loading state.
   if (id && session.conversationId === id) {
-    return <Offerer session={session} conversationId={id} onCancel={() => navigate('/')} />
+    return (
+      <Offerer
+        session={session}
+        conversationId={id}
+        onCancel={() => {
+          // BUG-011 / BUG-012: tear down the PC/channel so the remote peer
+          // observes onclose, and clear the session binding so the next
+          // "Start a chat" from Home is not short-circuited by the
+          // `state !== 'idle'` guard. Restores the pre-ARCH-001 `goHome`
+          // semantics that ARCH-001 inadvertently dropped.
+          session.reset()
+          navigate('/')
+        }}
+      />
+    )
   }
 
   if (!id) return <NotFound />
@@ -119,5 +136,14 @@ function ResumeOrNotFound({ id }: { id: string }) {
   }
   if (state === 'notfound') return <NotFound />
 
-  return <Offerer session={session} conversationId={id} onCancel={() => navigate('/')} />
+  return (
+    <Offerer
+      session={session}
+      conversationId={id}
+      onCancel={() => {
+        session.reset()
+        navigate('/')
+      }}
+    />
+  )
 }

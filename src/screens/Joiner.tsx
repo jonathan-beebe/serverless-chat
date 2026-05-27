@@ -151,7 +151,9 @@ export function Joiner({ session, offerCode, conversationId, onCancel, onOfferCa
     // Post-connect drop: the chat was live and just ended. Don't render the
     // stale reply-code CopyBox — that code is bound to the now-closed
     // PeerConnection and can't be reused. The single CTA resets the session
-    // and routes home (`onCancel` is wired to App.goHome). See BUG-005.
+    // and routes home (`onCancel` is wired in ConversationRoute to call
+    // session.reset() before navigating — restored by BUG-011 after
+    // ARCH-001 inadvertently dropped it). See BUG-005.
     return (
       <ScreenContainer
         label="Connection lost"

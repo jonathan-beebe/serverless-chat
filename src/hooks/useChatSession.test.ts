@@ -804,6 +804,27 @@ describe('useChatSession teardown', () => {
     expect(channel.closeCalls).toBeGreaterThanOrEqual(1)
     expect(pc.closeCalls).toBeGreaterThanOrEqual(1)
   })
+
+  it('a window pagehide event tears down the channel and pc so the remote peer sees onclose before the tab is killed (BUG-011)', async () => {
+    // Without this, closing the tab leaves the channel open until GC eventually
+    // collects it — the remote peer keeps rendering "still connected" while
+    // the SCTP CLOSE never ships. The pagehide listener mirrors the unmount
+    // effect's teardown for the close-tab case (where unmount doesn't fire).
+    const { result } = renderHook(() => useChatSession())
+    await act(async () => {
+      await result.current.startAsOfferer('test-conv')
+    })
+    act(() => lastChannel!.open())
+    const pc = lastPc!
+    const channel = lastChannel!
+
+    act(() => {
+      window.dispatchEvent(new Event('pagehide'))
+    })
+
+    expect(channel.closeCalls).toBeGreaterThanOrEqual(1)
+    expect(pc.closeCalls).toBeGreaterThanOrEqual(1)
+  })
 })
 
 describe('useChatSession state-machine guards', () => {

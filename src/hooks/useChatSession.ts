@@ -280,6 +280,18 @@ export function useChatSession(): ChatSession {
   // (e.g. user navigates away). Without this we leak a PeerConnection.
   useEffect(() => () => teardown(), [teardown])
 
+  // BUG-011: when the user closes the tab, the unmount effect above does not
+  // fire — the browser tears the process down without running React cleanups.
+  // Listen for `pagehide` (bfcache-safe) so the channel ships an SCTP CLOSE
+  // before the tab dies and the remote peer transitions `connected → 'closed'`
+  // within a few seconds rather than stranding on a stale "still connected"
+  // screen until GC eventually collects the PC.
+  useEffect(() => {
+    const onPagehide = () => teardown()
+    window.addEventListener('pagehide', onPagehide)
+    return () => window.removeEventListener('pagehide', onPagehide)
+  }, [teardown])
+
   // FEAT-010: send a sync-probe envelope. Only the offerer initiates one.
   // Stores the in-flight probe so the timeout can clean up if the ack
   // never arrives.
