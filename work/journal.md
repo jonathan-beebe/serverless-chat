@@ -20,6 +20,10 @@ id.
 
 ## Log
 
+- 2026-05-27:12:43:58 — RSRCH-003 — started
+- 2026-05-27:12:43:38 — IMPRV-029 — done: count-bearing pill sibling of the
+  role=log scroll surface, increments per scrolled-back arrival, click scrolls
+  to bottom + dismisses, manual-scroll does not dismiss per chosen policy
 - 2026-05-27:12:38:14 — IMPRV-029 — started
 - 2026-05-27:12:38:01 — IMPRV-028 — done: flipped transcript wrapper to flex
   flex-col and added mt-auto to its child so messages bottom-anchor adjacent to

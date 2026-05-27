@@ -1,8 +1,9 @@
 ---
 id: RSRCH-003
 type: research
-status: open
+status: resolved
 created: 2026-05-27
+resolved: 2026-05-27
 ---
 
 # RSRCH-003: Survey WebRTC connection recovery options under current and hypothetical signaling models
@@ -115,3 +116,61 @@ trigger for research-typing this rather than filing another bug or improvement.
   surface)
 - RSRCH-002 — `useChatSession` seam map (the cluster a recovery layer would
   attach to)
+
+## Working
+
+Artifact published at `docs/webrtc-recovery-options.md`. Followed the RSRCH-002
+seam-map document's shape: at-a-glance up top, one section per in-scope class
+with a fixed sub-structure (failure mode → recovery techniques → copy-paste
+viability → signaling unlock → browser caveats → NAT caveats → attach points),
+then signaling shapes and cross-class attach points, then a "already plumbed"
+inventory.
+
+Covered (per the ticket's outcome list):
+
+(a) WebRTC-layer failure modes for each class — named the relevant
+`PeerConnection` / `DataChannel` state transitions and which events fire.
+
+(b) Recovery techniques — `iceRestart: true` on `createOffer`,
+`pc.restartIce()`, `oniceconnectionstatechange` / `onconnectionstatechange`
+branching, Page Lifecycle integration (`visibilitychange` / `freeze` /
+`resume`), full new-PC handshake, local-only restart-over-existing-channel.
+
+(c) Under copy-paste signaling — class 1 and 2 still require manual re-exchange,
+no UX win. Class 3 is the current behavior with the one possible unlock being a
+"Reconnect" button that preserves conv id.
+
+(d) Four concrete signaling shapes — small WebSocket relay (best recovery
+quality, requires a server), QR refresh (zero infra, narrow applicability),
+ephemeral discovery token via public relay (no custom server, third-party
+dependency), and "no new signaling — reuse the data channel as the carrier"
+(only covers class 1's transient sub-case). Each carries an explicit trade-off
+list.
+
+(e) Browser-support caveats — per-class. Notable: Firefox does not implement
+Page Lifecycle `freeze` / `resume`; `pc.restartIce()` shortcut is Chrome 77+ /
+Firefox 70+ / Safari 14+; the `'disconnected'` → `'failed'` window varies by
+browser (~2-3s Firefox, ~5s Chrome, ~10-20s Safari).
+
+NAT-topology caveats — per-class. Notable: a peer pair that worked direct
+(srflx-srflx) may need TURN after a network change crosses into CGNAT;
+symmetric-NAT UDP timeout (~30s) drives some class 2 behavior.
+
+(f) Attach points in `src/core/rtc.ts` and `src/hooks/useChatSession.ts` —
+per-class, line-numbered, and consolidated in a cross-class "trigger layer /
+restart layer / signaling-carrier layer" summary. Referenced existing seams
+(`wirePc.onconnectionstatechange:657`, `wireChannel.onclose:629`,
+`deliberateTeardownRef:206`, `pcRef`, `pagehide` effect:289, `samplesRef:197`,
+`pushSample:211`).
+
+The "already plumbed" section enumerates the infrastructure a recovery layer can
+lean on without reinventing: FEAT-010 telemetry sampling already captures
+`connectionstatechange`, ARCH-001 keeps session in routing context, BUG-008
+cross-route persistence, FEAT-008 deliberate- teardown discrimination, FEAT-012
+history re-merge on channel open, BUG-011 `pagehide` teardown pattern.
+
+Open questions surfaced (not resolved) at the end: empirical `'disconnected'` →
+restart timing, asymmetric "both apps were closed" relay TTL question, and a
+small empirical probe needed for shape D.
+
+No follow-up tickets surfaced, per the ticket's explicit stance.
