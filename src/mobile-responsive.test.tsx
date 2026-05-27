@@ -196,16 +196,20 @@ describe('FEAT-013 mobile-responsive chat', () => {
     expect(timeSpanClass!).toMatch(/\bselect-none\b/)
   })
 
-  it('Home row-menu "Copy transcript" item is not viewport-gated, so small-screen users keep a one-click copy path (IMPRV-021)', () => {
-    const home = readFileSync(resolve(projectRoot, 'src/screens/Home.tsx'), 'utf8') as string
+  it('ConversationRow row-menu "Copy transcript" item is not viewport-gated, so small-screen users keep a one-click copy path (IMPRV-021)', () => {
+    // RFCTR-001: the per-row menu moved with `ConversationRow` out of
+    // `Home.tsx` into `src/components/ConversationRow.tsx`. The IMPRV-021
+    // invariant is unchanged — the menuitem must exist and must not carry
+    // viewport-hide tokens.
+    const row = readFileSync(resolve(projectRoot, 'src/components/ConversationRow.tsx'), 'utf8') as string
     // Locate the menuitem button by its label, walk back to capture its
     // className (template-literal or quoted). The item's class string must
     // not contain `hidden` or any `sm:hidden` / `max-sm:hidden` viewport-hide
     // tokens that would mirror the Chat toolbar rule from IMPRV-021.
-    const tmpl = home.match(/<button\b[\s\S]*?className=\{`([^`]*)`\}[\s\S]*?>\s*Copy transcript\s*</)
-    const quoted = home.match(/<button\b[\s\S]*?className="([^"]*)"[\s\S]*?>\s*Copy transcript\s*</)
+    const tmpl = row.match(/<button\b[\s\S]*?className=\{`([^`]*)`\}[\s\S]*?>\s*Copy transcript\s*</)
+    const quoted = row.match(/<button\b[\s\S]*?className="([^"]*)"[\s\S]*?>\s*Copy transcript\s*</)
     const itemClass = tmpl?.[1] ?? quoted?.[1]
-    expect(itemClass, 'Copy transcript menu item must exist in Home.tsx').toBeTruthy()
+    expect(itemClass, 'Copy transcript menu item must exist in ConversationRow.tsx').toBeTruthy()
     expect(itemClass!).not.toMatch(/\bhidden\b/)
     expect(itemClass!).not.toMatch(/\bsm:hidden\b/)
     expect(itemClass!).not.toMatch(/\bmax-sm:hidden\b/)

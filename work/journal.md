@@ -15,11 +15,26 @@ id.
 - IMPRV: 26
 - MAINT: 1
 - A11Y: 37
-- RFCTR: 1
+- RFCTR: 3
 - BUG: 9
 
 ## Log
 
+- 2026-05-27:09:21:34 — RFCTR-001 — done: moved `ConversationRow` + its helpers
+  (`formatRelative`, `autoLabel`, `COPY_FLASH_MS`, `TYPEAHEAD_RESET_MS`,
+  `MENU_ITEM_LABELS`, `RowProps`) from `src/screens/Home.tsx` to
+  `src/components/ConversationRow.tsx`; Home retains `LIVE_STATES` +
+  `liveConversationId` (consume `useSession`); split the 807-line
+  `Home.test.tsx` into a 175-line screen test (focus, empty state, CR-011 cull,
+  Start-a-chat, commit hash) + a 737-line `ConversationRow.test.tsx` covering
+  rendering / CR-008 menu dismissal / CR-009 Copy transcript / A11Y-025 APG
+  keyboard; updated the IMPRV-021 file-content assertion in
+  `src/mobile-responsive.test.tsx` to read from `ConversationRow.tsx`;
+  `npm run ci` green.
+- 2026-05-27:09:13:53 — RFCTR-001 — started
+- 2026-05-27:09:13:43 — RFCTR-002 — defined: replace file-content tests with
+  behavior assertions
+- 2026-05-27:09:13:43 — RFCTR-001 — defined: extract conversationrow from home
 - 2026-05-27:09:05:46 — IMPRV-025 — done: added
   `html { -webkit-tap-highlight-color: transparent }`,
   `body { overscroll-behavior-y: contain }`, and a global
