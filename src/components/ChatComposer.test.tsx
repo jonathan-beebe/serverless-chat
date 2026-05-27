@@ -137,3 +137,22 @@ describe('ChatComposer Enter / Shift+Enter (FEAT-004)', () => {
     expect(onSend).not.toHaveBeenCalled()
   })
 })
+
+describe('ChatComposer wide-screen breathing room (IMPRV-026)', () => {
+  it("the composer's <form> carries a `sm:mb-4` utility so on viewports ≥640px there's visible breathing room between the composer and the viewport bottom edge", () => {
+    // Mobile (<640px): no mb-* rule applies and the composer remains flush
+    // with the visual-viewport bottom for the IMPRV-017 / IMPRV-020 keyboard-
+    // pin behavior. Larger viewports get 1rem (16px) of clearance.
+    render(<ChatComposer onSend={() => {}} />)
+    const composer = screen.getByLabelText(/message/i)
+    // The form is the composer's parent — Textarea is the labelled element,
+    // and the form is the direct ancestor of both the textarea and the
+    // Send button (see ChatComposer.tsx render).
+    const form = composer.closest('form')
+    expect(form, 'expected to find the composer <form>').toBeTruthy()
+    expect(form!.className).toMatch(/\bsm:mb-4\b/)
+    // Negative guard: a bare `mb-4` (not sm-gated) would apply on phones
+    // and re-introduce the IMPRV-017 keyboard-pin regression.
+    expect(form!.className).not.toMatch(/(^|\s)mb-4(\s|$)/)
+  })
+})

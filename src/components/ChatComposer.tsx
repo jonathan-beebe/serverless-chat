@@ -63,7 +63,11 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(function ChatC
   }, [disabled])
 
   return (
-    <form onSubmit={onSubmit} className="flex items-end gap-2">
+    // IMPRV-026: `sm:mb-4` lifts the composer 1rem off the viewport bottom on
+    // viewports ≥640px so it doesn't sit flush against the browser chrome on
+    // desktop. Below `sm` the rule is inert and IMPRV-017 / IMPRV-020's
+    // keyboard-pin behavior is unchanged.
+    <form onSubmit={onSubmit} className="flex items-end gap-2 sm:mb-4">
       <label htmlFor="chat-input" className="sr-only">
         Message
       </label>

@@ -20,6 +20,14 @@ id.
 
 ## Log
 
+- 2026-05-27:11:30:00 — IMPRV-026 — done: added `sm:mb-4` to the composer
+  `<form>` in `src/components/ChatComposer.tsx` so the composer sits with 1rem
+  (~16px) of breathing room above the viewport bottom on viewports ≥640px;
+  phone-width unchanged so the IMPRV-017 / IMPRV-020 keyboard-pin behavior
+  survives; new behavior assertion in `src/components/ChatComposer.test.tsx`
+  reads the form's className for `sm:mb-4` presence and guards against a bare
+  `mb-4` regression; suite 457 passing
+- 2026-05-27:11:29:00 — IMPRV-026 — started
 - 2026-05-27:11:28:00 — BUG-012 — done: verified BUG-011's `session.reset()`
   restoration in `src/routes/ConversationRoute.tsx` onCancel sites also fixes
   the cancel→restart→NotFound sequence (sibling symptom of the same ARCH-001

@@ -1,8 +1,9 @@
 ---
 id: IMPRV-026
 type: improvement
-status: open
+status: resolved
 created: 2026-05-27
+resolved: 2026-05-27
 ---
 
 # IMPRV-026: lift composer off viewport bottom on wide screens
