@@ -20,6 +20,16 @@ id.
 
 ## Log
 
+- 2026-05-27:08:44:00 — FEAT-015 — done: added `useInstallPrompt` hook (captures
+  `beforeinstallprompt`, holds the event after `preventDefault()`, exposes
+  `promptInstall()`, clears on `appinstalled` or after `userChoice` resolves)
+  and `useDisplayModeStandalone` hook (matchMedia + `navigator.standalone` union
+  with `change` subscription); new `<InstallPrompt />` renders an "Install app"
+  button on Home near the commit-hash footer when `canInstall && !standalone`,
+  with LiveRegion announcement; 19 new tests cover Chromium fire→click→prompt,
+  dismissed outcome, `appinstalled` window event, iOS standalone, and
+  unsubscribe
+- 2026-05-27:08:38:59 — FEAT-015 — started
 - 2026-05-27:08:37:47 — FEAT-014 — done: CopyBox grew an optional `share` prop
   that renders an OS-share-sheet button alongside Copy when `navigator.share` +
   `canShare(payload)` both report support; Offerer's invite-URL CopyBox opts in,

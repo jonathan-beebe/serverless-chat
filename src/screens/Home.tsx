@@ -4,6 +4,7 @@ import { Button } from '../components/Button'
 import { Callout } from '../components/Callout'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { Heading } from '../components/Heading'
+import { InstallPrompt } from '../components/InstallPrompt'
 import { LiveRegion } from '../components/LiveRegion'
 import { ScreenContainer, useScreenChrome } from '../components/ScreenChrome'
 import { useFocusOnMount } from '../hooks/useFocusOnMount'
@@ -618,11 +619,20 @@ export function Home() {
           touches a server.
         </p>
       </details>
-      {/* IMPRV-018: short commit SHA (literal "dev" when git was unavailable
-          at build time). Constant per build via vite's `define`; no runtime
-          cost beyond a text node. Plain text — no link, no copy affordance —
-          so it sits quietly as a triage anchor. */}
-      <p className="text-xs text-stone-500 dark:text-stone-400">{__COMMIT_HASH__}</p>
+      {/* FEAT-015: install affordance sits in the same quiet status row as
+          the commit hash (IMPRV-018 precedent). The component self-hides when
+          the browser hasn't fired `beforeinstallprompt`, when the user is
+          already standalone, or after the captured prompt has been spent —
+          so the row collapses to just the commit hash on iOS Safari /
+          Firefox / installed-PWA contexts. */}
+      <div className="flex flex-col items-center gap-2">
+        <InstallPrompt />
+        {/* IMPRV-018: short commit SHA (literal "dev" when git was unavailable
+            at build time). Constant per build via vite's `define`; no runtime
+            cost beyond a text node. Plain text — no link, no copy affordance —
+            so it sits quietly as a triage anchor. */}
+        <p className="text-xs text-stone-500 dark:text-stone-400">{__COMMIT_HASH__}</p>
+      </div>
     </ScreenContainer>
   )
 }
