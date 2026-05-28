@@ -8,7 +8,7 @@ id.
 
 ## Next ticket numbers
 
-- RSRCH: 4
+- RSRCH: 5
 - DSGN: 1
 - ARCH: 2
 - FEAT: 16
@@ -16,10 +16,20 @@ id.
 - MAINT: 1
 - A11Y: 37
 - RFCTR: 4
-- BUG: 13
+- BUG: 14
 
 ## Log
 
+- 2026-05-27:22:17:03 — BUG-013 — done: useEffect with [isNearBottom, messages,
+  lastReadMessageId, onMarkRead] deps calls onMarkRead(newest) whenever
+  at-bottom and cursor < newest; hook's forward-only filter is the idempotency
+  guarantee
+- 2026-05-27:22:15:51 — RSRCH-004 — filed in 0-refine (per types/bug.md):
+  consolidate the chat scroll/cursor implementation behind the now-stable
+  four-rule model
+- 2026-05-27:22:09:31 — BUG-013 — started
+- 2026-05-27:22:08:05 — BUG-013 — defined: at-bottom snaps the read cursor to
+  the newest message so the marker stops surfacing above already-read content
 - 2026-05-27:20:35:15 — IMPRV-032 — done: isNearBottom state mirrors
   wasNearBottomRef from onScroll; lastReadIndex returns null at-bottom so the
   marker is suppressed without touching cursor advancement
