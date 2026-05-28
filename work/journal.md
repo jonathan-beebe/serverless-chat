@@ -20,6 +20,9 @@ id.
 
 ## Log
 
+- 2026-05-28:17:14:18 — IMPRV-035 — done: exported buildIceServers + 8 cases
+  covering all VITE*TURN*\* branches with .env.local override
+- 2026-05-28:17:11:15 — IMPRV-035 — started
 - 2026-05-28:17:10:23 — IMPRV-034 — done: added 9-case deriveSync block to
   wire.test.ts covering identity, latency, offsets, mirror invariant,
   NaN/Infinity, and hook-fixture regression anchor
