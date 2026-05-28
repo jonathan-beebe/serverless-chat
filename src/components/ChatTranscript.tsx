@@ -224,6 +224,22 @@ export function ChatTranscript({ messages, hasResumed, lastReadMessageId, onMark
     }
   }, [])
 
+  // BUG-013: when the user is at the bottom, the persisted cursor must
+  // already point at the newest message — "at-bottom" semantically means
+  // "caught up." The IMPRV-031 IntersectionObserver+dwell alone leaves the
+  // cursor lagging if the user scrolls up before 3s elapses for the bottom
+  // bubbles; this effect closes that gap by snapping the cursor whenever
+  // isNearBottom is true and the newest id differs from the cursor. The
+  // hook's `markRead` is forward-only + idempotent, so a repeated call with
+  // the same id is a no-op (no extra writes, no render churn).
+  useEffect(() => {
+    if (!isNearBottom) return
+    if (messages.length === 0) return
+    const newestId = messages[messages.length - 1].id
+    if (newestId === lastReadMessageId) return
+    onMarkRead?.(newestId)
+  }, [isNearBottom, messages, lastReadMessageId, onMarkRead])
+
   const registerBubble = (id: string) => (el: HTMLLIElement | null) => {
     const map = bubbleRefs.current
     const prev = map.get(id)

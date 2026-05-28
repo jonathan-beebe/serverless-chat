@@ -602,6 +602,9 @@ describe('ChatTranscript read cursor + Last read divider (IMPRV-030)', () => {
       const onMarkRead = vi.fn()
       const messages: ChatMessage[] = [msg('a', 'one'), msg('b', 'two'), msg('c', 'three')]
       render(<ChatTranscript messages={messages} onMarkRead={onMarkRead} />)
+      // BUG-013: the at-bottom snap fires onMarkRead(newest) on mount; clear
+      // it so the assertions below isolate the IMPRV-031 dwell mechanic.
+      onMarkRead.mockClear()
       const [observer] = MockIntersectionObserver.instances
       // Fire intersection for bubble "b" — schedules the dwell timer.
       observer.fire([{ target: observer.observed[1] }])
@@ -625,6 +628,7 @@ describe('ChatTranscript read cursor + Last read divider (IMPRV-030)', () => {
       const onMarkRead = vi.fn()
       const messages: ChatMessage[] = [msg('a', 'one'), msg('b', 'two')]
       render(<ChatTranscript messages={messages} onMarkRead={onMarkRead} />)
+      onMarkRead.mockClear() // BUG-013: ignore the at-bottom snap on mount.
       const [observer] = MockIntersectionObserver.instances
       observer.fire([{ target: observer.observed[0], isIntersecting: false, intersectionRatio: 0 }])
       // Even if a wall-clock 3 seconds elapses, no markRead — the dwell was
@@ -642,6 +646,7 @@ describe('ChatTranscript read cursor + Last read divider (IMPRV-030)', () => {
       const onMarkRead = vi.fn()
       const messages: ChatMessage[] = [msg('a', 'one'), msg('b', 'two')]
       render(<ChatTranscript messages={messages} onMarkRead={onMarkRead} />)
+      onMarkRead.mockClear() // BUG-013: ignore the at-bottom snap on mount.
       const [observer] = MockIntersectionObserver.instances
       // Bubble enters viewport — dwell starts.
       observer.fire([{ target: observer.observed[1] }])
@@ -663,6 +668,7 @@ describe('ChatTranscript read cursor + Last read divider (IMPRV-030)', () => {
       const onMarkRead = vi.fn()
       const messages: ChatMessage[] = [msg('a', 'one'), msg('b', 'two')]
       render(<ChatTranscript messages={messages} onMarkRead={onMarkRead} />)
+      onMarkRead.mockClear() // BUG-013: ignore the at-bottom snap on mount.
       const [observer] = MockIntersectionObserver.instances
       // First visit: 2 seconds in the viewport.
       observer.fire([{ target: observer.observed[1] }])
@@ -689,6 +695,7 @@ describe('ChatTranscript read cursor + Last read divider (IMPRV-030)', () => {
       const onMarkRead = vi.fn()
       const messages: ChatMessage[] = [msg('a', 'one'), msg('b', 'two')]
       const { unmount } = render(<ChatTranscript messages={messages} onMarkRead={onMarkRead} />)
+      onMarkRead.mockClear() // BUG-013: ignore the at-bottom snap on mount.
       const [observer] = MockIntersectionObserver.instances
       // Schedule a dwell timer mid-flight.
       observer.fire([{ target: observer.observed[1] }])
@@ -842,6 +849,98 @@ describe('ChatTranscript scroll-gated marker visibility (IMPRV-032)', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+describe('ChatTranscript at-bottom cursor snap (BUG-013)', () => {
+  it('calls onMarkRead with the newest message id on initial mount while at-bottom (no dwell required)', () => {
+    // The bug: when the user is at the bottom, the persisted cursor must
+    // already point at the newest message. Before the fix, it only advanced
+    // via the IMPRV-031 3-second dwell — leaving the cursor lagging if the
+    // user scrolled away within the dwell window.
+    const onMarkRead = vi.fn()
+    const messages: ChatMessage[] = [msg('a', 'one'), msg('b', 'two'), msg('c', 'three')]
+    render(<ChatTranscript messages={messages} lastReadMessageId="a" onMarkRead={onMarkRead} />)
+    // At-bottom is the initial state (matches the auto-scroll snap).
+    expect(onMarkRead).toHaveBeenCalledWith('c')
+  })
+
+  it('advances the cursor to the new newest message when one arrives while at-bottom', () => {
+    const onMarkRead = vi.fn()
+    const initial: ChatMessage[] = [msg('a', 'one'), msg('b', 'two')]
+    const { rerender } = render(<ChatTranscript messages={initial} lastReadMessageId="b" onMarkRead={onMarkRead} />)
+    onMarkRead.mockClear()
+
+    // New message arrives while at-bottom — cursor snaps to the new newest
+    // on the same commit, no fake timers required.
+    rerender(
+      <ChatTranscript messages={[...initial, msg('c', 'three')]} lastReadMessageId="b" onMarkRead={onMarkRead} />,
+    )
+
+    expect(onMarkRead).toHaveBeenCalledWith('c')
+  })
+
+  it('does NOT auto-advance the cursor when a message arrives while the user is scrolled back', () => {
+    const onMarkRead = vi.fn()
+    const initial: ChatMessage[] = [msg('a', 'one'), msg('b', 'two')]
+    const { rerender } = render(<ChatTranscript messages={initial} lastReadMessageId="b" onMarkRead={onMarkRead} />)
+    const transcript = getTranscript()
+
+    // Scroll back past the 32px threshold so isNearBottom flips to false.
+    stubScroll(transcript, { scrollHeight: 400, clientHeight: 200 })
+    transcript.scrollTop = 0
+    fireEvent.scroll(transcript)
+    onMarkRead.mockClear()
+
+    // New message arrives while scrolled back — the snap effect must NOT fire.
+    rerender(
+      <ChatTranscript messages={[...initial, msg('c', 'three')]} lastReadMessageId="b" onMarkRead={onMarkRead} />,
+    )
+
+    expect(onMarkRead).not.toHaveBeenCalled()
+  })
+
+  it('keeps the marker hidden after scrolling up when the user was fully caught up at the bottom', () => {
+    // End-to-end regression check: a fully-caught-up session (cursor === newest)
+    // followed by a scroll-up reveals no marker. This holds because of IMPRV-032
+    // (marker render is scroll-gated) AND BUG-013 (cursor is now actually at
+    // newest when the user has been at-bottom).
+    const messages: ChatMessage[] = [msg('a', 'one'), msg('b', 'two'), msg('c', 'three')]
+    render(<ChatTranscript messages={messages} lastReadMessageId="c" />)
+    const transcript = getTranscript()
+
+    stubScroll(transcript, { scrollHeight: 400, clientHeight: 200 })
+    transcript.scrollTop = 0
+    fireEvent.scroll(transcript)
+
+    expect(document.querySelector('[data-testid="last-read-marker"]')).toBeNull()
+  })
+
+  it('snaps the cursor to newest when the user scrolls back down to at-bottom after being scrolled away', () => {
+    // The "I scrolled up, read some history, then went back to the bottom"
+    // flow: as the threshold is crossed downward, isNearBottom flips to true,
+    // the snap effect runs, and the cursor catches up — same caught-up state
+    // as if they had been at-bottom the whole time.
+    const onMarkRead = vi.fn()
+    const messages: ChatMessage[] = [msg('a', 'one'), msg('b', 'two'), msg('c', 'three')]
+    const { rerender } = render(<ChatTranscript messages={messages} lastReadMessageId="a" onMarkRead={onMarkRead} />)
+    const transcript = getTranscript()
+
+    // Scroll up; cursor in the test stays at "a" (the parent owns the state
+    // in production, but the prop is fixed here for assertion clarity).
+    stubScroll(transcript, { scrollHeight: 400, clientHeight: 200 })
+    transcript.scrollTop = 0
+    fireEvent.scroll(transcript)
+    // Re-render to commit the post-scroll state (rerender with same props is
+    // enough — the onScroll handler triggered a setState).
+    rerender(<ChatTranscript messages={messages} lastReadMessageId="a" onMarkRead={onMarkRead} />)
+    onMarkRead.mockClear()
+
+    // Scroll back down within the 32px threshold.
+    transcript.scrollTop = 200 // 400 - 200 = 0px from bottom
+    fireEvent.scroll(transcript)
+
+    expect(onMarkRead).toHaveBeenCalledWith('c')
   })
 })
 
