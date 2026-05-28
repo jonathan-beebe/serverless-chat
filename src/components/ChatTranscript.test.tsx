@@ -279,7 +279,7 @@ describe('ChatTranscript log surface (A11Y-018)', () => {
     expect(list.hasAttribute('role')).toBe(false)
   })
 
-  it('renders the empty-state OUTSIDE the message <ol> and marked aria-hidden', () => {
+  it('renders the empty-state OUTSIDE the message <ol> and exposes it to AT (A11Y-039)', () => {
     render(<ChatTranscript messages={[]} />)
 
     // No <ol> at all in the empty state — the live region is "quiet" until
@@ -290,9 +290,12 @@ describe('ChatTranscript log surface (A11Y-018)', () => {
     const emptyState = log.querySelector('p')
     expect(emptyState).toBeTruthy()
     expect(emptyState?.textContent).toMatch(/no messages yet/i)
-    // aria-hidden so the placeholder isn't read as a live-region addition on
-    // first paint or as a "removal" jitter when the first message arrives.
-    expect(emptyState?.getAttribute('aria-hidden')).toBe('true')
+    // A11Y-039: the placeholder must reach the a11y tree so SR users entering
+    // an empty chat hear the empty-state instead of silence. aria-relevant=
+    // "additions" on the parent log already excludes the placeholder from
+    // live-region announcement on first paint and on removal when the first
+    // message arrives.
+    expect(emptyState?.hasAttribute('aria-hidden')).toBe(false)
   })
 
   it('marks date dividers role="presentation" + aria-hidden so they do not count toward list items', () => {

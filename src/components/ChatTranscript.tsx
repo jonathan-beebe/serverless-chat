@@ -342,9 +342,17 @@ export function ChatTranscript({ messages, hasResumed, lastReadMessageId, onMark
         doesn't resolve implicit role attributes. The wrapper is also the
         scroll container (so auto-scroll math reads from the same element AT
         navigates to as "Chat transcript"). The empty-state placeholder sits
-        as a sibling of the <ol> *inside* this wrapper but is marked
-        aria-hidden so AT doesn't read it on first paint or as it leaves when
-        the first message arrives.
+        as a sibling of the <ol> *inside* this wrapper.
+
+        A11Y-039: the placeholder is intentionally NOT aria-hidden. It needs
+        to reach the accessibility tree so a SR user entering an empty chat
+        hears "No messages yet. Say hello." instead of silence after the log
+        name. `aria-relevant="additions"` (not "removals") handles the
+        live-region concern: the placeholder is part of the *initial* render
+        — not an addition — so it won't be announced as a live update on
+        first paint, and its removal when the first message arrives is also
+        excluded from announcement. Only the newly-mounted message bubble
+        fires as an "addition."
 
         A11Y-021: `tabIndex={0}` makes the scroll container reachable by
         keyboard on Firefox and Safari (Chromium auto-promotes scroll
@@ -376,9 +384,7 @@ export function ChatTranscript({ messages, hasResumed, lastReadMessageId, onMark
         // so A11Y-018's `aria-live` additions still announce the newcomer.
         className="flex flex-1 flex-col overflow-y-auto overscroll-contain bg-white/50 p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 sm:rounded-md sm:border sm:border-stone-300 dark:bg-stone-900/50 dark:sm:border-stone-700">
         {messages.length === 0 ? (
-          <p aria-hidden="true" className="mt-auto text-sm text-stone-600 dark:text-stone-400">
-            No messages yet. Say hello.
-          </p>
+          <p className="mt-auto text-sm text-stone-600 dark:text-stone-400">No messages yet. Say hello.</p>
         ) : (
           <ol className="mt-auto space-y-2">
             {items.map((item) => {
