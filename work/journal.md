@@ -20,6 +20,10 @@ id.
 
 ## Log
 
+- 2026-05-28:17:43:24 — RFCTR-007 — done: swept 97 className.toMatch proxies
+  from 15 test files; bucket-(a) behaviour assertions, bucket-(c) comments
+  preserving A11Y refs, structural pins kept as classList.contains
+- 2026-05-28:17:32:31 — RFCTR-007 — started
 - 2026-05-28:17:31:26 — RFCTR-006 — done: CopyBox.onCopy now delegates to
   copyTextToClipboard; inline fallback removed
 - 2026-05-28:17:29:37 — RFCTR-006 — started
