@@ -26,7 +26,12 @@ const BASE_ICE_SERVERS: RTCIceServer[] = [
 // your TURN account. The production-shaped fix is a small server that
 // mints short-lived per-session creds — see step 3 of
 // docs/known_limitations.md.
-function buildIceServers(): RTCIceServer[] {
+// IMPRV-035: exported (was private) so unit tests can stub each env var and
+// call buildIceServers() directly without the `vi.resetModules()` +
+// dynamic-import gymnastics that the module-level `ICE_CONFIG` IIFE would
+// otherwise require. ICE_CONFIG still captures the value at module-load
+// time; nothing else changes.
+export function buildIceServers(): RTCIceServer[] {
   const urlsRaw = import.meta.env.VITE_TURN_URLS
   const username = import.meta.env.VITE_TURN_USERNAME
   const credential = import.meta.env.VITE_TURN_CREDENTIAL
