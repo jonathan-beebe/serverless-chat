@@ -541,6 +541,12 @@ describe('ChatTranscript read cursor + Last read divider (IMPRV-030)', () => {
   it('renders a "Last read" divider just after the message at the cursor when there is at least one unread', () => {
     const messages: ChatMessage[] = [msg('a', 'one'), msg('b', 'two'), msg('c', 'three')]
     render(<ChatTranscript messages={messages} lastReadMessageId="b" />)
+    // IMPRV-032: marker is gated on the user being scrolled back. Push the
+    // scroll position above the 32px threshold so the marker renders.
+    const transcript = getTranscript()
+    stubScroll(transcript, { scrollHeight: 400, clientHeight: 200 })
+    transcript.scrollTop = 0
+    fireEvent.scroll(transcript)
     const marker = getMarker()
     expect(marker).toBeTruthy()
     expect(marker?.textContent).toMatch(/last read/i)
@@ -567,6 +573,12 @@ describe('ChatTranscript read cursor + Last read divider (IMPRV-030)', () => {
   it('renders the divider with role="presentation" + aria-hidden so it stays out of the role=log live region (A11Y-018)', () => {
     const messages: ChatMessage[] = [msg('a', 'one'), msg('b', 'two')]
     render(<ChatTranscript messages={messages} lastReadMessageId="a" />)
+    // IMPRV-032: marker is gated on scrolled-back state — simulate it so the
+    // marker actually mounts and the a11y attributes can be asserted.
+    const transcript = getTranscript()
+    stubScroll(transcript, { scrollHeight: 400, clientHeight: 200 })
+    transcript.scrollTop = 0
+    fireEvent.scroll(transcript)
     const marker = getMarker()
     expect(marker).toBeTruthy()
     expect(marker?.getAttribute('role')).toBe('presentation')
@@ -742,6 +754,94 @@ describe('ChatTranscript read cursor + Last read divider (IMPRV-030)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /new message/i }))
     expect(transcript.scrollTop).toBe(460) // scrollHeight
+  })
+})
+
+describe('ChatTranscript scroll-gated marker visibility (IMPRV-032)', () => {
+  function getMarker(): HTMLElement | null {
+    return document.querySelector('[data-testid="last-read-marker"]') as HTMLElement | null
+  }
+
+  it('hides the "Last read" marker on initial mount even when cursor < newest (default isNearBottom=true)', () => {
+    // Rule 4 of the four-rule model: at-bottom means there's nothing to catch
+    // up to. The initial render's auto-scroll snaps to bottom, so the marker
+    // must not render even when the persisted cursor is behind the newest
+    // message.
+    const messages: ChatMessage[] = [msg('a', 'one'), msg('b', 'two'), msg('c', 'three')]
+    render(<ChatTranscript messages={messages} lastReadMessageId="a" />)
+    expect(getMarker()).toBeNull()
+  })
+
+  it('reveals the marker when the user scrolls back past the 32px threshold', () => {
+    // Rule 3: scrolled back is when the catch-up affordance becomes meaningful.
+    const messages: ChatMessage[] = [msg('a', 'one'), msg('b', 'two'), msg('c', 'three')]
+    render(<ChatTranscript messages={messages} lastReadMessageId="a" />)
+    const transcript = getTranscript()
+    expect(getMarker()).toBeNull()
+
+    stubScroll(transcript, { scrollHeight: 400, clientHeight: 200 })
+    transcript.scrollTop = 0 // 400px from bottom — clearly scrolled back
+    fireEvent.scroll(transcript)
+
+    expect(getMarker()).toBeTruthy()
+  })
+
+  it('hides the marker again when the user scrolls back down within the threshold', () => {
+    // Round-trip: scrolling from scrolled-back to at-bottom removes the marker
+    // in the same frame the threshold is crossed.
+    const messages: ChatMessage[] = [msg('a', 'one'), msg('b', 'two'), msg('c', 'three')]
+    render(<ChatTranscript messages={messages} lastReadMessageId="a" />)
+    const transcript = getTranscript()
+
+    stubScroll(transcript, { scrollHeight: 400, clientHeight: 200 })
+    transcript.scrollTop = 0
+    fireEvent.scroll(transcript)
+    expect(getMarker()).toBeTruthy()
+
+    transcript.scrollTop = 200 // 400 - 200 = 0px from bottom
+    fireEvent.scroll(transcript)
+    expect(getMarker()).toBeNull()
+  })
+
+  it('keeps the marker hidden while at-bottom even when a new message arrives and the cursor lags (no IMPRV-031 flash)', () => {
+    // The specific failure mode IMPRV-032 fixes: a new message arrives while
+    // the user is pinned at the bottom, the IMPRV-031 dwell hasn't completed
+    // yet, so the cursor still points to the old message and the marker would
+    // otherwise paint between the cursor and the newcomer for ~3 seconds.
+    const initial: ChatMessage[] = [msg('a', 'one'), msg('b', 'two')]
+    const { rerender } = render(<ChatTranscript messages={initial} lastReadMessageId="a" />)
+    const transcript = getTranscript()
+
+    // Establish at-bottom.
+    stubScroll(transcript, { scrollHeight: 400, clientHeight: 200 })
+    transcript.scrollTop = 200
+    fireEvent.scroll(transcript)
+    expect(getMarker()).toBeNull()
+
+    // New message arrives — cursor is still at "a", but the user is at-bottom
+    // so the marker must NOT render.
+    stubScroll(transcript, { scrollHeight: 460, clientHeight: 200 })
+    rerender(<ChatTranscript messages={[...initial, msg('c', 'three')]} lastReadMessageId="a" />)
+    expect(getMarker()).toBeNull()
+  })
+
+  it('continues to advance the persisted cursor via IntersectionObserver dwell while at-bottom (background advancement intact)', () => {
+    // IMPRV-032 only gates the marker render — the cursor still advances in
+    // the background so that when the user does scroll back later, the
+    // marker lands at the right position (and reload-resume is unaffected).
+    vi.useFakeTimers()
+    try {
+      const onMarkRead = vi.fn()
+      const messages: ChatMessage[] = [msg('a', 'one'), msg('b', 'two'), msg('c', 'three')]
+      render(<ChatTranscript messages={messages} lastReadMessageId="a" onMarkRead={onMarkRead} />)
+      // No scrollback simulated; user is at-bottom (default).
+      const [observer] = MockIntersectionObserver.instances
+      observer.fire([{ target: observer.observed[2] }])
+      vi.advanceTimersByTime(3000)
+      expect(onMarkRead).toHaveBeenCalledWith('c')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

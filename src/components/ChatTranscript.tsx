@@ -93,6 +93,13 @@ export function ChatTranscript({ messages, hasResumed, lastReadMessageId, onMark
   // making an in-effect measurement unreliable). Defaults to true so the
   // initial render still scrolls to the latest message.
   const wasNearBottomRef = useRef(true)
+  // IMPRV-032: state mirror of `wasNearBottomRef` for render consumers. The
+  // ref stays the source of truth for the messages-effect's auto-scroll
+  // branch (so the synchronous read still works on the same commit), and
+  // `onScroll` updates both together. The "Last read" marker visibility
+  // reads from this state so a scroll-state change re-renders the marker
+  // in the same frame the threshold is crossed.
+  const [isNearBottom, setIsNearBottom] = useState(true)
 
   // One formatter per instance instead of per message — `Intl.DateTimeFormat`
   // construction is cheap but not free, and the chat re-renders on every
@@ -124,11 +131,16 @@ export function ChatTranscript({ messages, hasResumed, lastReadMessageId, onMark
   // cursor is null) becomes a sentinel `null` for buildItems so the marker
   // simply isn't pushed — handles the "cursor refers to a deleted message"
   // edge case the ticket flagged.
+  // IMPRV-032: also suppress the marker when the user is at the bottom —
+  // rules 3 and 4 of the four-rule scroll/read model ("at-bottom means
+  // there's nothing to catch up to"). The persisted cursor still advances
+  // via the IntersectionObserver+dwell below; only the render is gated.
   const lastReadIndex = useMemo(() => {
+    if (isNearBottom) return null
     if (!lastReadMessageId) return null
     const idx = messages.findIndex((m) => m.id === lastReadMessageId)
     return idx === -1 ? null : idx
-  }, [messages, lastReadMessageId])
+  }, [messages, lastReadMessageId, isNearBottom])
 
   const items = useMemo(
     () => buildItems(messages, resumeBoundary, lastReadIndex),
@@ -265,7 +277,13 @@ export function ChatTranscript({ messages, hasResumed, lastReadMessageId, onMark
     const el = transcriptRef.current
     if (!el) return
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
-    wasNearBottomRef.current = distanceFromBottom < NEAR_BOTTOM_THRESHOLD_PX
+    const nearBottom = distanceFromBottom < NEAR_BOTTOM_THRESHOLD_PX
+    wasNearBottomRef.current = nearBottom
+    // IMPRV-032: mirror to state so the marker render branch reacts in the
+    // same frame the threshold is crossed. setState bails out on equal
+    // primitive values, so a scroll that doesn't cross the threshold (the
+    // common case while reading) is free.
+    setIsNearBottom(nearBottom)
   }
 
   // IMPRV-029: tap-to-dismiss handler — scroll to the newest message and

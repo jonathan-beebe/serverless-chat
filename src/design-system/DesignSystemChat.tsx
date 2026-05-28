@@ -31,13 +31,18 @@ export function DesignSystemChat() {
   const [messages, setMessages] = useState<ChatMessage[]>(buildChatFixture)
   // IMPRV-030: design-system route is for visual review. Pre-seed the cursor
   // at the second-to-last fixture message so reviewers see the "Last read"
-  // divider above the newest message on first paint. `markRead` is a no-op
-  // in this stub — every fixture bubble is visible on mount, so the
-  // IntersectionObserver in ChatTranscript would otherwise fire forward
-  // advancement immediately and the marker would disappear before any
-  // human could see it. Production exercises advancement via the real
-  // hook; this surface is for the divider shape + the IMPRV-029 pill's
-  // re-routed scroll target.
+  // divider when they scroll back. `markRead` is a no-op in this stub —
+  // every fixture bubble is visible on mount, so the IntersectionObserver
+  // in ChatTranscript would otherwise fire forward advancement (after the
+  // IMPRV-031 dwell) and the cursor would land at ds-5, hiding the marker
+  // entirely. Production exercises advancement via the real hook; this
+  // surface is for the divider shape + the IMPRV-029 pill's re-routed
+  // scroll target.
+  //
+  // IMPRV-032: the marker is now scroll-gated — it does NOT render on first
+  // paint because the auto-scroll snaps to bottom, and "at-bottom = caught
+  // up" suppresses the marker. Reviewers see the divider after scrolling up.
+  // No bypass is exposed; the demo route reflects the production invariant.
   const [lastReadMessageId] = useState<string | null>('ds-4')
   const session: ChatSession = {
     state: 'connected',

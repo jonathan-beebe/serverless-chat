@@ -1,17 +1,20 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import { DesignSystemChat } from './DesignSystemChat'
 
-// IMPRV-030: the design-system mock chat route exists to give reviewers a
-// way to *see* the read-cursor visual without negotiating SDPs between two
-// devices. The fixture pre-seeds the cursor on the second-to-last message
-// so the "Last read" divider renders above the newest one on first paint.
-// `markRead` is intentionally a no-op in this stub — every fixture bubble
-// is visible on mount, so any forward advancement would immediately hide
-// the divider the route exists to demonstrate. This test guards against
-// either of those guarantees regressing.
-describe('DesignSystemChat read-cursor demo (IMPRV-030)', () => {
+// IMPRV-030: the design-system mock chat route exists to give reviewers a way
+// to *see* the read-cursor visual without negotiating SDPs between two
+// devices. The fixture pre-seeds the cursor on the second-to-last message so
+// the "Last read" divider can render above the newest message.
+//
+// IMPRV-032: marker visibility is now scroll-gated — the divider is hidden
+// while the user is at the bottom (since there's nothing to catch up to) and
+// only renders when scrolled back. The route can no longer demo the marker on
+// first paint; it surfaces after a manual scrollback. These tests assert both
+// halves of that invariant: hidden on initial mount, visible (and correctly
+// positioned) after scrollback.
+describe('DesignSystemChat read-cursor demo (IMPRV-030 + IMPRV-032)', () => {
   function renderRoute() {
     return render(
       <MemoryRouter initialEntries={['/design-system/chat']}>
@@ -22,15 +25,37 @@ describe('DesignSystemChat read-cursor demo (IMPRV-030)', () => {
     )
   }
 
-  it('renders the "Last read" divider on initial mount so the route demos the IMPRV-030 marker visually', () => {
+  function getTranscript(): HTMLDivElement {
+    return screen.getByRole('log', { name: /chat transcript/i }) as HTMLDivElement
+  }
+
+  function stubScroll(el: Element, { scrollHeight, clientHeight }: { scrollHeight: number; clientHeight: number }) {
+    Object.defineProperty(el, 'scrollHeight', { configurable: true, value: scrollHeight })
+    Object.defineProperty(el, 'clientHeight', { configurable: true, value: clientHeight })
+  }
+
+  function scrollBack(transcript: HTMLDivElement) {
+    stubScroll(transcript, { scrollHeight: 800, clientHeight: 200 })
+    transcript.scrollTop = 0 // 600px from bottom — clearly scrolled back
+    fireEvent.scroll(transcript)
+  }
+
+  it('hides the "Last read" marker on initial mount (IMPRV-032 at-bottom gate)', () => {
+    // Default render: the auto-scroll snaps to bottom, so `isNearBottom` is
+    // true and the marker is suppressed even though the persisted cursor
+    // (ds-4) is behind the newest message (ds-5).
     renderRoute()
+    expect(document.querySelector('[data-testid="last-read-marker"]')).toBeNull()
+  })
+
+  it('positions the marker BETWEEN ds-4 and ds-5 once the user scrolls back', () => {
+    renderRoute()
+    scrollBack(getTranscript())
+
     const marker = document.querySelector('[data-testid="last-read-marker"]')
     expect(marker).toBeTruthy()
     expect(marker?.textContent).toMatch(/last read/i)
-  })
 
-  it('positions the marker BETWEEN the second-to-last message (ds-4) and the newest (ds-5)', () => {
-    renderRoute()
     const list = screen.getByRole('list')
     // Walk the <li>s in DOM order and collect a sequence of message-id /
     // divider-id labels so the assertion describes the actual layout.
