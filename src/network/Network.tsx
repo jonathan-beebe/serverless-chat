@@ -171,13 +171,19 @@ function MessageTimeline({ telemetry }: { telemetry: NetworkTelemetry }) {
           narrower than 36rem. Chromium auto-promotes overflow containers to
           focusable since M126, but Firefox / Safari do not — so without an
           explicit `tabIndex={0}` keyboard-only users on those engines can't
-          reach the off-screen columns. `role="region"` + `aria-label` makes
-          it a navigable landmark; the focus-visible ring matches A11Y-021's
-          treatment of the chat transcript wrapper. */}
+          reach the off-screen columns. The focus-visible ring matches
+          A11Y-021's treatment of the chat transcript wrapper.
+
+          A11Y-040: dropped `role="region"` + `aria-label="Per-message
+          timeline (scrollable)"`. The parent <section> already provides
+          landmark navigation via its `aria-labelledby`, and the inner
+          <table> carries the same labelledby — so a SR user moving inward
+          previously heard the heading text twice (once on the region, once
+          on the table). The wrapper is now a plain focusable scroll
+          surface; landmark + content names live on the section and table. */}
       <div
-        role="region"
-        aria-label="Per-message timeline (scrollable)"
         tabIndex={0}
+        data-testid="net-timeline-scroll"
         className="overflow-x-auto rounded-md border border-stone-300 bg-white/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 dark:border-stone-700 dark:bg-stone-900/50">
         <table aria-labelledby="net-timeline-heading" className="w-full min-w-[36rem] text-left text-sm">
           <thead className="text-xs font-medium text-stone-600 dark:text-stone-400">

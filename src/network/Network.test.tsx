@@ -147,10 +147,17 @@ describe('Network with active telemetry', () => {
   // focusable but Firefox / Safari do not — so without `tabIndex={0}` plus a
   // labelled `role="region"`, keyboard-only / screen-magnifier / switch users
   // on those engines cannot reach the off-screen columns.
-  it('per-message timeline wrapper is a focusable labelled scroll region (A11Y-028)', () => {
+  it('per-message timeline wrapper is a focusable scroll surface (A11Y-028, A11Y-040)', () => {
+    // A11Y-040: the wrapper used to carry role="region" + an aria-label that
+    // duplicated the heading the inner <table> already labels via
+    // aria-labelledby. Landmark + content names now live on the parent
+    // <section> and the table; the wrapper is just a focusable scroll
+    // surface. The A11Y-028 keyboard-scroll properties stay intact.
     renderInRouter(<Network session={stubSession(activeTelemetry())} />)
-    const wrapper = screen.getByRole('region', { name: /per-message timeline \(scrollable\)/i })
+    const wrapper = screen.getByTestId('net-timeline-scroll')
     expect(wrapper).toHaveAttribute('tabindex', '0')
+    expect(wrapper.hasAttribute('role')).toBe(false)
+    expect(wrapper.hasAttribute('aria-label')).toBe(false)
     expect(wrapper.className).toMatch(/overflow-x-auto/)
     expect(wrapper.className).toMatch(/focus-visible:ring-sky-400/)
     expect(wrapper.className).toMatch(/focus-visible:outline-none/)
