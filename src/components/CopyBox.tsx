@@ -127,6 +127,13 @@ export function CopyBox({ value, label, helpText, variant = 'code', autoFocus = 
       <label htmlFor={textareaId} className="text-sm font-medium text-stone-800 dark:text-stone-200">
         {label}
       </label>
+      {/* A11Y-041: no `onFocus` auto-select. WCAG 3.2.1 (On Focus): focus
+          must not substantively change visible state. The manual-copy
+          fallback in `onCopy` still calls `el.select()` before flipping
+          `needsManualCopy` so a Ctrl+C / Cmd+C keystroke at that point still
+          copies the entire value — selection only happens as a direct
+          consequence of user action, never just because the textarea was
+          tabbed into. */}
       <Textarea
         id={textareaId}
         ref={textareaRef}
@@ -134,7 +141,6 @@ export function CopyBox({ value, label, helpText, variant = 'code', autoFocus = 
         value={value}
         rows={variant === 'url' ? 2 : 6}
         className="resize-none font-mono text-xs"
-        onFocus={(e) => e.currentTarget.select()}
         aria-describedby={needsManualCopy ? manualCopyHintId : undefined}
       />
       <div className="flex items-center justify-between gap-3">
