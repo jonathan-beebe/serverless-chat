@@ -20,6 +20,9 @@ id.
 
 ## Log
 
+- 2026-05-28:17:25:23 — RFCTR-004 — done: extracted src/core/telemetry with
+  10-test suite; useChatSession.ts 1052→1008 lines, public API unchanged
+- 2026-05-28:17:22:54 — RFCTR-004 — started
 - 2026-05-28:17:21:33 — MAINT-001 — done: excluded work/ from tailwind content
   scan (@source not) and reworded source comments; build is warning-free
 - 2026-05-28:17:17:42 — MAINT-001 — started
