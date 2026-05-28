@@ -20,6 +20,9 @@ id.
 
 ## Log
 
+- 2026-05-28:16:51:55 — A11Y-039 — done: empty-state placeholder no longer
+  aria-hidden; aria-relevant="additions" already silences live churn
+- 2026-05-28:16:48:30 — A11Y-039 — started
 - 2026-05-28:16:48:03 — A11Y-038 — done: commit-hash footer now text-stone-600
   (~7.78:1) clearing WCAG 1.4.3
 - 2026-05-28:16:46:55 — A11Y-038 — started
