@@ -20,6 +20,9 @@ id.
 
 ## Log
 
+- 2026-05-28:16:55:23 — A11Y-040 — done: dropped role+aria-label on timeline
+  scroll wrapper; parent section + table labelledby own the names
+- 2026-05-28:16:53:17 — A11Y-040 — started
 - 2026-05-28:16:51:55 — A11Y-039 — done: empty-state placeholder no longer
   aria-hidden; aria-relevant="additions" already silences live churn
 - 2026-05-28:16:48:30 — A11Y-039 — started
