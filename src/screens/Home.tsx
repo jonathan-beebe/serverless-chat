@@ -121,7 +121,7 @@ export function Home() {
             at build time). Constant per build via vite's `define`; no runtime
             cost beyond a text node. Plain text — no link, no copy affordance —
             so it sits quietly as a triage anchor. */}
-        <p className="text-xs text-stone-500 dark:text-stone-400">{__COMMIT_HASH__}</p>
+        <p className="text-xs text-stone-600 dark:text-stone-400">{__COMMIT_HASH__}</p>
       </div>
     </ScreenContainer>
   )
