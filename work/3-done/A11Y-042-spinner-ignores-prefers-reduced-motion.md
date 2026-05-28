@@ -1,7 +1,7 @@
 ---
 id: A11Y-042
 type: a11y
-status: open
+status: resolved
 created: 2026-05-28
 ---
 
@@ -55,3 +55,16 @@ the visual replacement is a polish call.
 
 - A11Y-012 (connection state not announced — established the AT path the spinner
   is decorating)
+
+## Working
+
+- `Spinner.tsx:12` carried `animate-spin` unconditionally — no `motion-reduce:`
+  variant.
+- Added `motion-reduce:animate-none` to the composed className. Users with
+  `prefers-reduced-motion: reduce` now see a static glyph; the A11Y-012 live
+  region continues to carry the textual "preparing…" status independently.
+- Project grep for other `animate-*` classes turned up only this file — no other
+  surfaces need the same treatment in this pass.
+- Comment block above the component updated to point at A11Y-042 so the next
+  edit doesn't silently strip the variant.
+- Full suite: 504/504 green.
