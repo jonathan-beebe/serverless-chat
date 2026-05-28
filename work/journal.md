@@ -12,14 +12,49 @@ id.
 - DSGN: 1
 - ARCH: 2
 - FEAT: 16
-- IMPRV: 33
-- MAINT: 1
-- A11Y: 37
-- RFCTR: 4
+- IMPRV: 37
+- MAINT: 2
+- A11Y: 44
+- RFCTR: 8
 - BUG: 14
 
 ## Log
 
+- 2026-05-28:16:46:05 — A11Y-037 — done: pending delivery glyph now text-sky-200
+  (~4.5:1) clearing WCAG 1.4.11
+- 2026-05-28:16:43:08 — A11Y-037 — started
+- 2026-05-28:14:58:11 — RFCTR-007 — defined: sweep classname tailwind toMatch
+  assertions in component tests
+- 2026-05-28:14:54:47 — RFCTR-006 — defined: dedupe CopyBox clipboard fallback
+  by delegating to core/clipboard helper
+- 2026-05-28:14:52:59 — RFCTR-005 — defined: lift extractOfferCode and
+  classifyPastedCode out of Offerer into src/core
+- 2026-05-28:14:50:44 — RFCTR-004 — defined: lift pure telemetry math out of
+  useChatSession into src/core/telemetry
+- 2026-05-28:14:48:42 — IMPRV-036 — defined: pin wire chat envelope sender field
+  decode and round-trip cases
+- 2026-05-28:14:46:53 — IMPRV-035 — defined: add unit tests for buildIceServers
+  env-driven branches
+- 2026-05-28:14:44:25 — IMPRV-034 — defined: add direct unit tests for
+  deriveSync math
+- 2026-05-28:14:42:41 — IMPRV-033 — defined: add unit tests for rtcDiagnostics
+  listener wiring and helpers
+- 2026-05-28:14:26:16 — A11Y-043 — defined: joiner accept click has no immediate
+  live-region acknowledgement
+- 2026-05-28:14:24:41 — A11Y-042 — defined: spinner ignores
+  prefers-reduced-motion
+- 2026-05-28:14:23:29 — A11Y-041 — defined: copybox textarea auto-selects all
+  content on focus
+- 2026-05-28:14:22:07 — A11Y-040 — defined: network per-message timeline
+  announces its name twice on entry
+- 2026-05-28:14:20:47 — A11Y-039 — defined: chat transcript empty-state
+  placeholder is aria-hidden from SR users
+- 2026-05-28:14:19:26 — A11Y-038 — defined: home commit hash text-stone-500
+  fails 1.4.3 in light mode
+- 2026-05-28:14:18:11 — A11Y-037 — defined: pending delivery glyph contrast on
+  outgoing bubbles fails 1.4.11
+- 2026-05-28:06:39:41 — MAINT-001 — defined: silence vite/lightning-css warnings
+  from tailwind scanning env(...) shorthand in comments
 - 2026-05-27:22:17:03 — BUG-013 — done: useEffect with [isNearBottom, messages,
   lastReadMessageId, onMarkRead] deps calls onMarkRead(newest) whenever
   at-bottom and cursor < newest; hook's forward-only filter is the idempotency
