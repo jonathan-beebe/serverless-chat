@@ -3,6 +3,7 @@ import { Button } from './Button'
 import { Callout } from './Callout'
 import { LiveRegion } from './LiveRegion'
 import { Textarea } from './Textarea'
+import { copyTextToClipboard } from '../core/clipboard'
 import { useFocusOnMount } from '../hooks/useFocusOnMount'
 
 interface Props {
@@ -70,40 +71,20 @@ export function CopyBox({ value, label, helpText, variant = 'code', autoFocus = 
     setNeedsManualCopy(false)
   }, [value])
 
+  // RFCTR-006: route through the shared two-tier helper (CR-009). The
+  // helper owns writeText / execCommand fallback ordering and leaves the
+  // textarea selected on 'manual' so a Ctrl+C / Cmd+C keystroke completes
+  // the copy from the existing selection.
   const onCopy = async () => {
     // A fresh attempt supersedes any previous confirmation; clear up front so
     // the success/failure of *this* click is what the user sees.
     setCopied(false)
 
-    // Primary path: the modern async clipboard API.
-    try {
-      await navigator.clipboard.writeText(value)
+    const result = await copyTextToClipboard(value, textareaRef.current)
+    if (result === 'copied') {
       markCopied()
       return
-    } catch {
-      // Falls through to the legacy path (writeText can be blocked on http:,
-      // in sandboxed iframes like Teams Web, or when permissions are denied).
     }
-
-    // Fallback path: select the text and try `document.execCommand('copy')`.
-    // Deprecated but still implemented across evergreen browsers and works in
-    // many of the contexts where `writeText` is blocked.
-    const el = textareaRef.current
-    if (el) {
-      el.select()
-      try {
-        if (document.execCommand('copy')) {
-          markCopied()
-          return
-        }
-      } catch {
-        // Some environments throw rather than returning false.
-      }
-    }
-
-    // Last resort: tell the user they need to press Cmd/Ctrl+C themselves.
-    // The textarea is already selected (above), so a single keystroke works.
-    setCopied(false)
     setNeedsManualCopy(true)
   }
 
