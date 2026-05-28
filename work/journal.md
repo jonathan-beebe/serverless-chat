@@ -20,6 +20,10 @@ id.
 
 ## Log
 
+- 2026-05-28:17:06:31 — IMPRV-033 — done: added 19-test rtcDiagnostics suite
+  covering banner, six listener channels, helpers via observable output, and
+  logSelectedPair paths
+- 2026-05-28:17:04:36 — IMPRV-033 — started
 - 2026-05-28:17:02:22 — A11Y-043 — done: statusMessage default returns
   "Accepting invite..." on reply branch so Accept click has immediate ack
 - 2026-05-28:17:00:50 — A11Y-043 — started
