@@ -20,6 +20,10 @@ id.
 
 ## Log
 
+- 2026-05-28:17:10:23 — IMPRV-034 — done: added 9-case deriveSync block to
+  wire.test.ts covering identity, latency, offsets, mirror invariant,
+  NaN/Infinity, and hook-fixture regression anchor
+- 2026-05-28:17:07:45 — IMPRV-034 — started
 - 2026-05-28:17:06:31 — IMPRV-033 — done: added 19-test rtcDiagnostics suite
   covering banner, six listener channels, helpers via observable output, and
   logSelectedPair paths
