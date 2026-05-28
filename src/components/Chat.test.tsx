@@ -36,10 +36,10 @@ describe('Chat outer wrapper layout contract (CR-007)', () => {
     const transcript = screen.getByRole('log', { name: /chat transcript/i })
     const wrapper = transcript.parentElement as HTMLElement
     expect(wrapper).toBeTruthy()
-    expect(wrapper.className).toContain('flex-1')
-    expect(wrapper.className).toContain('min-h-0')
+    expect(wrapper.classList.contains('flex-1')).toBe(true)
+    expect(wrapper.classList.contains('min-h-0')).toBe(true)
     // Explicit regression guard against the previous (broken) shape.
-    expect(wrapper.className).not.toMatch(/(^|\s)h-full(\s|$)/)
+    expect(wrapper.classList.contains('h-full')).toBe(false)
   })
 })
 

@@ -32,17 +32,16 @@ describe('ScreenContainer (BUG-010 safe-area moved to body)', () => {
       </ScreenContainer>,
     )
     const main = screen.getByRole('main')
-    const className = main.className
-    expect(className).not.toMatch(/\bmt-\[env\(safe-area-inset/)
-    expect(className).not.toMatch(/\bml-\[env\(safe-area-inset/)
-    expect(className).not.toMatch(/\bmr-\[env\(safe-area-inset/)
-    expect(className).not.toMatch(/safe-area-inset/)
+    // Regression guard against IMPRV-024's broken shape: no safe-area-inset
+    // margin utilities on the root. The inset now lives on `body` (verified
+    // by the CSS-rule probes below).
+    expect(main.className).not.toContain('safe-area-inset')
     // Consumer classes must pass through untouched — mx-auto in particular,
     // which is the centering utility BUG-010 restores.
-    expect(className).toMatch(/\bmx-auto\b/)
-    expect(className).toMatch(/\bmax-w-xl\b/)
-    expect(className).toMatch(/\bpx-4\b/)
-    expect(className).toMatch(/\bpy-12\b/)
+    expect(main.classList.contains('mx-auto')).toBe(true)
+    expect(main.classList.contains('max-w-xl')).toBe(true)
+    expect(main.classList.contains('px-4')).toBe(true)
+    expect(main.classList.contains('py-12')).toBe(true)
   })
 
   it('renders the region branch WITHOUT safe-area-inset margin utilities too — the showcase still inherits the inset through body (BUG-010)', () => {
@@ -54,9 +53,8 @@ describe('ScreenContainer (BUG-010 safe-area moved to body)', () => {
       </ScreenChromeContext.Provider>,
     )
     const region = screen.getByRole('region', { name: 'Home preview' })
-    const className = region.className
-    expect(className).not.toMatch(/safe-area-inset/)
-    expect(className).toMatch(/\bmx-auto\b/)
+    expect(region.className).not.toContain('safe-area-inset')
+    expect(region.classList.contains('mx-auto')).toBe(true)
   })
 
   it('index.css declares `body { padding-top: env(safe-area-inset-top) }` so the notch is cleared at the document root (BUG-010, replaces IMPRV-024 utility)', () => {
