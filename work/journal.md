@@ -20,6 +20,9 @@ id.
 
 ## Log
 
+- 2026-05-28:17:21:33 — MAINT-001 — done: excluded work/ from tailwind content
+  scan (@source not) and reworded source comments; build is warning-free
+- 2026-05-28:17:17:42 — MAINT-001 — started
 - 2026-05-28:17:16:53 — IMPRV-036 — done: pinned chat-envelope sender
   round-trip + 3 decode-safety cases for BUG-006 contract
 - 2026-05-28:17:14:57 — IMPRV-036 — started
