@@ -20,6 +20,9 @@ id.
 
 ## Log
 
+- 2026-05-28:16:59:26 — A11Y-042 — done: spinner honours motion-reduce via
+  motion-reduce:animate-none
+- 2026-05-28:16:57:52 — A11Y-042 — started
 - 2026-05-28:16:57:15 — A11Y-041 — done: dropped onFocus auto-select on CopyBox
   textarea; manual-copy fallback still selects on click
 - 2026-05-28:16:55:55 — A11Y-041 — started
