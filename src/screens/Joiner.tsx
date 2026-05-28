@@ -61,7 +61,14 @@ function statusMessage(state: ConnectionState, hasLocal: boolean, branch: 'invit
     case 'closed':
       return 'Connection lost.'
     default:
-      return ''
+      // A11Y-043: the user has clicked Accept (branch === 'reply') but the
+      // session has not yet transitioned out of 'idle' — `startAsAnswerer`
+      // is async, so there's a measurable gap between the click and the
+      // first real status. Without this acknowledgement, a SR user hears
+      // silence after Accept while the visible branch swap they cannot see
+      // has already happened. Pre-emptively ack so the live region carries
+      // a non-empty message within the same React commit as the click.
+      return branch === 'reply' ? 'Accepting invite. Preparing your reply code.' : ''
   }
 }
 

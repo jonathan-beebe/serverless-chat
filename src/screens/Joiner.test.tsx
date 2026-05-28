@@ -187,6 +187,20 @@ describe('Joiner polite-defer on Accept (BUG-007)', () => {
     expect(convId.length).toBeGreaterThan(0)
   })
 
+  it('announces an immediate acknowledgement when Accept fires on an idle session (A11Y-043)', () => {
+    // A11Y-043: startAsAnswerer is async, so the session can sit at 'idle'
+    // for a measurable window after the click flips the branch to 'reply'.
+    // Without the ack, the live region carries '' during that window and the
+    // SR user hears nothing after Accept while the visible branch swap they
+    // cannot see has already happened.
+    const session = makeSession({ state: 'idle' })
+    render(<Joiner session={session} offerCode="ALICE_OFFER" conversationId={TEST_CONV_ID} onCancel={() => {}} />)
+
+    expect(screen.queryByText(/accepting invite/i)).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /^accept$/i }))
+    expect(screen.getByText(/accepting invite\. preparing your reply code\./i)).toBeInTheDocument()
+  })
+
   it('does NOT announce "Reply code ready" in the live region while still on the invite branch', () => {
     // BUG-007 polish: when the shared hook has leaked `awaiting-answer` from a
     // prior offerer flow, the Joiner's live region must not announce
