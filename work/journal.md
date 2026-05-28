@@ -20,6 +20,9 @@ id.
 
 ## Log
 
+- 2026-05-28:17:28:32 — RFCTR-005 — done: extracted src/core/inviteCode with
+  14-test suite; Offerer.tsx 397→356 lines
+- 2026-05-28:17:26:19 — RFCTR-005 — started
 - 2026-05-28:17:25:23 — RFCTR-004 — done: extracted src/core/telemetry with
   10-test suite; useChatSession.ts 1052→1008 lines, public API unchanged
 - 2026-05-28:17:22:54 — RFCTR-004 — started
