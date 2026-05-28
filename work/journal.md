@@ -12,7 +12,7 @@ id.
 - DSGN: 1
 - ARCH: 2
 - FEAT: 16
-- IMPRV: 32
+- IMPRV: 33
 - MAINT: 1
 - A11Y: 37
 - RFCTR: 4
@@ -20,6 +20,12 @@ id.
 
 ## Log
 
+- 2026-05-27:20:35:15 — IMPRV-032 — done: isNearBottom state mirrors
+  wasNearBottomRef from onScroll; lastReadIndex returns null at-bottom so the
+  marker is suppressed without touching cursor advancement
+- 2026-05-27:20:27:50 — IMPRV-032 — started
+- 2026-05-27:16:22:09 — IMPRV-032 — defined: gate last-read marker visibility on
+  live scroll state so it hides at-bottom and shows when scrolled back
 - 2026-05-27:14:01:03 — IMPRV-031 — done: per-bubble setTimeout(3000) gates
   onMarkRead; isIntersecting schedules, !isIntersecting cancels, unmount clears
   all pending timers
