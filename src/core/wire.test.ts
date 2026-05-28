@@ -21,6 +21,22 @@ describe('wire envelope encode/decode round-trip', () => {
     expect(back).toEqual(env)
   })
 
+  it('round-trips a chat envelope carrying a BUG-006 sender id', () => {
+    const env: WireEnvelope = {
+      v: 1,
+      t: 'chat',
+      id: '11111111-1111-1111-1111-111111111111',
+      sentAt: 1_700_000_000_000,
+      text: 'hello world',
+      sender: '22222222-2222-2222-2222-222222222222',
+    }
+    const back = decode(encode(env))
+    expect(back).toEqual(env)
+    // Narrow + read defensively so the assertion fails cleanly if the wire
+    // shape ever drifts back to non-optional / wrong-type.
+    expect(back && back.t === 'chat' ? back.sender : null).toBe(env.sender)
+  })
+
   it('round-trips a sync-probe envelope', () => {
     const env: WireEnvelope = {
       v: 1,
@@ -193,6 +209,40 @@ describe('wire envelope decode safety', () => {
     expect(decode(JSON.stringify({ v: 1, t: 'chat', id: 'a', sentAt: 1, text: 42 }))).toBeNull()
     expect(warn).toHaveBeenCalled()
     warn.mockRestore()
+  })
+
+  // IMPRV-036: BUG-006 introduced `sender` as an OPTIONAL field on chat
+  // envelopes for legacy-peer interop. The decode guard accepts only
+  // string-typed senders and drops anything else to `undefined` while
+  // keeping the surrounding envelope. These cases pin that exact shape so
+  // a future tightening (e.g. "reject envelopes missing sender") can't
+  // sneak past as a hook-level regression.
+  it('decodes a chat envelope with sender absent to sender === undefined (BUG-006)', () => {
+    const decoded = decode(JSON.stringify({ v: 1, t: 'chat', id: 'a', sentAt: 1, text: 'hi' }))
+    expect(decoded).not.toBeNull()
+    expect(decoded!.t).toBe('chat')
+    expect(decoded!.t === 'chat' && decoded!.sender).toBeUndefined()
+  })
+
+  it('decodes a chat envelope with non-string sender to sender === undefined (BUG-006)', () => {
+    const decoded = decode(JSON.stringify({ v: 1, t: 'chat', id: 'a', sentAt: 1, text: 'hi', sender: 42 }))
+    expect(decoded).not.toBeNull()
+    expect(decoded!.t).toBe('chat')
+    expect(decoded!.t === 'chat' && decoded!.sender).toBeUndefined()
+    // The surrounding envelope is retained — only the offending field is
+    // sanitised, the message itself still flows.
+    expect(decoded!.t === 'chat' ? decoded!.text : null).toBe('hi')
+  })
+
+  it('preserves an empty-string sender as-is (behavior pin, not a fix)', () => {
+    // typeof '' === 'string', so the guard at wire.ts:156 lets '' through.
+    // This is intentional: the wire layer doesn't decide what's a "useful"
+    // sender — the hook layer does. Documenting it here means a later
+    // refactor that wants to coerce '' → undefined has to update this case
+    // explicitly rather than silently changing behavior.
+    const decoded = decode(JSON.stringify({ v: 1, t: 'chat', id: 'a', sentAt: 1, text: 'hi', sender: '' }))
+    expect(decoded).not.toBeNull()
+    expect(decoded!.t === 'chat' ? decoded!.sender : null).toBe('')
   })
 })
 
