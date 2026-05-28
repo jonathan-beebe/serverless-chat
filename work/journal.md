@@ -20,6 +20,9 @@ id.
 
 ## Log
 
+- 2026-05-28:17:02:22 — A11Y-043 — done: statusMessage default returns
+  "Accepting invite..." on reply branch so Accept click has immediate ack
+- 2026-05-28:17:00:50 — A11Y-043 — started
 - 2026-05-28:16:59:26 — A11Y-042 — done: spinner honours motion-reduce via
   motion-reduce:animate-none
 - 2026-05-28:16:57:52 — A11Y-042 — started
