@@ -469,11 +469,12 @@ export function ChatTranscript({ messages, hasResumed, lastReadMessageId, onMark
                           data-testid={`delivery-${m.id}`}
                           aria-label={delivered ? 'Delivered' : 'Pending'}
                           role="img"
-                          // Hollow check until delivered (faint sky tint over
-                          // the sky-700 bubble); filled white on delivery.
-                          // Same glyph either way so the bubble doesn't shift
-                          // when the receipt lands.
-                          className={`inline-block leading-none ${delivered ? 'text-white' : 'text-sky-100/60'}`}>
+                          // A11Y-037: Pending uses text-sky-200 (~4.5:1 vs
+                          // bg-sky-700) so the glyph clears WCAG 1.4.11 (3:1
+                          // non-text contrast). Prior text-sky-100/60 sat at
+                          // ~1.4:1. Same ✓ glyph either way so the bubble
+                          // doesn't shift when the receipt lands.
+                          className={`inline-block leading-none ${delivered ? 'text-white' : 'text-sky-200'}`}>
                           {'✓'}
                         </span>
                       )}
