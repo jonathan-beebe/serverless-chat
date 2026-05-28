@@ -12,7 +12,9 @@ const projectRoot = resolve(here, '../..')
 const CSS_DECLS = parseCssFile(resolve(projectRoot, 'src/index.css'))
 
 // BUG-010: IMPRV-024 originally placed safe-area-inset MARGIN utilities on the
-// ScreenContainer root (mt-/ml-/mr-[env(safe-area-inset-*)]). Tailwind v4 emits
+// ScreenContainer root (top / left / right margin shorthands referencing
+// env() — phrased without the bracket form so Tailwind's content scanner
+// doesn't pick the literal candidates up; see MAINT-001). Tailwind v4 emits
 // `margin-left`/`margin-right` longhand AFTER `margin-inline` (the shorthand
 // `mx-auto` compiles to), so the longhand inset utilities won the cascade and
 // killed every screen's wide-screen `mx-auto` centering — in browser tabs the

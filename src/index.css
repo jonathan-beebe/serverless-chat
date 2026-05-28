@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+/* MAINT-001: keep the work/ ticket archive out of Tailwind's content scan.
+   Resolved tickets reference utilities by name in prose (e.g.
+   `mr-[env(safe-area-inset-right)]` in BUG-010 / IMPRV-024), and the v4
+   scanner materialises those literal candidates into rules — Lightning
+   CSS then warns on the embedded `env(...)` shorthand and the dead
+   utilities bloat the shipped CSS. work/ is documentation, not source,
+   so excluding it costs nothing. */
+@source not "../work";
+
 /* FEAT-007 / AC #11 — Redefine `dark:` so it matches BOTH a `.dark` ancestor
    AND `@media (prefers-color-scheme: dark)`, with `.light` opting out of the
    media-query path. The shorthand form `@custom-variant dark (selector)`
@@ -87,7 +96,9 @@ html {
    Offerer/Joiner wrappers own it via `pb-[max(env(safe-area-inset-bottom),
    0.25rem)]`, and `UpdatePrompt` owns its own banner-bottom inset. Doing it
    on body too would double-count (IMPRV-024 "pick one" rule).
-   Replaces IMPRV-024's mt-/ml-/mr-[env(...)] utilities on ScreenContainer. */
+   Replaces IMPRV-024's safe-area-inset margin utilities (mt-, ml-, mr-
+   referencing env()) on ScreenContainer; see MAINT-001 for why the
+   bracket-shorthand wording was rephrased. */
 body {
   background-color: #fafaf9; /* stone-50 */
   color: #1c1917; /* stone-900 */

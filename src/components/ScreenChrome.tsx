@@ -53,8 +53,10 @@ interface ScreenContainerProps {
 }
 
 // BUG-010: the safe-area-inset treatment lives in `src/index.css` on `body`
-// (top/left/right padding). Putting `ml-[env(...)]` / `mr-[env(...)]` on
-// ScreenContainer (IMPRV-024) collided with each consumer's `mx-auto` —
+// (top/left/right padding). Putting horizontal margin utilities that
+// referenced env() (ml- and mr- forms) on ScreenContainer (IMPRV-024)
+// collided with each consumer's `mx-auto` — MAINT-001 reworded this so
+// Tailwind's content scanner no longer materialises the dead classes.
 // Tailwind emits `margin-left` / `margin-right` longhand AFTER `margin-inline`,
 // so the inset utilities won the cascade and clamped every screen flush-left
 // in browser tabs (where `env(...)` is `0px`). Body-level padding sidesteps the
