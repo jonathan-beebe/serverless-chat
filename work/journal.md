@@ -20,6 +20,9 @@ id.
 
 ## Log
 
+- 2026-05-28:16:57:15 — A11Y-041 — done: dropped onFocus auto-select on CopyBox
+  textarea; manual-copy fallback still selects on click
+- 2026-05-28:16:55:55 — A11Y-041 — started
 - 2026-05-28:16:55:23 — A11Y-040 — done: dropped role+aria-label on timeline
   scroll wrapper; parent section + table labelledby own the names
 - 2026-05-28:16:53:17 — A11Y-040 — started
