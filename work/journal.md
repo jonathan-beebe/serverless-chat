@@ -20,6 +20,9 @@ id.
 
 ## Log
 
+- 2026-05-28:17:16:53 — IMPRV-036 — done: pinned chat-envelope sender
+  round-trip + 3 decode-safety cases for BUG-006 contract
+- 2026-05-28:17:14:57 — IMPRV-036 — started
 - 2026-05-28:17:14:18 — IMPRV-035 — done: exported buildIceServers + 8 cases
   covering all VITE*TURN*\* branches with .env.local override
 - 2026-05-28:17:11:15 — IMPRV-035 — started
