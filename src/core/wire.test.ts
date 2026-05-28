@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { decode, encode, type WireEnvelope } from './wire'
+import { decode, deriveSync, encode, type WireEnvelope } from './wire'
 
 // The wire module is a pure boundary: every payload that goes over the data
 // channel after `open` is JSON of this shape. Tests pin the round-trip
@@ -210,5 +210,105 @@ describe('wire envelope encode contract', () => {
     // that JSON.parse accepts.
     expect(typeof s).toBe('string')
     expect(() => JSON.parse(s)).not.toThrow()
+  })
+})
+
+// IMPRV-034: deriveSync is the canonical NTP-style formula both peers use to
+// derive offset + RTT from the FEAT-010 probe/ack/done quad. It's pure
+// arithmetic — four number inputs, two number outputs — and was previously
+// covered only indirectly through the useChatSession integration tests.
+// These cases build each quad from a synthetic baseline + chosen latency +
+// chosen offset so the expected outputs are computable by hand.
+describe('deriveSync', () => {
+  // Quad construction: peer's clock leads local by `offset` ms; one-way
+  // latency is `oneWayMs`; the remote side spends `processingMs` between
+  // receiving the probe and sending the ack. The resulting timestamps make
+  // every test case readable as "given offset X and latency L, expect..."
+  function quad(opts: { baseT1: number; oneWayMs: number; offsetMs: number; processingMs?: number }) {
+    const processing = opts.processingMs ?? 0
+    const t1 = opts.baseT1
+    const t2 = t1 + opts.oneWayMs + opts.offsetMs
+    const t3 = t2 + processing
+    const t4 = t3 - opts.offsetMs + opts.oneWayMs
+    return { t1, t2, t3, t4 }
+  }
+
+  it('identical clocks, zero latency: offset=0, rtt=elapsed', () => {
+    const { t1, t2, t3, t4 } = quad({ baseT1: 1_000_000, oneWayMs: 0, offsetMs: 0, processingMs: 7 })
+    const { rtt, offset } = deriveSync(t1, t2, t3, t4)
+    expect(offset).toBe(0)
+    expect(rtt).toBe(0)
+  })
+
+  it('symmetric latency, no clock skew: rtt = 2*one-way, offset = 0', () => {
+    const { t1, t2, t3, t4 } = quad({ baseT1: 1_000_000, oneWayMs: 50, offsetMs: 0, processingMs: 5 })
+    const { rtt, offset } = deriveSync(t1, t2, t3, t4)
+    expect(rtt).toBe(100)
+    expect(offset).toBe(0)
+  })
+
+  it('peer-ahead: positive offset', () => {
+    const { t1, t2, t3, t4 } = quad({ baseT1: 1_000_000, oneWayMs: 100, offsetMs: 50 })
+    const { offset } = deriveSync(t1, t2, t3, t4)
+    expect(offset).toBe(50)
+  })
+
+  it('peer-behind: negative offset', () => {
+    const { t1, t2, t3, t4 } = quad({ baseT1: 1_000_000, oneWayMs: 100, offsetMs: -75 })
+    const { offset } = deriveSync(t1, t2, t3, t4)
+    expect(offset).toBe(-75)
+  })
+
+  it('RTT is independent of clock offset (latency-only)', () => {
+    const baseT1 = 1_000_000
+    const oneWayMs = 80
+    const a = deriveSync(
+      ...(Object.values(quad({ baseT1, oneWayMs, offsetMs: 0 })) as [number, number, number, number]),
+    )
+    const b = deriveSync(
+      ...(Object.values(quad({ baseT1, oneWayMs, offsetMs: 500 })) as [number, number, number, number]),
+    )
+    const c = deriveSync(
+      ...(Object.values(quad({ baseT1, oneWayMs, offsetMs: -250 })) as [number, number, number, number]),
+    )
+    expect(a.rtt).toBe(160)
+    expect(b.rtt).toBe(160)
+    expect(c.rtt).toBe(160)
+  })
+
+  it('mirror invariant: swapping (t1↔t2) and (t3↔t4) negates both offset and rtt', () => {
+    // The hook flips the offset sign on the answerer side; this is the
+    // formula-level identity that makes that mirror correct. Both outputs
+    // are antisymmetric under the swap — the answerer applies abs(rtt) (or
+    // equivalent) and -offset to recover the physical pair-RTT and the
+    // answerer-perspective skew.
+    const { t1, t2, t3, t4 } = quad({ baseT1: 1_000_000, oneWayMs: 60, offsetMs: 42, processingMs: 3 })
+    const original = deriveSync(t1, t2, t3, t4)
+    const mirrored = deriveSync(t2, t1, t4, t3)
+    expect(mirrored.offset).toBe(-original.offset)
+    expect(mirrored.rtt).toBe(-original.rtt)
+  })
+
+  it('matches the useChatSession answerer-fixture inputs (regression anchor)', () => {
+    // Same numeric anchors as useChatSession.test.ts:560-580. If this
+    // expectation drifts, the hook fixture must drift in lockstep — and
+    // either both move or both stay, never just one.
+    const { rtt, offset } = deriveSync(1000, 1100, 1110, 1200)
+    expect(offset).toBe(5)
+    expect(rtt).toBe(190)
+  })
+
+  it('propagates NaN without throwing', () => {
+    const { rtt, offset } = deriveSync(NaN, 1, 2, 3)
+    expect(Number.isNaN(rtt)).toBe(true)
+    expect(Number.isNaN(offset)).toBe(true)
+  })
+
+  it('propagates Infinity without throwing', () => {
+    // rtt = t4 - t1 - (t3 - t2) = 0 - 0 - (0 - ∞) = +∞
+    // offset = ((t2 - t1) + (t3 - t4)) / 2 = (∞ + 0) / 2 = +∞
+    const { rtt, offset } = deriveSync(0, Number.POSITIVE_INFINITY, 0, 0)
+    expect(rtt).toBe(Number.POSITIVE_INFINITY)
+    expect(offset).toBe(Number.POSITIVE_INFINITY)
   })
 })
