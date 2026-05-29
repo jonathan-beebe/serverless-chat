@@ -14,12 +14,17 @@ id.
 - FEAT: 16
 - IMPRV: 37
 - MAINT: 2
-- A11Y: 44
+- A11Y: 45
 - RFCTR: 8
 - BUG: 14
 
 ## Log
 
+- 2026-05-28:20:21:25 — A11Y-044 — done: CopyBox auto-focus skip-rule flipped so
+  Copy always wins; Share never auto-focuses
+- 2026-05-28:20:19:07 — A11Y-044 — started
+- 2026-05-28:20:17:58 — A11Y-044 — defined: offerer invite copybox default focus
+  lands on share, not copy
 - 2026-05-28:17:43:24 — RFCTR-007 — done: swept 97 className.toMatch proxies
   from 15 test files; bucket-(a) behaviour assertions, bucket-(c) comments
   preserving A11Y refs, structural pins kept as classList.contains
