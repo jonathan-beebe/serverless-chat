@@ -299,6 +299,45 @@ describe('CopyBox web share behavior (FEAT-014)', () => {
     expect(share).toHaveBeenCalledTimes(1)
   })
 
+  it('focuses Copy (not Share) on mount when autoFocus is set and Share is supported (A11Y-044)', () => {
+    // A11Y-044: Share is the visual primary on mobile (FEAT-014), but it
+    // must NOT claim initial keyboard focus. Copy is the durable,
+    // in-document, cross-browser default across every CopyBox instance in
+    // the app — the invite branch is the one place where Share availability
+    // would otherwise contradict that. Keyboard / AT users on browsers that
+    // expose navigator.share (now including Chrome desktop) must land on
+    // Copy when the screen settles.
+    stubShare(vi.fn().mockResolvedValue(undefined))
+
+    render(
+      <CopyBox
+        value="https://example.test/#offer=abc"
+        label="Invite URL"
+        autoFocus
+        share={{ title: 'Invite a friend', text: 'Join my chat', url: 'https://example.test/#offer=abc' }}
+      />,
+    )
+
+    expect(screen.getByRole('button', { name: /^copy$/i })).toHaveFocus()
+    expect(screen.getByRole('button', { name: /^share$/i })).not.toHaveFocus()
+  })
+
+  it('still focuses Copy on mount when autoFocus is set and Share is unsupported (baseline pairing for A11Y-044)', () => {
+    removeShare()
+
+    render(
+      <CopyBox
+        value="https://example.test/#offer=abc"
+        label="Invite URL"
+        autoFocus
+        share={{ url: 'https://example.test/#offer=abc' }}
+      />,
+    )
+
+    expect(screen.getByRole('button', { name: /^copy$/i })).toHaveFocus()
+    expect(screen.queryByRole('button', { name: /^share$/i })).not.toBeInTheDocument()
+  })
+
   it('swallows AbortError (user dismissed the share sheet) without surfacing an error', async () => {
     const abort = Object.assign(new Error('Share canceled'), { name: 'AbortError' })
     const share = vi.fn().mockRejectedValue(abort)

@@ -47,10 +47,13 @@ export function CopyBox({ value, label, helpText, variant = 'code', autoFocus = 
     if (typeof navigator.canShare === 'function' && !navigator.canShare(share)) return false
     return true
   }, [share])
-  // When Share is rendered it's the primary affordance on mobile, so it
-  // receives `autoFocus`; Copy gets focus only when Share is absent.
-  const shareButtonRef = useFocusOnMount<HTMLButtonElement>([], { skip: !autoFocus || !shareSupported })
-  const copyButtonRef = useFocusOnMount<HTMLButtonElement>([], { skip: !autoFocus || shareSupported })
+  // A11Y-044: Share stays the visual primary on mobile (rendered to the
+  // left of Copy per FEAT-014), but it must NOT claim initial keyboard
+  // focus. Copy is the durable, in-document, cross-browser default across
+  // every CopyBox instance in the app, so AT users land on the same
+  // affordance on every screen. Share is still reachable via Tab.
+  const shareButtonRef = useFocusOnMount<HTMLButtonElement>([], { skip: true })
+  const copyButtonRef = useFocusOnMount<HTMLButtonElement>([], { skip: !autoFocus })
 
   // Marks a successful copy. The confirmation persists until the user starts a
   // new copy attempt, the underlying `value` changes, or the component
